@@ -29,12 +29,21 @@ export default function AppShell() {
         {(isAdmin || isHubStaff) && (
           <button style={tileBtn} onClick={() => nav("/app/hub-tasks")}>
             Hub Tasks
+            <div style={tileSub}>Manage species &amp; clients</div>
+          </button>
+        )}
+
+        {(isAdmin || isHubStaff) && (
+          <button style={tileBtn} onClick={() => nav("/app/delivery-orders")}>
+            Delivery Orders
+            <div style={tileSub}>Create and track driver deliveries</div>
           </button>
         )}
 
         {(isAdmin || isDriver) && (
-          <button style={tileBtn} onClick={() => alert("Driver screen next")}>
+          <button style={tileBtn} onClick={() => nav("/driver")}>
             Driver Screen
+            <div style={tileSub}>View assigned deliveries</div>
           </button>
         )}
 
@@ -72,4 +81,11 @@ const tileBtn: React.CSSProperties = {
   fontWeight: 800,
   cursor: "pointer",
   textAlign: "left",
+};
+
+const tileSub: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 500,
+  opacity: 0.6,
+  marginTop: 4,
 };

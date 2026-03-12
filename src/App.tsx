@@ -3,6 +3,7 @@ import LoginPage from "./pages/LoginPage";
 import AppShell from "./pages/AppShell";
 import RequireAuth from "./components/RequireAuth";
 import HubTasksPage from "./pages/HubTasksPage";
+import DeliveryOrdersPage from "./pages/DeliveryOrdersPage";
 import DriverPage from "./pages/DriverPage";
 import RequireRole from "./components/RequireRole";
 
@@ -29,11 +30,19 @@ export default function App() {
         }
       />
       <Route
+        path="/app/delivery-orders"
+        element={
+          <RequireAuth>
+            <DeliveryOrdersPage />
+          </RequireAuth>
+        }
+      />
+      <Route
         path="/driver"
         element={
-          <RequireRole role="Driver">
+          <RequireAuth>
             <DriverPage />
-          </RequireRole>
+          </RequireAuth>
         }
       />
     </Routes>
