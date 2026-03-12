@@ -5,7 +5,6 @@ import RequireAuth from "./components/RequireAuth";
 import HubTasksPage from "./pages/HubTasksPage";
 import DeliveryOrdersPage from "./pages/DeliveryOrdersPage";
 import DriverPage from "./pages/DriverPage";
-import RequireRole from "./components/RequireRole";
 
 export default function App() {
   return (
