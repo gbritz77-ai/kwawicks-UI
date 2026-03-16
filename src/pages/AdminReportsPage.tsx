@@ -108,7 +108,17 @@ export default function AdminReportsPage() {
         </div>
       )}
 
-      {error && <p style={s.error}>{error}</p>}
+      {error && !loading && (() => {
+        const hasData =
+          (tab === "revenue" && revenue) ||
+          (tab === "outstanding" && outstanding) ||
+          (tab === "drivers" && drivers) ||
+          (tab === "returns" && returns) ||
+          (tab === "deliveries" && deliveries) ||
+          (tab === "invoices" && invoices) ||
+          (tab === "species" && speciesRevenue);
+        return !hasData ? <p style={s.error}>{error}</p> : null;
+      })()}
       {loading && <p style={s.muted}>Loading...</p>}
 
       {/* Revenue */}
