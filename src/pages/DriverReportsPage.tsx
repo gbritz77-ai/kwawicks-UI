@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import type { CSSProperties } from "react";
 import { reportsApi } from "../api/reportsApi";
 import type { MyDeliveryItem } from "../api/reportsApi";
 
 export default function DriverReportsPage() {
+  const nav = useNavigate();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [items, setItems] = useState<MyDeliveryItem[]>([]);
@@ -29,7 +31,10 @@ export default function DriverReportsPage() {
 
   return (
     <div style={s.page}>
-      <h2 style={s.heading}>My Delivery History</h2>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        <button style={s.backBtn} onClick={() => nav("/driver")}>← Back</button>
+        <h2 style={{ ...s.heading, marginBottom: 0 }}>My Delivery History</h2>
+      </div>
 
       {/* Date filter */}
       <div style={s.filterRow}>
@@ -113,7 +118,11 @@ function Td({ children, style }: { children: React.ReactNode; style?: CSSPropert
 
 const s: Record<string, CSSProperties> = {
   page: { padding: "24px 20px", maxWidth: 860, margin: "0 auto" },
-  heading: { fontSize: 22, fontWeight: 700, marginBottom: 20, color: "#1e293b" },
+  heading: { fontSize: 22, fontWeight: 700, color: "#1e293b" },
+  backBtn: {
+    padding: "6px 14px", borderRadius: 6, border: "1px solid #cbd5e1",
+    background: "#fff", cursor: "pointer", fontSize: 14, color: "#475569",
+  },
   filterRow: { display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" },
   label: { fontSize: 13, color: "#64748b", fontWeight: 500 },
   dateInput: { padding: "6px 10px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 14 },

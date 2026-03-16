@@ -269,6 +269,9 @@ export default function DriverPage() {
           <button style={s.secondaryBtn} onClick={loadOrders} disabled={loading}>
             Refresh
           </button>
+          <button style={s.secondaryBtn} onClick={() => nav("/driver/reports")}>
+            Reports
+          </button>
           <button
             style={s.secondaryBtn}
             onClick={() => { clearAuth(); nav("/login", { replace: true }); }}
