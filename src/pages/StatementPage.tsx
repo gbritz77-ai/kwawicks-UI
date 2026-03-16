@@ -51,6 +51,9 @@ export default function StatementPage() {
 
       {/* Print button bar */}
       <div className="no-print" style={s.printBar}>
+        <button style={s.backBtn} onClick={() => window.close()}>
+          ← Close
+        </button>
         <span style={{ color: "#475569", fontSize: 14 }}>
           {customerId === "ALL"
             ? `${statements.length} customer statement${statements.length !== 1 ? "s" : ""} — use your browser's Print to save as PDF`
@@ -190,6 +193,10 @@ const s: Record<string, React.CSSProperties> = {
   printBar: {
     background: "#f8fafc", borderBottom: "1px solid #e2e8f0",
     padding: "12px 32px", display: "flex", justifyContent: "space-between", alignItems: "center",
+  },
+  backBtn: {
+    padding: "8px 16px", borderRadius: 8, border: "1px solid #cbd5e1", cursor: "pointer",
+    background: "#fff", color: "#475569", fontSize: 14, fontWeight: 500,
   },
   printBtn: {
     padding: "8px 20px", borderRadius: 8, border: "none", cursor: "pointer",
