@@ -2,15 +2,18 @@ import { useState, useEffect } from "react";
 import type { CSSProperties } from "react";
 import { reportsApi } from "../api/reportsApi";
 import { invoicesApi } from "../api/invoicesApi";
+import { clientsApi } from "../api/clientsApi";
 import type {
   RevenueSummaryResponse,
   OutstandingPaymentsResponse,
   DriverPerformanceResponse,
   ReturnsSummaryResponse,
   DeliveryStatusSummaryResponse,
+  InvoiceItem,
 } from "../api/reportsApi";
+import type { ClientDto } from "../api/clientsApi";
 
-type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries";
+type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices";
 
 export default function AdminReportsPage() {
   const [tab, setTab] = useState<Tab>("revenue");
@@ -23,6 +26,10 @@ export default function AdminReportsPage() {
   const [returns, setReturns] = useState<ReturnsSummaryResponse | null>(null);
   const [deliveries, setDeliveries] = useState<DeliveryStatusSummaryResponse | null>(null);
   const [statusFilter, setStatusFilter] = useState<"All" | "Open" | "OutForDelivery" | "Delivered">("All");
+  const [invoices, setInvoices] = useState<InvoiceItem[] | null>(null);
+  const [invoicePayFilter, setInvoicePayFilter] = useState<"" | "Pending" | "Paid">("");
+  const [invoiceCustomer, setInvoiceCustomer] = useState("");
+  const [clients, setClients] = useState<ClientDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -35,6 +42,14 @@ export default function AdminReportsPage() {
       if (tab === "drivers") setDrivers(await reportsApi.getDriverPerformance(from || undefined, to || undefined));
       if (tab === "returns") setReturns(await reportsApi.getReturns(from || undefined, to || undefined));
       if (tab === "deliveries") setDeliveries(await reportsApi.getDeliveryStatus(from || undefined, to || undefined));
+      if (tab === "invoices") {
+        const [inv, cls] = await Promise.all([
+          reportsApi.getInvoices({ customerId: invoiceCustomer || undefined, paymentStatus: invoicePayFilter || undefined, from: from || undefined, to: to || undefined }),
+          clients.length ? Promise.resolve(clients) : clientsApi.list(),
+        ]);
+        setInvoices(inv);
+        if (!clients.length) setClients(cls);
+      }
     } catch {
       setError("Failed to load report.");
     } finally {
@@ -53,10 +68,11 @@ export default function AdminReportsPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["revenue", "outstanding", "drivers", "returns", "deliveries"] as Tab[]).map((t) => (
+        {(["revenue", "outstanding", "invoices", "drivers", "returns", "deliveries"] as Tab[]).map((t) => (
           <button key={t} style={tab === t ? { ...s.tab, ...s.tabActive } : s.tab} onClick={() => setTab(t)}>
             {t === "revenue" && "Revenue"}
             {t === "outstanding" && "Outstanding"}
+            {t === "invoices" && "Invoices"}
             {t === "drivers" && "Driver Performance"}
             {t === "returns" && "Returns"}
             {t === "deliveries" && "Deliveries"}
@@ -112,6 +128,26 @@ export default function AdminReportsPage() {
       {tab === "outstanding" && outstanding && !loading && (
         <OutstandingTable
           outstanding={outstanding}
+          fmt={fmt}
+          onConfirmed={load}
+        />
+      )}
+
+      {/* Invoices */}
+      {tab === "invoices" && (
+        <InvoicesTab
+          invoices={invoices}
+          clients={clients}
+          payFilter={invoicePayFilter}
+          setPayFilter={setInvoicePayFilter}
+          customer={invoiceCustomer}
+          setCustomer={setInvoiceCustomer}
+          from={from}
+          setFrom={setFrom}
+          to={to}
+          setTo={setTo}
+          loading={loading}
+          onApply={load}
           fmt={fmt}
           onConfirmed={load}
         />
@@ -266,6 +302,151 @@ export default function AdminReportsPage() {
             </tbody>
           </table>
         </div>
+      )}
+    </div>
+  );
+}
+
+function InvoicesTab({
+  invoices, clients, payFilter, setPayFilter, customer, setCustomer,
+  from, setFrom, to, setTo, loading, onApply, fmt, onConfirmed,
+}: {
+  invoices: InvoiceItem[] | null;
+  clients: ClientDto[];
+  payFilter: "" | "Pending" | "Paid";
+  setPayFilter: (v: "" | "Pending" | "Paid") => void;
+  customer: string;
+  setCustomer: (v: string) => void;
+  from: string; setFrom: (v: string) => void;
+  to: string; setTo: (v: string) => void;
+  loading: boolean;
+  onApply: () => void;
+  fmt: (n: number) => string;
+  onConfirmed: () => void;
+}) {
+  const [confirming, setConfirming] = useState<string | null>(null);
+
+  const clientMap = Object.fromEntries(clients.map((c) => [c.clientId, c.clientName]));
+
+  async function handleConfirm(invoiceId: string) {
+    setConfirming(invoiceId);
+    try {
+      await invoicesApi.confirmPayment(invoiceId);
+      onConfirmed();
+    } finally {
+      setConfirming(null);
+    }
+  }
+
+  const totalPending = invoices?.filter((i) => i.paymentStatus === "Pending").reduce((s, i) => s + i.grandTotal, 0) ?? 0;
+  const totalPaid    = invoices?.filter((i) => i.paymentStatus === "Paid").reduce((s, i) => s + i.grandTotal, 0) ?? 0;
+
+  return (
+    <div>
+      {/* Filters */}
+      <div style={{ ...s.filterRow, marginBottom: 16 }}>
+        <label style={s.label}>Customer</label>
+        <select
+          value={customer}
+          onChange={(e) => setCustomer(e.target.value)}
+          style={{ ...s.dateInput, minWidth: 180 }}
+        >
+          <option value="">All customers</option>
+          {clients.map((c) => (
+            <option key={c.clientId} value={c.clientId}>{c.clientName}</option>
+          ))}
+        </select>
+
+        <label style={s.label}>From</label>
+        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={s.dateInput} />
+        <label style={s.label}>To</label>
+        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={s.dateInput} />
+        <button style={s.applyBtn} onClick={onApply}>Apply</button>
+      </div>
+
+      {/* Payment status toggle */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        {(["", "Pending", "Paid"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => { setPayFilter(v); onApply(); }}
+            style={{
+              ...s.tab,
+              ...(payFilter === v ? s.tabActive : {}),
+              ...(v === "Pending" && payFilter === "Pending" ? { background: "#92400e", borderColor: "#92400e" } : {}),
+            }}
+          >
+            {v === "" ? "All" : v}
+          </button>
+        ))}
+      </div>
+
+      {loading && <p style={s.muted}>Loading…</p>}
+
+      {invoices && !loading && (
+        <>
+          <div style={s.kpiRow}>
+            <KpiCard label="Total invoices" value={String(invoices.length)} />
+            <KpiCard label="Pending" value={fmt(totalPending)} />
+            <KpiCard label="Paid" value={fmt(totalPaid)} highlight />
+          </div>
+
+          <table style={s.table}>
+            <thead>
+              <tr>
+                <Th>Invoice</Th>
+                <Th>Customer</Th>
+                <Th>Driver</Th>
+                <Th>Payment Type</Th>
+                <Th>Status</Th>
+                <Th>Sub-total</Th>
+                <Th>VAT</Th>
+                <Th>Grand Total</Th>
+                <Th>Date</Th>
+                <Th>Action</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoices.map((inv) => {
+                const payColor = inv.paymentStatus === "Paid" ? "#166534" : "#854d0e";
+                const payBg    = inv.paymentStatus === "Paid" ? "#dcfce7" : "#fef9c3";
+                return (
+                  <tr key={inv.invoiceId}>
+                    <Td><span style={s.mono}>{inv.invoiceId.slice(0, 8)}…</span></Td>
+                    <Td>{clientMap[inv.customerId] ?? inv.customerId}</Td>
+                    <Td style={{ color: "#64748b", fontSize: 13 }}>{inv.createdByDriverId || "—"}</Td>
+                    <Td>{inv.paymentType || "—"}</Td>
+                    <Td>
+                      <span style={{ ...s.badge, background: payBg, color: payColor }}>
+                        {inv.paymentStatus}
+                      </span>
+                    </Td>
+                    <Td>{fmt(inv.subTotal)}</Td>
+                    <Td>{fmt(inv.vatTotal)}</Td>
+                    <Td><strong>{fmt(inv.grandTotal)}</strong></Td>
+                    <Td style={{ color: "#64748b", fontSize: 13 }}>
+                      {new Date(inv.createdAt).toLocaleDateString("en-ZA")}
+                    </Td>
+                    <Td>
+                      {inv.paymentStatus === "Pending" ? (
+                        <button
+                          disabled={confirming === inv.invoiceId}
+                          onClick={() => handleConfirm(inv.invoiceId)}
+                          style={s.confirmBtn}
+                        >
+                          {confirming === inv.invoiceId ? "…" : "Confirm"}
+                        </button>
+                      ) : "—"}
+                    </Td>
+                  </tr>
+                );
+              })}
+              {invoices.length === 0 && (
+                <tr><td colSpan={10} style={s.emptyCell}>No invoices found</td></tr>
+              )}
+            </tbody>
+          </table>
+        </>
       )}
     </div>
   );

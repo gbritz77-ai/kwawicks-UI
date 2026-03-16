@@ -88,6 +88,32 @@ export type DeliveryStatusSummaryResponse = {
   orders: DeliveryStatusItem[];
 };
 
+// ── Admin: Invoices ───────────────────────────────────────────────────────────
+export type InvoiceLineItem = {
+  speciesId: string;
+  quantity: number;
+  unitPrice: number;
+  vatRate: number;
+  lineTotal: number;
+};
+
+export type InvoiceItem = {
+  invoiceId: string;
+  customerId: string;
+  hubId: string;
+  deliveryOrderId: string;
+  createdByDriverId: string;
+  status: string;
+  paymentType: string;
+  paymentStatus: string;
+  subTotal: number;
+  vatTotal: number;
+  grandTotal: number;
+  createdAt: string;
+  updatedAt: string;
+  lines: InvoiceLineItem[];
+};
+
 // ── Driver types ─────────────────────────────────────────────────────────────
 export type MyDeliveryItem = {
   deliveryOrderId: string;
@@ -123,6 +149,16 @@ export const reportsApi = {
 
   getDeliveryStatus: (from?: string, to?: string) =>
     api.get<DeliveryStatusSummaryResponse>(`/api/reports/delivery-status${dateParams(from, to)}`),
+
+  getInvoices: (params?: { customerId?: string; paymentStatus?: string; from?: string; to?: string }) => {
+    const p = new URLSearchParams();
+    if (params?.customerId) p.set("customerId", params.customerId);
+    if (params?.paymentStatus) p.set("paymentStatus", params.paymentStatus);
+    if (params?.from) p.set("from", params.from);
+    if (params?.to) p.set("to", params.to);
+    const qs = p.toString() ? `?${p}` : "";
+    return api.get<InvoiceItem[]>(`/api/reports/invoices${qs}`);
+  },
 
   getMyDeliveries: (from?: string, to?: string) =>
     api.get<MyDeliveryItem[]>(`/api/reports/my-deliveries${dateParams(from, to)}`),
