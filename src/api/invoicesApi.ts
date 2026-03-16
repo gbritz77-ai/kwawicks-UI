@@ -85,6 +85,9 @@ export const invoicesApi = {
   recordPayment: (invoiceId: string, paymentType: string) =>
     api.post<void>(`/api/invoices/${invoiceId}/payment`, { paymentType }),
 
+  confirmPayment: (invoiceId: string) =>
+    api.put<void>(`/api/invoices/${invoiceId}/confirm-payment`, {}),
+
   getReceiptUploadUrl: (invoiceId: string) =>
     api.get<ReceiptUploadUrlResponse>(`/api/invoices/${invoiceId}/receipt-upload-url`),
 };

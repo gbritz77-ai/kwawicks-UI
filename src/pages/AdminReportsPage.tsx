@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { CSSProperties } from "react";
 import { reportsApi } from "../api/reportsApi";
+import { invoicesApi } from "../api/invoicesApi";
 import type {
   RevenueSummaryResponse,
   OutstandingPaymentsResponse,
@@ -109,37 +110,11 @@ export default function AdminReportsPage() {
 
       {/* Outstanding */}
       {tab === "outstanding" && outstanding && !loading && (
-        <div>
-          <div style={s.kpiRow}>
-            <KpiCard label="Outstanding invoices" value={String(outstanding.count)} />
-            <KpiCard label="Total outstanding" value={fmt(outstanding.totalOutstanding)} highlight />
-          </div>
-          <table style={s.table}>
-            <thead>
-              <tr>
-                <Th>Invoice</Th><Th>Customer</Th><Th>Type</Th><Th>Amount</Th><Th>Days outstanding</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {outstanding.items.map((i) => (
-                <tr key={i.invoiceId}>
-                  <Td><span style={s.mono}>{i.invoiceId.slice(0, 8)}…</span></Td>
-                  <Td>{i.customerId}</Td>
-                  <Td>{i.paymentType}</Td>
-                  <Td>{fmt(i.grandTotal)}</Td>
-                  <Td>
-                    <span style={{ color: i.daysOutstanding > 30 ? "#dc2626" : i.daysOutstanding > 14 ? "#d97706" : "#16a34a" }}>
-                      {i.daysOutstanding}d
-                    </span>
-                  </Td>
-                </tr>
-              ))}
-              {outstanding.items.length === 0 && (
-                <tr><td colSpan={5} style={s.emptyCell}>No outstanding payments</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <OutstandingTable
+          outstanding={outstanding}
+          fmt={fmt}
+          onConfirmed={load}
+        />
       )}
 
       {/* Driver Performance */}
@@ -296,6 +271,71 @@ export default function AdminReportsPage() {
   );
 }
 
+function OutstandingTable({
+  outstanding,
+  fmt,
+  onConfirmed,
+}: {
+  outstanding: OutstandingPaymentsResponse;
+  fmt: (n: number) => string;
+  onConfirmed: () => void;
+}) {
+  const [confirming, setConfirming] = useState<string | null>(null);
+
+  async function handleConfirm(invoiceId: string) {
+    setConfirming(invoiceId);
+    try {
+      await invoicesApi.confirmPayment(invoiceId);
+      onConfirmed();
+    } finally {
+      setConfirming(null);
+    }
+  }
+
+  return (
+    <div>
+      <div style={s.kpiRow}>
+        <KpiCard label="Outstanding invoices" value={String(outstanding.count)} />
+        <KpiCard label="Total outstanding" value={fmt(outstanding.totalOutstanding)} highlight />
+      </div>
+      <table style={s.table}>
+        <thead>
+          <tr>
+            <Th>Invoice</Th><Th>Customer</Th><Th>Type</Th><Th>Amount</Th><Th>Days outstanding</Th><Th>Action</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {outstanding.items.map((i) => (
+            <tr key={i.invoiceId}>
+              <Td><span style={s.mono}>{i.invoiceId.slice(0, 8)}…</span></Td>
+              <Td>{i.customerId}</Td>
+              <Td>{i.paymentType}</Td>
+              <Td>{fmt(i.grandTotal)}</Td>
+              <Td>
+                <span style={{ color: i.daysOutstanding > 30 ? "#dc2626" : i.daysOutstanding > 14 ? "#d97706" : "#16a34a" }}>
+                  {i.daysOutstanding}d
+                </span>
+              </Td>
+              <Td>
+                <button
+                  disabled={confirming === i.invoiceId}
+                  onClick={() => handleConfirm(i.invoiceId)}
+                  style={s.confirmBtn}
+                >
+                  {confirming === i.invoiceId ? "Confirming…" : "Confirm Payment"}
+                </button>
+              </Td>
+            </tr>
+          ))}
+          {outstanding.items.length === 0 && (
+            <tr><td colSpan={6} style={s.emptyCell}>No outstanding payments</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function KpiCard({ label, value, highlight, active, color, bg, onClick }: {
   label: string; value: string; highlight?: boolean;
   active?: boolean; color?: string; bg?: string; onClick?: () => void;
@@ -352,6 +392,10 @@ const s: Record<string, CSSProperties> = {
   emptyCell: { padding: "24px 12px", color: "#94a3b8", textAlign: "center" },
   mono: { fontFamily: "monospace", fontSize: 12 },
   badge: { padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600 },
+  confirmBtn: {
+    padding: "5px 12px", borderRadius: 6, border: "none", cursor: "pointer",
+    background: "#15803d", color: "#fff", fontSize: 13, fontWeight: 600,
+  },
   error: { color: "#dc2626", marginBottom: 12 },
   muted: { color: "#94a3b8" },
 };
