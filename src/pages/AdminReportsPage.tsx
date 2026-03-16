@@ -551,6 +551,8 @@ function OutstandingTable({
   onConfirmed: () => void;
 }) {
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
 
   async function handleConfirm(invoiceId: string) {
     setConfirming(invoiceId);
@@ -559,6 +561,16 @@ function OutstandingTable({
       onConfirmed();
     } finally {
       setConfirming(null);
+    }
+  }
+
+  async function handleViewReceipt(invoiceId: string) {
+    setViewingReceipt(invoiceId);
+    try {
+      const { url } = await invoicesApi.getReceiptViewUrl(invoiceId);
+      setReceiptUrl(url);
+    } finally {
+      setViewingReceipt(null);
     }
   }
 
@@ -571,7 +583,7 @@ function OutstandingTable({
       <ScrollTable>
         <thead>
           <tr>
-            <Th>Invoice</Th><Th>Customer</Th><Th>Type</Th><Th>Amount</Th><Th>Days outstanding</Th><Th>Action</Th>
+            <Th>Invoice</Th><Th>Customer</Th><Th>Type</Th><Th>Amount</Th><Th>Days outstanding</Th><Th>Receipt</Th><Th>Action</Th>
           </tr>
         </thead>
         <tbody>
@@ -587,6 +599,17 @@ function OutstandingTable({
                 </span>
               </Td>
               <Td>
+                {i.receiptS3Key ? (
+                  <button
+                    disabled={viewingReceipt === i.invoiceId}
+                    onClick={() => handleViewReceipt(i.invoiceId)}
+                    style={s.viewBtn}
+                  >
+                    {viewingReceipt === i.invoiceId ? "…" : "View POP"}
+                  </button>
+                ) : "—"}
+              </Td>
+              <Td>
                 <button
                   disabled={confirming === i.invoiceId}
                   onClick={() => handleConfirm(i.invoiceId)}
@@ -598,10 +621,25 @@ function OutstandingTable({
             </tr>
           ))}
           {outstanding.items.length === 0 && (
-            <tr><td colSpan={6} style={s.emptyCell}>No outstanding payments</td></tr>
+            <tr><td colSpan={7} style={s.emptyCell}>No outstanding payments</td></tr>
           )}
         </tbody>
       </ScrollTable>
+
+      {receiptUrl && (
+        <div style={s.modalOverlay} onClick={() => setReceiptUrl(null)}>
+          <div style={s.modalBox} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <strong style={{ fontSize: 15 }}>Proof of Payment</strong>
+              <button onClick={() => setReceiptUrl(null)} style={s.modalClose}>✕</button>
+            </div>
+            <img src={receiptUrl} alt="Proof of payment" style={{ maxWidth: "100%", maxHeight: "70vh", borderRadius: 8, display: "block" }} />
+            <a href={receiptUrl} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 10, fontSize: 13, color: "#2563eb" }}>
+              Open full size ↗
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

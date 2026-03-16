@@ -25,6 +25,7 @@ export type OutstandingPaymentItem = {
   grandTotal: number;
   createdAt: string;
   daysOutstanding: number;
+  receiptS3Key: string;
 };
 
 export type OutstandingPaymentsResponse = {
