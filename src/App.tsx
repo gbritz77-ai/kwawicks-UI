@@ -5,6 +5,8 @@ import RequireAuth from "./components/RequireAuth";
 import HubTasksPage from "./pages/HubTasksPage";
 import DeliveryOrdersPage from "./pages/DeliveryOrdersPage";
 import DriverPage from "./pages/DriverPage";
+import AdminReportsPage from "./pages/AdminReportsPage";
+import DriverReportsPage from "./pages/DriverReportsPage";
 
 export default function App() {
   return (
@@ -41,6 +43,22 @@ export default function App() {
         element={
           <RequireAuth>
             <DriverPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/driver/reports"
+        element={
+          <RequireAuth>
+            <DriverReportsPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/app/reports"
+        element={
+          <RequireAuth>
+            <AdminReportsPage />
           </RequireAuth>
         }
       />

@@ -47,9 +47,19 @@ export default function AppShell() {
           </button>
         )}
 
-        <button style={tileBtn} onClick={() => alert("Reports next")}>
-          Reports
-        </button>
+        {isAdmin && (
+          <button style={tileBtn} onClick={() => nav("/app/reports")}>
+            Reports
+            <div style={tileSub}>Revenue, outstanding payments, driver performance</div>
+          </button>
+        )}
+
+        {isDriver && (
+          <button style={tileBtn} onClick={() => nav("/driver/reports")}>
+            My Delivery History
+            <div style={tileSub}>View your completed deliveries and earnings</div>
+          </button>
+        )}
       </div>
 
       <div style={{ marginTop: 20 }}>
