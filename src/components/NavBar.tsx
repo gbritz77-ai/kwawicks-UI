@@ -2,11 +2,22 @@ import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { clearAuth, getProfileFromIdToken, hasRole } from "../api/auth";
 
-type NavItem = { label: string; path: string };
+type NavItem = { label: string; path: string; tabParam?: string };
+
+function isActive(item: NavItem, pathname: string, search: string): boolean {
+  if (item.tabParam !== undefined) {
+    return pathname === item.path && new URLSearchParams(search).get("tab") === item.tabParam;
+  }
+  if (item.path === "/app/reports") {
+    const tab = new URLSearchParams(search).get("tab");
+    return pathname === item.path && tab !== "invoices" && tab !== "statement";
+  }
+  return pathname === item.path || (item.path !== "/app" && pathname.startsWith(item.path));
+}
 
 export default function NavBar() {
   const nav = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const profile = getProfileFromIdToken();
 
   const isAdmin    = hasRole("Admin");
@@ -22,6 +33,8 @@ export default function NavBar() {
   }
   if (isAdmin) {
     items.push({ label: "Reports",          path: "/app/reports" });
+    items.push({ label: "Invoices",         path: "/app/reports", tabParam: "invoices" });
+    items.push({ label: "Statements",       path: "/app/reports", tabParam: "statement" });
   }
   if (isDriver) {
     items.push({ label: "My Deliveries",    path: "/driver" });
@@ -43,12 +56,13 @@ export default function NavBar() {
       {/* Links */}
       <div style={s.links}>
         {items.map((item) => {
-          const active = pathname === item.path || (item.path !== "/app" && pathname.startsWith(item.path));
+          const active = isActive(item, pathname, search);
+          const href = item.tabParam !== undefined ? `${item.path}?tab=${item.tabParam}` : item.path;
           return (
             <button
-              key={item.path}
+              key={item.tabParam !== undefined ? `${item.path}?tab=${item.tabParam}` : item.path}
               style={active ? { ...s.link, ...s.linkActive } : s.link}
-              onClick={() => nav(item.path)}
+              onClick={() => nav(href)}
             >
               {item.label}
             </button>

@@ -199,4 +199,7 @@ export const reportsApi = {
     if (to) p.set("to", to);
     return api.get<CustomerStatementResponse>(`/api/reports/statement?${p}`);
   },
+
+  getAllStatements: (from?: string, to?: string) =>
+    api.get<CustomerStatementResponse[]>(`/api/reports/statements${dateParams(from, to)}`),
 };

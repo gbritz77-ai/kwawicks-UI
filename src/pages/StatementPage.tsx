@@ -15,21 +15,27 @@ export default function StatementPage() {
   const to = params.get("to") ?? undefined;
 
   const [statement, setStatement] = useState<CustomerStatementResponse | null>(null);
+  const [allStatements, setAllStatements] = useState<CustomerStatementResponse[] | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!customerId) { setError("No customer selected."); return; }
-    reportsApi.getCustomerStatement(customerId, from, to)
-      .then(setStatement)
-      .catch(() => setError("Failed to load statement."));
+    if (customerId === "ALL") {
+      reportsApi.getAllStatements(from, to)
+        .then(setAllStatements)
+        .catch(() => setError("Failed to load statements."));
+    } else {
+      reportsApi.getCustomerStatement(customerId, from, to)
+        .then(setStatement)
+        .catch(() => setError("Failed to load statement."));
+    }
   }, [customerId, from, to]);
 
   if (error) return <div style={{ padding: 40, color: "#dc2626" }}>{error}</div>;
-  if (!statement) return <div style={{ padding: 40, color: "#64748b" }}>Loading statement…</div>;
+  if (customerId === "ALL" && !allStatements) return <div style={{ padding: 40, color: "#64748b" }}>Loading statements…</div>;
+  if (customerId !== "ALL" && !statement) return <div style={{ padding: 40, color: "#64748b" }}>Loading statement…</div>;
 
-  const periodLabel = statement.from || statement.to
-    ? `${statement.from ? fmtDate(statement.from) : "—"} to ${statement.to ? fmtDate(statement.to) : "—"}`
-    : "All time";
+  const statements = allStatements ?? (statement ? [statement] : []);
 
   return (
     <>
@@ -37,6 +43,7 @@ export default function StatementPage() {
       <style>{`
         @media print {
           .no-print { display: none !important; }
+          .page-break { page-break-after: always; }
           body { margin: 0; }
         }
         body { font-family: Arial, Helvetica, sans-serif; color: #111; }
@@ -45,112 +52,126 @@ export default function StatementPage() {
       {/* Print button bar */}
       <div className="no-print" style={s.printBar}>
         <span style={{ color: "#475569", fontSize: 14 }}>
-          Statement ready — use your browser's Print to save as PDF
+          {customerId === "ALL"
+            ? `${statements.length} customer statement${statements.length !== 1 ? "s" : ""} — use your browser's Print to save as PDF`
+            : "Statement ready — use your browser's Print to save as PDF"}
         </span>
         <button style={s.printBtn} onClick={() => window.print()}>
           🖨 Print / Save as PDF
         </button>
       </div>
 
-      {/* Statement document */}
-      <div style={s.page}>
-
-        {/* Header */}
-        <div style={s.header}>
-          <div>
-            <div style={s.companyName}>KwaWicks</div>
-            <div style={s.companyMeta}>Customer Account Statement</div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={s.metaLabel}>Generated</div>
-            <div style={s.metaValue}>{fmtDate(statement.generatedAt)}</div>
-            <div style={{ ...s.metaLabel, marginTop: 6 }}>Period</div>
-            <div style={s.metaValue}>{periodLabel}</div>
-          </div>
+      {statements.map((st, idx) => (
+        <div key={st.customerId} className={idx < statements.length - 1 ? "page-break" : undefined}>
+          <StatementDocument statement={st} />
         </div>
+      ))}
+    </>
+  );
+}
 
-        <hr style={s.divider} />
+function StatementDocument({ statement }: { statement: CustomerStatementResponse }) {
+  const periodLabel = statement.from || statement.to
+    ? `${statement.from ? fmtDate(statement.from) : "—"} to ${statement.to ? fmtDate(statement.to) : "—"}`
+    : "All time";
 
-        {/* Customer info */}
-        <div style={s.customerBlock}>
-          <div style={s.sectionLabel}>Bill To</div>
-          <div style={s.customerName}>{statement.customerName}</div>
-          {statement.customerAddress && (
-            <div style={s.customerMeta}>{statement.customerAddress}</div>
-          )}
-          {statement.customerContact && (
-            <div style={s.customerMeta}>{statement.customerContact}</div>
-          )}
+  return (
+    <div style={s.page}>
+      {/* Header */}
+      <div style={s.header}>
+        <div>
+          <div style={s.companyName}>KwaWicks</div>
+          <div style={s.companyMeta}>Customer Account Statement</div>
         </div>
-
-        {/* Invoice table */}
-        <table style={s.table}>
-          <thead>
-            <tr style={s.thead}>
-              <th style={s.th}>Date</th>
-              <th style={s.th}>Invoice #</th>
-              <th style={s.th}>Payment Method</th>
-              <th style={{ ...s.th, textAlign: "right" }}>Sub-Total</th>
-              <th style={{ ...s.th, textAlign: "right" }}>VAT</th>
-              <th style={{ ...s.th, textAlign: "right" }}>Total</th>
-              <th style={{ ...s.th, textAlign: "center" }}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {statement.lines.map((line, i) => (
-              <tr key={line.invoiceId} style={i % 2 === 0 ? {} : s.altRow}>
-                <td style={s.td}>{fmtDate(line.date)}</td>
-                <td style={{ ...s.td, fontFamily: "monospace", fontSize: 12 }}>
-                  {line.invoiceId.slice(0, 8)}…
-                </td>
-                <td style={s.td}>{line.paymentType || "—"}</td>
-                <td style={{ ...s.td, textAlign: "right" }}>{fmt(line.subTotal)}</td>
-                <td style={{ ...s.td, textAlign: "right" }}>{fmt(line.vatTotal)}</td>
-                <td style={{ ...s.td, textAlign: "right", fontWeight: 600 }}>{fmt(line.grandTotal)}</td>
-                <td style={{ ...s.td, textAlign: "center" }}>
-                  <span style={{
-                    ...s.badge,
-                    background: line.paymentStatus === "Paid" ? "#dcfce7" : "#fef9c3",
-                    color: line.paymentStatus === "Paid" ? "#166534" : "#92400e",
-                  }}>
-                    {line.paymentStatus || "—"}
-                  </span>
-                </td>
-              </tr>
-            ))}
-            {statement.lines.length === 0 && (
-              <tr>
-                <td colSpan={7} style={{ ...s.td, textAlign: "center", color: "#94a3b8", padding: "24px 0" }}>
-                  No invoices found for this period
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-
-        {/* Totals summary */}
-        <div style={s.totalsBlock}>
-          <div style={s.totalsGrid}>
-            <TotalRow label="Sub-Total" value={fmt(statement.totalSubTotal)} />
-            <TotalRow label="VAT" value={fmt(statement.totalVat)} />
-            <TotalRow label="Total Invoiced" value={fmt(statement.totalGrandTotal)} bold />
-            <div style={s.totalsDivider} />
-            <TotalRow label="Total Paid" value={fmt(statement.totalPaid)} color="#166534" />
-            <TotalRow
-              label="Outstanding Balance"
-              value={fmt(statement.totalOutstanding)}
-              bold
-              color={statement.totalOutstanding > 0 ? "#dc2626" : "#166534"}
-            />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div style={s.footer}>
-          <p>This statement was generated automatically. Please contact KwaWicks if you have any queries.</p>
+        <div style={{ textAlign: "right" }}>
+          <div style={s.metaLabel}>Generated</div>
+          <div style={s.metaValue}>{fmtDate(statement.generatedAt)}</div>
+          <div style={{ ...s.metaLabel, marginTop: 6 }}>Period</div>
+          <div style={s.metaValue}>{periodLabel}</div>
         </div>
       </div>
-    </>
+
+      <hr style={s.divider} />
+
+      {/* Customer info */}
+      <div style={s.customerBlock}>
+        <div style={s.sectionLabel}>Bill To</div>
+        <div style={s.customerName}>{statement.customerName}</div>
+        {statement.customerAddress && (
+          <div style={s.customerMeta}>{statement.customerAddress}</div>
+        )}
+        {statement.customerContact && (
+          <div style={s.customerMeta}>{statement.customerContact}</div>
+        )}
+      </div>
+
+      {/* Invoice table */}
+      <table style={s.table}>
+        <thead>
+          <tr style={s.thead}>
+            <th style={s.th}>Date</th>
+            <th style={s.th}>Invoice #</th>
+            <th style={s.th}>Payment Method</th>
+            <th style={{ ...s.th, textAlign: "right" }}>Sub-Total</th>
+            <th style={{ ...s.th, textAlign: "right" }}>VAT</th>
+            <th style={{ ...s.th, textAlign: "right" }}>Total</th>
+            <th style={{ ...s.th, textAlign: "center" }}>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {statement.lines.map((line, i) => (
+            <tr key={line.invoiceId} style={i % 2 === 0 ? {} : s.altRow}>
+              <td style={s.td}>{fmtDate(line.date)}</td>
+              <td style={{ ...s.td, fontFamily: "monospace", fontSize: 12 }}>
+                {line.invoiceId.slice(0, 8)}…
+              </td>
+              <td style={s.td}>{line.paymentType || "—"}</td>
+              <td style={{ ...s.td, textAlign: "right" }}>{fmt(line.subTotal)}</td>
+              <td style={{ ...s.td, textAlign: "right" }}>{fmt(line.vatTotal)}</td>
+              <td style={{ ...s.td, textAlign: "right", fontWeight: 600 }}>{fmt(line.grandTotal)}</td>
+              <td style={{ ...s.td, textAlign: "center" }}>
+                <span style={{
+                  ...s.badge,
+                  background: line.paymentStatus === "Paid" ? "#dcfce7" : "#fef9c3",
+                  color: line.paymentStatus === "Paid" ? "#166534" : "#92400e",
+                }}>
+                  {line.paymentStatus || "—"}
+                </span>
+              </td>
+            </tr>
+          ))}
+          {statement.lines.length === 0 && (
+            <tr>
+              <td colSpan={7} style={{ ...s.td, textAlign: "center", color: "#94a3b8", padding: "24px 0" }}>
+                No invoices found for this period
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {/* Totals summary */}
+      <div style={s.totalsBlock}>
+        <div style={s.totalsGrid}>
+          <TotalRow label="Sub-Total" value={fmt(statement.totalSubTotal)} />
+          <TotalRow label="VAT" value={fmt(statement.totalVat)} />
+          <TotalRow label="Total Invoiced" value={fmt(statement.totalGrandTotal)} bold />
+          <div style={s.totalsDivider} />
+          <TotalRow label="Total Paid" value={fmt(statement.totalPaid)} color="#166534" />
+          <TotalRow
+            label="Outstanding Balance"
+            value={fmt(statement.totalOutstanding)}
+            bold
+            color={statement.totalOutstanding > 0 ? "#dc2626" : "#166534"}
+          />
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={s.footer}>
+        <p>This statement was generated automatically. Please contact KwaWicks if you have any queries.</p>
+      </div>
+    </div>
   );
 }
 

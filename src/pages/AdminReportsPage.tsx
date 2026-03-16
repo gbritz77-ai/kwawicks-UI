@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { CSSProperties } from "react";
+import { useSearchParams } from "react-router-dom";
 import { reportsApi } from "../api/reportsApi";
 import { invoicesApi } from "../api/invoicesApi";
 import { clientsApi } from "../api/clientsApi";
@@ -16,7 +17,12 @@ import type { ClientDto } from "../api/clientsApi";
 type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement";
 
 export default function AdminReportsPage() {
-  const [tab, setTab] = useState<Tab>("revenue");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = (searchParams.get("tab") as Tab) || "revenue";
+
+  function setTab(t: Tab) {
+    setSearchParams(t === "revenue" ? {} : { tab: t }, { replace: true });
+  }
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
@@ -325,6 +331,7 @@ export default function AdminReportsPage() {
               style={s.select}
             >
               <option value="">— Select customer —</option>
+              <option value="ALL">All Customers</option>
               {clients.map((c) => (
                 <option key={c.clientId} value={c.clientId}>{c.clientName}</option>
               ))}
