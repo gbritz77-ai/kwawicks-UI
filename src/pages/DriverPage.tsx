@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { clearAuth, getProfileFromIdToken } from "../api/auth";
+import { getProfileFromIdToken } from "../api/auth";
 import { deliveryOrdersApi, type DeliveryOrderResponse } from "../api/deliveryOrdersApi";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
 import { invoicesApi } from "../api/invoicesApi";
@@ -38,7 +37,6 @@ const STATUS_LABELS: Record<string, string> = {
 // ── Component ──────────────────────────────────────────────────────────────
 
 export default function DriverPage() {
-  const nav = useNavigate();
   const profile = getProfileFromIdToken();
   const driverId = profile?.username ?? "";
 
@@ -261,24 +259,10 @@ export default function DriverPage() {
     <div style={s.page}>
       {/* Header */}
       <div style={s.header}>
-        <div>
-          <div style={s.title}>My Deliveries</div>
-          {profile?.username && <div style={s.sub}>Logged in as {profile.username}</div>}
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button style={s.secondaryBtn} onClick={loadOrders} disabled={loading}>
-            Refresh
-          </button>
-          <button style={s.secondaryBtn} onClick={() => nav("/driver/reports")}>
-            Reports
-          </button>
-          <button
-            style={s.secondaryBtn}
-            onClick={() => { clearAuth(); nav("/login", { replace: true }); }}
-          >
-            Log out
-          </button>
-        </div>
+        <div style={s.title}>My Deliveries</div>
+        <button style={s.secondaryBtn} onClick={loadOrders} disabled={loading}>
+          Refresh
+        </button>
       </div>
 
       {/* Summary pills */}

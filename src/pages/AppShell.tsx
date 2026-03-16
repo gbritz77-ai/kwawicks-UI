@@ -1,101 +1,27 @@
-import { useNavigate } from "react-router-dom";
-import { clearAuth, getProfileFromIdToken, hasRole } from "../api/auth";
 import { useAutoLogout } from "../hooks/useAutoLogout";
+import { getProfileFromIdToken, hasRole } from "../api/auth";
 
 export default function AppShell() {
   useAutoLogout();
-
-  const nav = useNavigate();
   const profile = getProfileFromIdToken();
-
-  const isAdmin = hasRole("Admin");
-  const isHubStaff = hasRole("HubStaff");
   const isDriver = hasRole("Driver");
 
   return (
-    <div style={{ padding: 24, fontFamily: "system-ui" }}>
-      <h2>KwaWicks</h2>
-      <p>
-        Welcome{profile?.username ? `, ${profile.username}` : ""} ✅
+    <div style={s.page}>
+      <h2 style={s.heading}>
+        Welcome{profile?.username ? `, ${profile.username}` : ""}
+      </h2>
+      <p style={s.sub}>
+        {isDriver
+          ? "Use the navigation above to view your deliveries or delivery history."
+          : "Use the navigation above to access Hub Tasks, Delivery Orders, and Reports."}
       </p>
-
-      <div style={{ display: "grid", gap: 12, maxWidth: 520, marginTop: 16 }}>
-        {isAdmin && (
-          <button style={tileBtn} onClick={() => alert("Admin panel next")}>
-            Admin Panel
-          </button>
-        )}
-
-        {(isAdmin || isHubStaff) && (
-          <button style={tileBtn} onClick={() => nav("/app/hub-tasks")}>
-            Hub Tasks
-            <div style={tileSub}>Manage species &amp; clients</div>
-          </button>
-        )}
-
-        {(isAdmin || isHubStaff) && (
-          <button style={tileBtn} onClick={() => nav("/app/delivery-orders")}>
-            Delivery Orders
-            <div style={tileSub}>Create and track driver deliveries</div>
-          </button>
-        )}
-
-        {(isAdmin || isDriver) && (
-          <button style={tileBtn} onClick={() => nav("/driver")}>
-            Driver Screen
-            <div style={tileSub}>View assigned deliveries</div>
-          </button>
-        )}
-
-        {isAdmin && (
-          <button style={tileBtn} onClick={() => nav("/app/reports")}>
-            Reports
-            <div style={tileSub}>Revenue, outstanding payments, driver performance</div>
-          </button>
-        )}
-
-        {isDriver && (
-          <button style={tileBtn} onClick={() => nav("/driver/reports")}>
-            My Delivery History
-            <div style={tileSub}>View your completed deliveries and earnings</div>
-          </button>
-        )}
-      </div>
-
-      <div style={{ marginTop: 20 }}>
-        <button
-          onClick={() => {
-            clearAuth();
-            nav("/login", { replace: true });
-          }}
-          style={{
-            padding: "12px 14px",
-            borderRadius: 10,
-            border: "1px solid rgba(0,0,0,0.2)",
-            cursor: "pointer",
-            fontWeight: 700,
-          }}
-        >
-          Log out
-        </button>
-      </div>
     </div>
   );
 }
 
-const tileBtn: React.CSSProperties = {
-  padding: "16px 16px",
-  borderRadius: 12,
-  border: "1px solid rgba(0,0,0,0.15)",
-  fontSize: 16,
-  fontWeight: 800,
-  cursor: "pointer",
-  textAlign: "left",
-};
-
-const tileSub: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 500,
-  opacity: 0.6,
-  marginTop: 4,
+const s: Record<string, React.CSSProperties> = {
+  page: { padding: "48px 32px", fontFamily: "system-ui, -apple-system, sans-serif" },
+  heading: { fontSize: 26, fontWeight: 800, color: "#1e293b", marginBottom: 10 },
+  sub: { fontSize: 15, color: "#64748b", maxWidth: 480 },
 };
