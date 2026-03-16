@@ -325,6 +325,8 @@ function InvoicesTab({
   onConfirmed: () => void;
 }) {
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
 
   const clientMap = Object.fromEntries(clients.map((c) => [c.clientId, c.clientName]));
 
@@ -335,6 +337,16 @@ function InvoicesTab({
       onConfirmed();
     } finally {
       setConfirming(null);
+    }
+  }
+
+  async function handleViewReceipt(invoiceId: string) {
+    setViewingReceipt(invoiceId);
+    try {
+      const { url } = await invoicesApi.getReceiptViewUrl(invoiceId);
+      setReceiptUrl(url);
+    } finally {
+      setViewingReceipt(null);
     }
   }
 
@@ -403,6 +415,7 @@ function InvoicesTab({
                 <Th>VAT</Th>
                 <Th>Grand Total</Th>
                 <Th>Date</Th>
+                <Th>Receipt</Th>
                 <Th>Action</Th>
               </tr>
             </thead>
@@ -410,6 +423,7 @@ function InvoicesTab({
               {invoices.map((inv) => {
                 const payColor = inv.paymentStatus === "Paid" ? "#166534" : "#854d0e";
                 const payBg    = inv.paymentStatus === "Paid" ? "#dcfce7" : "#fef9c3";
+                const hasReceipt = !!inv.receiptS3Key;
                 return (
                   <tr key={inv.invoiceId}>
                     <Td><span style={s.mono}>{inv.invoiceId.slice(0, 8)}…</span></Td>
@@ -428,6 +442,17 @@ function InvoicesTab({
                       {new Date(inv.createdAt).toLocaleDateString("en-ZA")}
                     </Td>
                     <Td>
+                      {hasReceipt ? (
+                        <button
+                          disabled={viewingReceipt === inv.invoiceId}
+                          onClick={() => handleViewReceipt(inv.invoiceId)}
+                          style={s.viewBtn}
+                        >
+                          {viewingReceipt === inv.invoiceId ? "…" : "View POP"}
+                        </button>
+                      ) : "—"}
+                    </Td>
+                    <Td>
                       {inv.paymentStatus === "Pending" ? (
                         <button
                           disabled={confirming === inv.invoiceId}
@@ -442,11 +467,27 @@ function InvoicesTab({
                 );
               })}
               {invoices.length === 0 && (
-                <tr><td colSpan={10} style={s.emptyCell}>No invoices found</td></tr>
+                <tr><td colSpan={11} style={s.emptyCell}>No invoices found</td></tr>
               )}
             </tbody>
           </ScrollTable>
         </>
+      )}
+
+      {/* Receipt image modal */}
+      {receiptUrl && (
+        <div style={s.modalOverlay} onClick={() => setReceiptUrl(null)}>
+          <div style={s.modalBox} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <strong style={{ fontSize: 15 }}>Proof of Payment</strong>
+              <button onClick={() => setReceiptUrl(null)} style={s.modalClose}>✕</button>
+            </div>
+            <img src={receiptUrl} alt="Proof of payment" style={{ maxWidth: "100%", maxHeight: "70vh", borderRadius: 8, display: "block" }} />
+            <a href={receiptUrl} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 10, fontSize: 13, color: "#2563eb" }}>
+              Open full size ↗
+            </a>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -580,6 +621,21 @@ const s: Record<string, CSSProperties> = {
   confirmBtn: {
     padding: "5px 12px", borderRadius: 6, border: "none", cursor: "pointer",
     background: "#15803d", color: "#fff", fontSize: 13, fontWeight: 600,
+  },
+  viewBtn: {
+    padding: "5px 12px", borderRadius: 6, border: "1px solid #2563eb", cursor: "pointer",
+    background: "#eff6ff", color: "#2563eb", fontSize: 13, fontWeight: 600,
+  },
+  modalOverlay: {
+    position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000,
+    display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+  },
+  modalBox: {
+    background: "#fff", borderRadius: 12, padding: 20, maxWidth: 720, width: "100%",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+  },
+  modalClose: {
+    background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#64748b",
   },
   error: { color: "#dc2626", marginBottom: 12 },
   muted: { color: "#94a3b8" },

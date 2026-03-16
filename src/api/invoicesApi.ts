@@ -90,4 +90,7 @@ export const invoicesApi = {
 
   getReceiptUploadUrl: (invoiceId: string) =>
     api.get<ReceiptUploadUrlResponse>(`/api/invoices/${invoiceId}/receipt-upload-url`),
+
+  getReceiptViewUrl: (invoiceId: string) =>
+    api.get<{ url: string }>(`/api/invoices/${invoiceId}/receipt-view-url`),
 };

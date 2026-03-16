@@ -107,6 +107,7 @@ export type InvoiceItem = {
   status: string;
   paymentType: string;
   paymentStatus: string;
+  receiptS3Key: string;
   subTotal: number;
   vatTotal: number;
   grandTotal: number;
