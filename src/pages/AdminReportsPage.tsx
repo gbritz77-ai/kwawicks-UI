@@ -11,10 +11,11 @@ import type {
   ReturnsSummaryResponse,
   DeliveryStatusSummaryResponse,
   InvoiceItem,
+  SpeciesRevenueResponse,
 } from "../api/reportsApi";
 import type { ClientDto } from "../api/clientsApi";
 
-type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement";
+type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species";
 
 export default function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -36,6 +37,7 @@ export default function AdminReportsPage() {
   const [invoicePayFilter, setInvoicePayFilter] = useState<"" | "Pending" | "Paid">("");
   const [invoiceCustomer, setInvoiceCustomer] = useState("");
   const [clients, setClients] = useState<ClientDto[]>([]);
+  const [speciesRevenue, setSpeciesRevenue] = useState<SpeciesRevenueResponse | null>(null);
   const [stmtCustomer, setStmtCustomer] = useState("");
   const [stmtFrom, setStmtFrom] = useState("");
   const [stmtTo, setStmtTo] = useState("");
@@ -62,6 +64,7 @@ export default function AdminReportsPage() {
       if (tab === "statement" && !clients.length) {
         setClients(await clientsApi.list());
       }
+      if (tab === "species") setSpeciesRevenue(await reportsApi.getSpeciesRevenue(from || undefined, to || undefined));
     } catch {
       setError("Failed to load report.");
     } finally {
@@ -80,7 +83,7 @@ export default function AdminReportsPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["revenue", "outstanding", "invoices", "drivers", "returns", "deliveries", "statement"] as Tab[]).map((t) => (
+        {(["revenue", "outstanding", "invoices", "drivers", "returns", "deliveries", "species", "statement"] as Tab[]).map((t) => (
           <button key={t} style={tab === t ? { ...s.tab, ...s.tabActive } : s.tab} onClick={() => setTab(t)}>
             {t === "revenue" && "Revenue"}
             {t === "outstanding" && "Outstanding"}
@@ -88,6 +91,7 @@ export default function AdminReportsPage() {
             {t === "drivers" && "Driver Performance"}
             {t === "returns" && "Returns"}
             {t === "deliveries" && "Deliveries"}
+            {t === "species" && "Species Revenue"}
             {t === "statement" && "Customer Statement"}
           </button>
         ))}
@@ -316,6 +320,54 @@ export default function AdminReportsPage() {
           </ScrollTable>
         </div>
       )}
+
+      {/* Species Revenue */}
+      {tab === "species" && speciesRevenue && !loading && (() => {
+        const grandTotal = speciesRevenue.items.reduce((s, i) => s + i.totalRevenue, 0);
+        const fmtMonth = (m: string) => {
+          const [y, mo] = m.split("-");
+          return new Date(Number(y), Number(mo) - 1).toLocaleString("en-ZA", { month: "short", year: "2-digit" });
+        };
+        return (
+          <div>
+            <div style={s.kpiRow}>
+              <KpiCard label="Species" value={String(speciesRevenue.items.length)} />
+              <KpiCard label="Total Revenue" value={fmt(grandTotal)} highlight />
+            </div>
+            <ScrollTable>
+              <thead>
+                <tr>
+                  <Th>Species</Th>
+                  <Th>Total Qty</Th>
+                  <Th>Total Revenue</Th>
+                  <Th>% of Total</Th>
+                  {speciesRevenue.months.map((m) => <Th key={m}>{fmtMonth(m)}</Th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {speciesRevenue.items.map((item) => (
+                  <tr key={item.speciesId}>
+                    <Td><strong>{item.speciesName}</strong></Td>
+                    <Td>{item.totalQty}</Td>
+                    <Td>{fmt(item.totalRevenue)}</Td>
+                    <Td style={{ color: "#64748b" }}>
+                      {grandTotal > 0 ? `${((item.totalRevenue / grandTotal) * 100).toFixed(1)}%` : "—"}
+                    </Td>
+                    {speciesRevenue.months.map((m) => (
+                      <Td key={m} style={{ color: "#64748b" }}>
+                        {item.revenueByMonth[m] ? fmt(item.revenueByMonth[m]) : "—"}
+                      </Td>
+                    ))}
+                  </tr>
+                ))}
+                {speciesRevenue.items.length === 0 && (
+                  <tr><td colSpan={4 + speciesRevenue.months.length} style={s.emptyCell}>No data for selected period</td></tr>
+                )}
+              </tbody>
+            </ScrollTable>
+          </div>
+        );
+      })()}
 
       {/* Customer Statement */}
       {tab === "statement" && (

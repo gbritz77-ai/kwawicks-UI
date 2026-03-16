@@ -144,6 +144,22 @@ export type CustomerStatementResponse = {
   totalOutstanding: number;
 };
 
+// ── Admin: Species Revenue ────────────────────────────────────────────────────
+export type SpeciesRevenueSummary = {
+  speciesId: string;
+  speciesName: string;
+  totalQty: number;
+  totalRevenue: number;
+  revenueByMonth: Record<string, number>;
+};
+
+export type SpeciesRevenueResponse = {
+  from?: string;
+  to?: string;
+  months: string[];
+  items: SpeciesRevenueSummary[];
+};
+
 // ── Driver types ─────────────────────────────────────────────────────────────
 export type MyDeliveryItem = {
   deliveryOrderId: string;
@@ -202,4 +218,7 @@ export const reportsApi = {
 
   getAllStatements: (from?: string, to?: string) =>
     api.get<CustomerStatementResponse[]>(`/api/reports/statements${dateParams(from, to)}`),
+
+  getSpeciesRevenue: (from?: string, to?: string) =>
+    api.get<SpeciesRevenueResponse>(`/api/reports/revenue-by-species${dateParams(from, to)}`),
 };
