@@ -63,6 +63,27 @@ export type ReturnsSummaryResponse = {
   items: ReturnsSummaryItem[];
 };
 
+// ── Admin: Delivery Status Summary ───────────────────────────────────────────
+export type DeliveryStatusItem = {
+  deliveryOrderId: string;
+  status: string;
+  customerId: string;
+  driverName: string;
+  deliveryAddress: string;
+  totalItems: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DeliveryStatusSummaryResponse = {
+  from?: string;
+  to?: string;
+  openCount: number;
+  inTransitCount: number;
+  deliveredCount: number;
+  orders: DeliveryStatusItem[];
+};
+
 // ── Driver types ─────────────────────────────────────────────────────────────
 export type MyDeliveryItem = {
   deliveryOrderId: string;
@@ -95,6 +116,9 @@ export const reportsApi = {
 
   getReturns: (from?: string, to?: string) =>
     api.get<ReturnsSummaryResponse>(`/api/reports/returns${dateParams(from, to)}`),
+
+  getDeliveryStatus: (from?: string, to?: string) =>
+    api.get<DeliveryStatusSummaryResponse>(`/api/reports/delivery-status${dateParams(from, to)}`),
 
   getMyDeliveries: (from?: string, to?: string) =>
     api.get<MyDeliveryItem[]>(`/api/reports/my-deliveries${dateParams(from, to)}`),

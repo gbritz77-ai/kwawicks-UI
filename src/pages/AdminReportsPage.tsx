@@ -6,9 +6,10 @@ import type {
   OutstandingPaymentsResponse,
   DriverPerformanceResponse,
   ReturnsSummaryResponse,
+  DeliveryStatusSummaryResponse,
 } from "../api/reportsApi";
 
-type Tab = "revenue" | "outstanding" | "drivers" | "returns";
+type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries";
 
 export default function AdminReportsPage() {
   const [tab, setTab] = useState<Tab>("revenue");
@@ -19,6 +20,7 @@ export default function AdminReportsPage() {
   const [outstanding, setOutstanding] = useState<OutstandingPaymentsResponse | null>(null);
   const [drivers, setDrivers] = useState<DriverPerformanceResponse | null>(null);
   const [returns, setReturns] = useState<ReturnsSummaryResponse | null>(null);
+  const [deliveries, setDeliveries] = useState<DeliveryStatusSummaryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -30,6 +32,7 @@ export default function AdminReportsPage() {
       if (tab === "outstanding") setOutstanding(await reportsApi.getOutstandingPayments());
       if (tab === "drivers") setDrivers(await reportsApi.getDriverPerformance(from || undefined, to || undefined));
       if (tab === "returns") setReturns(await reportsApi.getReturns(from || undefined, to || undefined));
+      if (tab === "deliveries") setDeliveries(await reportsApi.getDeliveryStatus(from || undefined, to || undefined));
     } catch {
       setError("Failed to load report.");
     } finally {
@@ -48,12 +51,13 @@ export default function AdminReportsPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["revenue", "outstanding", "drivers", "returns"] as Tab[]).map((t) => (
+        {(["revenue", "outstanding", "drivers", "returns", "deliveries"] as Tab[]).map((t) => (
           <button key={t} style={tab === t ? { ...s.tab, ...s.tabActive } : s.tab} onClick={() => setTab(t)}>
             {t === "revenue" && "Revenue"}
             {t === "outstanding" && "Outstanding"}
             {t === "drivers" && "Driver Performance"}
             {t === "returns" && "Returns"}
+            {t === "deliveries" && "Deliveries"}
           </button>
         ))}
       </div>
@@ -165,6 +169,53 @@ export default function AdminReportsPage() {
         </div>
       )}
 
+      {/* Deliveries */}
+      {tab === "deliveries" && deliveries && !loading && (
+        <div>
+          <div style={s.kpiRow}>
+            <KpiCard label="Open" value={String(deliveries.openCount)} />
+            <KpiCard label="In Transit" value={String(deliveries.inTransitCount)} />
+            <KpiCard label="Delivered" value={String(deliveries.deliveredCount)} highlight />
+          </div>
+          <table style={s.table}>
+            <thead>
+              <tr>
+                <Th>Status</Th><Th>Customer</Th><Th>Driver</Th><Th>Address</Th><Th>Items</Th><Th>Created</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {deliveries.orders.map((o) => {
+                const statusColor =
+                  o.status === "Delivered" ? "#166534" :
+                  o.status === "OutForDelivery" ? "#1d4ed8" : "#92400e";
+                const statusBg =
+                  o.status === "Delivered" ? "#dcfce7" :
+                  o.status === "OutForDelivery" ? "#dbeafe" : "#fef9c3";
+                const statusLabel =
+                  o.status === "OutForDelivery" ? "In Transit" : o.status;
+                return (
+                  <tr key={o.deliveryOrderId}>
+                    <Td>
+                      <span style={{ ...s.badge, background: statusBg, color: statusColor }}>
+                        {statusLabel}
+                      </span>
+                    </Td>
+                    <Td>{o.customerId}</Td>
+                    <Td>{o.driverName || "—"}</Td>
+                    <Td style={{ color: "#64748b", fontSize: 13 }}>{o.deliveryAddress}</Td>
+                    <Td>{o.totalItems}</Td>
+                    <Td style={{ color: "#64748b", fontSize: 13 }}>{new Date(o.createdAt).toLocaleDateString("en-ZA")}</Td>
+                  </tr>
+                );
+              })}
+              {deliveries.orders.length === 0 && (
+                <tr><td colSpan={6} style={s.emptyCell}>No orders for selected period</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* Returns */}
       {tab === "returns" && returns && !loading && (
         <div>
@@ -235,6 +286,7 @@ const s: Record<string, CSSProperties> = {
   td: { padding: "10px 12px", borderBottom: "1px solid #f1f5f9", color: "#1e293b" },
   emptyCell: { padding: "24px 12px", color: "#94a3b8", textAlign: "center" },
   mono: { fontFamily: "monospace", fontSize: 12 },
+  badge: { padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600 },
   error: { color: "#dc2626", marginBottom: 12 },
   muted: { color: "#94a3b8" },
 };
