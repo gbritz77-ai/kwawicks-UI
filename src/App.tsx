@@ -7,6 +7,7 @@ import DeliveryOrdersPage from "./pages/DeliveryOrdersPage";
 import DriverPage from "./pages/DriverPage";
 import AdminReportsPage from "./pages/AdminReportsPage";
 import DriverReportsPage from "./pages/DriverReportsPage";
+import StatementPage from "./pages/StatementPage";
 
 export default function App() {
   return (
@@ -59,6 +60,14 @@ export default function App() {
         element={
           <RequireAuth>
             <AdminReportsPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/app/statement"
+        element={
+          <RequireAuth>
+            <StatementPage />
           </RequireAuth>
         }
       />

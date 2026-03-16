@@ -116,6 +116,33 @@ export type InvoiceItem = {
   lines: InvoiceLineItem[];
 };
 
+// ── Admin: Customer Statement ─────────────────────────────────────────────────
+export type CustomerStatementLine = {
+  invoiceId: string;
+  date: string;
+  paymentType: string;
+  paymentStatus: string;
+  subTotal: number;
+  vatTotal: number;
+  grandTotal: number;
+};
+
+export type CustomerStatementResponse = {
+  customerId: string;
+  customerName: string;
+  customerAddress: string;
+  customerContact: string;
+  from?: string;
+  to?: string;
+  generatedAt: string;
+  lines: CustomerStatementLine[];
+  totalSubTotal: number;
+  totalVat: number;
+  totalGrandTotal: number;
+  totalPaid: number;
+  totalOutstanding: number;
+};
+
 // ── Driver types ─────────────────────────────────────────────────────────────
 export type MyDeliveryItem = {
   deliveryOrderId: string;
@@ -164,4 +191,11 @@ export const reportsApi = {
 
   getMyDeliveries: (from?: string, to?: string) =>
     api.get<MyDeliveryItem[]>(`/api/reports/my-deliveries${dateParams(from, to)}`),
+
+  getCustomerStatement: (customerId: string, from?: string, to?: string) => {
+    const p = new URLSearchParams({ customerId });
+    if (from) p.set("from", from);
+    if (to) p.set("to", to);
+    return api.get<CustomerStatementResponse>(`/api/reports/statement?${p}`);
+  },
 };

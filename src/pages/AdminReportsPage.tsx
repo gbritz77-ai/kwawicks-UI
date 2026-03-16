@@ -13,7 +13,7 @@ import type {
 } from "../api/reportsApi";
 import type { ClientDto } from "../api/clientsApi";
 
-type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices";
+type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement";
 
 export default function AdminReportsPage() {
   const [tab, setTab] = useState<Tab>("revenue");
@@ -30,6 +30,9 @@ export default function AdminReportsPage() {
   const [invoicePayFilter, setInvoicePayFilter] = useState<"" | "Pending" | "Paid">("");
   const [invoiceCustomer, setInvoiceCustomer] = useState("");
   const [clients, setClients] = useState<ClientDto[]>([]);
+  const [stmtCustomer, setStmtCustomer] = useState("");
+  const [stmtFrom, setStmtFrom] = useState("");
+  const [stmtTo, setStmtTo] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -50,6 +53,9 @@ export default function AdminReportsPage() {
         setInvoices(inv);
         if (!clients.length) setClients(cls);
       }
+      if (tab === "statement" && !clients.length) {
+        setClients(await clientsApi.list());
+      }
     } catch {
       setError("Failed to load report.");
     } finally {
@@ -68,7 +74,7 @@ export default function AdminReportsPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["revenue", "outstanding", "invoices", "drivers", "returns", "deliveries"] as Tab[]).map((t) => (
+        {(["revenue", "outstanding", "invoices", "drivers", "returns", "deliveries", "statement"] as Tab[]).map((t) => (
           <button key={t} style={tab === t ? { ...s.tab, ...s.tabActive } : s.tab} onClick={() => setTab(t)}>
             {t === "revenue" && "Revenue"}
             {t === "outstanding" && "Outstanding"}
@@ -76,12 +82,13 @@ export default function AdminReportsPage() {
             {t === "drivers" && "Driver Performance"}
             {t === "returns" && "Returns"}
             {t === "deliveries" && "Deliveries"}
+            {t === "statement" && "Customer Statement"}
           </button>
         ))}
       </div>
 
-      {/* Date filter (not shown for outstanding) */}
-      {tab !== "outstanding" && (
+      {/* Date filter (not shown for outstanding or statement) */}
+      {tab !== "outstanding" && tab !== "statement" && (
         <div style={s.filterRow}>
           <label style={s.label}>From</label>
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={s.dateInput} />
@@ -301,6 +308,47 @@ export default function AdminReportsPage() {
               )}
             </tbody>
           </ScrollTable>
+        </div>
+      )}
+
+      {/* Customer Statement */}
+      {tab === "statement" && (
+        <div>
+          <p style={{ color: "#64748b", fontSize: 14, marginBottom: 16 }}>
+            Generate a statement for a customer showing all their invoices and outstanding balance.
+          </p>
+          <div style={s.filterRow}>
+            <label style={s.label}>Customer</label>
+            <select
+              value={stmtCustomer}
+              onChange={(e) => setStmtCustomer(e.target.value)}
+              style={s.select}
+            >
+              <option value="">— Select customer —</option>
+              {clients.map((c) => (
+                <option key={c.clientId} value={c.clientId}>{c.clientName}</option>
+              ))}
+            </select>
+            <label style={s.label}>From</label>
+            <input type="date" value={stmtFrom} onChange={(e) => setStmtFrom(e.target.value)} style={s.dateInput} />
+            <label style={s.label}>To</label>
+            <input type="date" value={stmtTo} onChange={(e) => setStmtTo(e.target.value)} style={s.dateInput} />
+            <button
+              style={{ ...s.applyBtn, opacity: stmtCustomer ? 1 : 0.5 }}
+              disabled={!stmtCustomer}
+              onClick={() => {
+                const p = new URLSearchParams({ customerId: stmtCustomer });
+                if (stmtFrom) p.set("from", stmtFrom);
+                if (stmtTo) p.set("to", stmtTo);
+                window.open(`/app/statement?${p}`, "_blank");
+              }}
+            >
+              Generate Statement ↗
+            </button>
+          </div>
+          {!clients.length && !loading && (
+            <p style={s.muted}>Loading customers…</p>
+          )}
         </div>
       )}
     </div>
@@ -636,6 +684,10 @@ const s: Record<string, CSSProperties> = {
   },
   modalClose: {
     background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#64748b",
+  },
+  select: {
+    padding: "6px 10px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 14,
+    background: "#fff", minWidth: 200,
   },
   error: { color: "#dc2626", marginBottom: 12 },
   muted: { color: "#94a3b8" },
