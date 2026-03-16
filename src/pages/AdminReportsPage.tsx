@@ -249,7 +249,7 @@ export default function AdminReportsPage() {
                   return (
                     <tr key={o.deliveryOrderId}>
                       <Td><span style={{ ...s.badge, background: bg, color }}>{label}</span></Td>
-                      <Td>{o.customerId}</Td>
+                      <Td>{o.customerName || o.customerId}</Td>
                       <Td>{o.driverName || "—"}</Td>
                       <Td style={{ color: "#64748b", fontSize: 13 }}>{o.deliveryAddress}</Td>
                       <Td>{o.totalItems}</Td>

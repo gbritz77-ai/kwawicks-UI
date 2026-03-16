@@ -68,6 +68,7 @@ export type DeliveryStatusItem = {
   deliveryOrderId: string;
   status: string;
   customerId: string;
+  customerName: string;
   driverName: string;
   deliveryAddress: string;
   totalItems: number;
