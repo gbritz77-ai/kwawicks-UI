@@ -226,29 +226,39 @@ export default function AdminReportsPage() {
             <table style={s.table}>
               <thead>
                 <tr>
-                  <Th>Status</Th><Th>Customer</Th><Th>Driver</Th><Th>Address</Th><Th>Items</Th><Th>Created</Th><Th>Last Updated</Th>
+                  <Th>Status</Th><Th>Customer</Th><Th>Driver</Th><Th>Address</Th><Th>Items</Th><Th>Invoice</Th><Th>Amount</Th><Th>Payment</Th><Th>Pay Status</Th><Th>Created</Th><Th>Updated</Th>
                 </tr>
               </thead>
               <tbody>
                 {visible.map((o) => {
                   const { color, bg } = statusStyle(o.status);
                   const label = o.status === "OutForDelivery" ? "In Transit" : o.status;
+                  const payColor = o.paymentStatus === "Paid" ? "#166534" : o.paymentStatus === "Pending" ? "#854d0e" : undefined;
+                  const payBg   = o.paymentStatus === "Paid" ? "#dcfce7" : o.paymentStatus === "Pending" ? "#fef9c3" : undefined;
                   return (
                     <tr key={o.deliveryOrderId}>
-                      <Td>
-                        <span style={{ ...s.badge, background: bg, color }}>{label}</span>
-                      </Td>
+                      <Td><span style={{ ...s.badge, background: bg, color }}>{label}</span></Td>
                       <Td>{o.customerId}</Td>
                       <Td>{o.driverName || "—"}</Td>
                       <Td style={{ color: "#64748b", fontSize: 13 }}>{o.deliveryAddress}</Td>
                       <Td>{o.totalItems}</Td>
+                      <Td style={{ fontSize: 12, fontFamily: "monospace", color: "#64748b" }}>
+                        {o.invoiceId ? o.invoiceId.slice(0, 8) + "…" : "—"}
+                      </Td>
+                      <Td>{o.grandTotal > 0 ? fmt(o.grandTotal) : "—"}</Td>
+                      <Td>{o.paymentType || "—"}</Td>
+                      <Td>
+                        {o.paymentStatus
+                          ? <span style={{ ...s.badge, background: payBg, color: payColor }}>{o.paymentStatus}</span>
+                          : "—"}
+                      </Td>
                       <Td style={{ color: "#64748b", fontSize: 13 }}>{new Date(o.createdAt).toLocaleDateString("en-ZA")}</Td>
                       <Td style={{ color: "#64748b", fontSize: 13 }}>{new Date(o.updatedAt).toLocaleDateString("en-ZA")}</Td>
                     </tr>
                   );
                 })}
                 {visible.length === 0 && (
-                  <tr><td colSpan={7} style={s.emptyCell}>No orders match this filter</td></tr>
+                  <tr><td colSpan={11} style={s.emptyCell}>No orders match this filter</td></tr>
                 )}
               </tbody>
             </table>

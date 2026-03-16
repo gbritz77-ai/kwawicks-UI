@@ -73,6 +73,10 @@ export type DeliveryStatusItem = {
   totalItems: number;
   createdAt: string;
   updatedAt: string;
+  invoiceId: string;
+  paymentType: string;
+  paymentStatus: string;
+  grandTotal: number;
 };
 
 export type DeliveryStatusSummaryResponse = {
