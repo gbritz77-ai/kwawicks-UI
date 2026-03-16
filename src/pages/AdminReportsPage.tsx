@@ -21,6 +21,7 @@ export default function AdminReportsPage() {
   const [drivers, setDrivers] = useState<DriverPerformanceResponse | null>(null);
   const [returns, setReturns] = useState<ReturnsSummaryResponse | null>(null);
   const [deliveries, setDeliveries] = useState<DeliveryStatusSummaryResponse | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"All" | "Open" | "OutForDelivery" | "Delivered">("All");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -170,51 +171,90 @@ export default function AdminReportsPage() {
       )}
 
       {/* Deliveries */}
-      {tab === "deliveries" && deliveries && !loading && (
-        <div>
-          <div style={s.kpiRow}>
-            <KpiCard label="Open" value={String(deliveries.openCount)} />
-            <KpiCard label="In Transit" value={String(deliveries.inTransitCount)} />
-            <KpiCard label="Delivered" value={String(deliveries.deliveredCount)} highlight />
+      {tab === "deliveries" && deliveries && !loading && (() => {
+        const visible = statusFilter === "All"
+          ? deliveries.orders
+          : deliveries.orders.filter((o) => o.status === statusFilter);
+
+        function statusStyle(status: string) {
+          if (status === "Delivered") return { color: "#166534", bg: "#dcfce7" };
+          if (status === "OutForDelivery") return { color: "#1d4ed8", bg: "#dbeafe" };
+          return { color: "#92400e", bg: "#fef9c3" };
+        }
+
+        return (
+          <div>
+            {/* Clickable KPI cards act as filters */}
+            <div style={s.kpiRow}>
+              <KpiCard
+                label="All"
+                value={String(deliveries.orders.length)}
+                active={statusFilter === "All"}
+                onClick={() => setStatusFilter("All")}
+              />
+              <KpiCard
+                label="Open"
+                value={String(deliveries.openCount)}
+                active={statusFilter === "Open"}
+                color="#92400e"
+                bg="#fef9c3"
+                onClick={() => setStatusFilter("Open")}
+              />
+              <KpiCard
+                label="In Transit"
+                value={String(deliveries.inTransitCount)}
+                active={statusFilter === "OutForDelivery"}
+                color="#1d4ed8"
+                bg="#dbeafe"
+                onClick={() => setStatusFilter("OutForDelivery")}
+              />
+              <KpiCard
+                label="Delivered"
+                value={String(deliveries.deliveredCount)}
+                active={statusFilter === "Delivered"}
+                color="#166534"
+                bg="#dcfce7"
+                onClick={() => setStatusFilter("Delivered")}
+              />
+            </div>
+
+            <p style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>
+              Showing {visible.length} order{visible.length !== 1 ? "s" : ""}
+              {statusFilter !== "All" ? ` · ${statusFilter === "OutForDelivery" ? "In Transit" : statusFilter}` : ""}
+            </p>
+
+            <table style={s.table}>
+              <thead>
+                <tr>
+                  <Th>Status</Th><Th>Customer</Th><Th>Driver</Th><Th>Address</Th><Th>Items</Th><Th>Created</Th><Th>Last Updated</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((o) => {
+                  const { color, bg } = statusStyle(o.status);
+                  const label = o.status === "OutForDelivery" ? "In Transit" : o.status;
+                  return (
+                    <tr key={o.deliveryOrderId}>
+                      <Td>
+                        <span style={{ ...s.badge, background: bg, color }}>{label}</span>
+                      </Td>
+                      <Td>{o.customerId}</Td>
+                      <Td>{o.driverName || "—"}</Td>
+                      <Td style={{ color: "#64748b", fontSize: 13 }}>{o.deliveryAddress}</Td>
+                      <Td>{o.totalItems}</Td>
+                      <Td style={{ color: "#64748b", fontSize: 13 }}>{new Date(o.createdAt).toLocaleDateString("en-ZA")}</Td>
+                      <Td style={{ color: "#64748b", fontSize: 13 }}>{new Date(o.updatedAt).toLocaleDateString("en-ZA")}</Td>
+                    </tr>
+                  );
+                })}
+                {visible.length === 0 && (
+                  <tr><td colSpan={7} style={s.emptyCell}>No orders match this filter</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
-          <table style={s.table}>
-            <thead>
-              <tr>
-                <Th>Status</Th><Th>Customer</Th><Th>Driver</Th><Th>Address</Th><Th>Items</Th><Th>Created</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {deliveries.orders.map((o) => {
-                const statusColor =
-                  o.status === "Delivered" ? "#166534" :
-                  o.status === "OutForDelivery" ? "#1d4ed8" : "#92400e";
-                const statusBg =
-                  o.status === "Delivered" ? "#dcfce7" :
-                  o.status === "OutForDelivery" ? "#dbeafe" : "#fef9c3";
-                const statusLabel =
-                  o.status === "OutForDelivery" ? "In Transit" : o.status;
-                return (
-                  <tr key={o.deliveryOrderId}>
-                    <Td>
-                      <span style={{ ...s.badge, background: statusBg, color: statusColor }}>
-                        {statusLabel}
-                      </span>
-                    </Td>
-                    <Td>{o.customerId}</Td>
-                    <Td>{o.driverName || "—"}</Td>
-                    <Td style={{ color: "#64748b", fontSize: 13 }}>{o.deliveryAddress}</Td>
-                    <Td>{o.totalItems}</Td>
-                    <Td style={{ color: "#64748b", fontSize: 13 }}>{new Date(o.createdAt).toLocaleDateString("en-ZA")}</Td>
-                  </tr>
-                );
-              })}
-              {deliveries.orders.length === 0 && (
-                <tr><td colSpan={6} style={s.emptyCell}>No orders for selected period</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Returns */}
       {tab === "returns" && returns && !loading && (
@@ -246,9 +286,24 @@ export default function AdminReportsPage() {
   );
 }
 
-function KpiCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function KpiCard({ label, value, highlight, active, color, bg, onClick }: {
+  label: string; value: string; highlight?: boolean;
+  active?: boolean; color?: string; bg?: string; onClick?: () => void;
+}) {
+  const background = active && bg ? bg : highlight ? "#166534" : "#f8fafc";
+  const textColor = active && color ? color : highlight ? "#fff" : "#1e293b";
   return (
-    <div style={{ ...s.kpi, background: highlight ? "#166534" : "#f8fafc", color: highlight ? "#fff" : "#1e293b" }}>
+    <div
+      onClick={onClick}
+      style={{
+        ...s.kpi,
+        background,
+        color: textColor,
+        cursor: onClick ? "pointer" : "default",
+        outline: active ? `2px solid ${color ?? "#15803d"}` : "none",
+        outlineOffset: 2,
+      }}
+    >
       <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 700 }}>{value}</div>
     </div>
