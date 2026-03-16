@@ -104,7 +104,7 @@ export default function AdminReportsPage() {
             <KpiCard label="Grand Total" value={fmt(revenue.totalGrandTotal)} highlight />
           </div>
           <h3 style={s.subHeading}>By Payment Type</h3>
-          <table style={s.table}>
+          <ScrollTable>
             <thead>
               <tr>
                 <Th>Type</Th><Th>Count</Th><Th>Sub-total</Th><Th>Grand Total</Th>
@@ -120,7 +120,7 @@ export default function AdminReportsPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </ScrollTable>
         </div>
       )}
 
@@ -156,7 +156,7 @@ export default function AdminReportsPage() {
       {/* Driver Performance */}
       {tab === "drivers" && drivers && !loading && (
         <div>
-          <table style={s.table}>
+          <ScrollTable>
             <thead>
               <tr>
                 <Th>Driver</Th><Th>Deliveries</Th><Th>Total Value</Th><Th>Dead</Th><Th>Mutilated</Th><Th>Not Wanted</Th>
@@ -177,7 +177,7 @@ export default function AdminReportsPage() {
                 <tr><td colSpan={6} style={s.emptyCell}>No data for selected period</td></tr>
               )}
             </tbody>
-          </table>
+          </ScrollTable>
         </div>
       )}
 
@@ -234,7 +234,7 @@ export default function AdminReportsPage() {
               {statusFilter !== "All" ? ` · ${statusFilter === "OutForDelivery" ? "In Transit" : statusFilter}` : ""}
             </p>
 
-            <table style={s.table}>
+            <ScrollTable>
               <thead>
                 <tr>
                   <Th>Status</Th><Th>Customer</Th><Th>Driver</Th><Th>Address</Th><Th>Items</Th><Th>Invoice</Th><Th>Amount</Th><Th>Payment</Th><Th>Pay Status</Th><Th>Created</Th><Th>Updated</Th>
@@ -272,7 +272,7 @@ export default function AdminReportsPage() {
                   <tr><td colSpan={11} style={s.emptyCell}>No orders match this filter</td></tr>
                 )}
               </tbody>
-            </table>
+            </ScrollTable>
           </div>
         );
       })()}
@@ -280,7 +280,7 @@ export default function AdminReportsPage() {
       {/* Returns */}
       {tab === "returns" && returns && !loading && (
         <div>
-          <table style={s.table}>
+          <ScrollTable>
             <thead>
               <tr>
                 <Th>Species</Th><Th>Dead</Th><Th>Mutilated</Th><Th>Not Wanted</Th><Th>Total</Th>
@@ -300,7 +300,7 @@ export default function AdminReportsPage() {
                 <tr><td colSpan={5} style={s.emptyCell}>No returns for selected period</td></tr>
               )}
             </tbody>
-          </table>
+          </ScrollTable>
         </div>
       )}
     </div>
@@ -391,7 +391,7 @@ function InvoicesTab({
             <KpiCard label="Paid" value={fmt(totalPaid)} highlight />
           </div>
 
-          <table style={s.table}>
+          <ScrollTable>
             <thead>
               <tr>
                 <Th>Invoice</Th>
@@ -445,7 +445,7 @@ function InvoicesTab({
                 <tr><td colSpan={10} style={s.emptyCell}>No invoices found</td></tr>
               )}
             </tbody>
-          </table>
+          </ScrollTable>
         </>
       )}
     </div>
@@ -479,7 +479,7 @@ function OutstandingTable({
         <KpiCard label="Outstanding invoices" value={String(outstanding.count)} />
         <KpiCard label="Total outstanding" value={fmt(outstanding.totalOutstanding)} highlight />
       </div>
-      <table style={s.table}>
+      <ScrollTable>
         <thead>
           <tr>
             <Th>Invoice</Th><Th>Customer</Th><Th>Type</Th><Th>Amount</Th><Th>Days outstanding</Th><Th>Action</Th>
@@ -512,7 +512,7 @@ function OutstandingTable({
             <tr><td colSpan={6} style={s.emptyCell}>No outstanding payments</td></tr>
           )}
         </tbody>
-      </table>
+      </ScrollTable>
     </div>
   );
 }
@@ -541,6 +541,9 @@ function KpiCard({ label, value, highlight, active, color, bg, onClick }: {
   );
 }
 
+function ScrollTable({ children }: { children: React.ReactNode }) {
+  return <div style={s.tableWrap}><table style={s.table}>{children}</table></div>;
+}
 function Th({ children }: { children: React.ReactNode }) {
   return <th style={s.th}>{children}</th>;
 }
@@ -549,7 +552,8 @@ function Td({ children, style }: { children: React.ReactNode; style?: CSSPropert
 }
 
 const s: Record<string, CSSProperties> = {
-  page: { padding: "24px 20px", maxWidth: 960, margin: "0 auto" },
+  page: { padding: "24px 20px", maxWidth: 1400, margin: "0 auto" },
+  tableWrap: { overflowX: "auto" as const },
   heading: { fontSize: 22, fontWeight: 700, marginBottom: 20, color: "#1e293b" },
   subHeading: { fontSize: 16, fontWeight: 600, margin: "20px 0 10px", color: "#334155" },
   tabs: { display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" },
@@ -568,8 +572,8 @@ const s: Record<string, CSSProperties> = {
   kpiRow: { display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 24 },
   kpi: { flex: "1 1 160px", borderRadius: 10, padding: "16px 20px", minWidth: 140 },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 14 },
-  th: { textAlign: "left", padding: "10px 12px", borderBottom: "2px solid #e2e8f0", fontWeight: 600, color: "#475569", fontSize: 12, textTransform: "uppercase", letterSpacing: "0.05em" },
-  td: { padding: "10px 12px", borderBottom: "1px solid #f1f5f9", color: "#1e293b" },
+  th: { textAlign: "left", padding: "10px 12px", borderBottom: "2px solid #e2e8f0", fontWeight: 600, color: "#475569", fontSize: 12, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" },
+  td: { padding: "10px 12px", borderBottom: "1px solid #f1f5f9", color: "#1e293b", whiteSpace: "nowrap" },
   emptyCell: { padding: "24px 12px", color: "#94a3b8", textAlign: "center" },
   mono: { fontFamily: "monospace", fontSize: 12 },
   badge: { padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600 },
