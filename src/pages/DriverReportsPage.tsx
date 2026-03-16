@@ -25,10 +25,6 @@ export default function DriverReportsPage() {
 
   useEffect(() => { load(); }, []);
 
-  const fmt = (n: number) =>
-    `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-  const totalValue = items.reduce((sum, i) => sum + i.grandTotal, 0);
   const pendingCount = items.filter((i) => i.paymentStatus === "Pending").length;
 
   return (
@@ -52,7 +48,6 @@ export default function DriverReportsPage() {
           {/* KPIs */}
           <div style={s.kpiRow}>
             <KpiCard label="Deliveries" value={String(items.length)} />
-            <KpiCard label="Total Value" value={fmt(totalValue)} highlight />
             {pendingCount > 0 && <KpiCard label="Awaiting Payment" value={String(pendingCount)} warn />}
           </div>
 
@@ -63,7 +58,6 @@ export default function DriverReportsPage() {
                 <Th>Date</Th>
                 <Th>Customer</Th>
                 <Th>Address</Th>
-                <Th>Amount</Th>
                 <Th>Payment</Th>
                 <Th>Status</Th>
               </tr>
@@ -74,7 +68,6 @@ export default function DriverReportsPage() {
                   <Td>{new Date(item.completedAt).toLocaleDateString("en-ZA")}</Td>
                   <Td>{item.customerId}</Td>
                   <Td style={{ color: "#64748b", fontSize: 13 }}>{item.deliveryAddress}</Td>
-                  <Td><strong>{fmt(item.grandTotal)}</strong></Td>
                   <Td>{item.paymentType || "—"}</Td>
                   <Td>
                     <span style={{
@@ -89,7 +82,7 @@ export default function DriverReportsPage() {
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={s.emptyCell}>No deliveries found for selected period</td>
+                  <td colSpan={5} style={s.emptyCell}>No deliveries found for selected period</td>
                 </tr>
               )}
             </tbody>

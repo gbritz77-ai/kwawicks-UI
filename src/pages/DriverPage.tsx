@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { clearAuth, getProfileFromIdToken } from "../api/auth";
 import { deliveryOrdersApi, type DeliveryOrderResponse } from "../api/deliveryOrdersApi";
@@ -34,9 +34,6 @@ const STATUS_LABELS: Record<string, string> = {
   Delivered: "Delivered",
 };
 
-function money(n: number) {
-  return `R ${n.toFixed(2)}`;
-}
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -152,25 +149,6 @@ export default function DriverPage() {
     });
   }
 
-  // ── Invoice preview calculation ────────────────────────────────────────────
-
-  const invoicePreview = useMemo(() => {
-    if (!completing) return null;
-    let subTotal = 0;
-    let vatTotal = 0;
-    for (const rl of returnLines) {
-      const delivered = parseInt(rl.deliveredQty) || 0;
-      if (delivered <= 0) continue;
-      const sp = (speciesList as any[]).find((s: any) => s.speciesId === rl.speciesId);
-      const price = sp?.sellPrice ?? 0;
-      const vatRate = sp?.vat ?? 0;
-      const lineNet = delivered * price;
-      const lineVat = lineNet * vatRate;
-      subTotal += lineNet;
-      vatTotal += lineVat;
-    }
-    return { subTotal, vatTotal, grandTotal: subTotal + vatTotal };
-  }, [returnLines, speciesList, completing]);
 
   // ── Validation ─────────────────────────────────────────────────────────────
 
@@ -479,15 +457,6 @@ export default function DriverPage() {
                     </div>
                   );
                 })}
-
-                {/* Invoice preview */}
-                {invoicePreview && invoicePreview.grandTotal > 0 && (
-                  <div style={s.preview}>
-                    <div style={s.previewRow}><span>Subtotal</span><span>{money(invoicePreview.subTotal)}</span></div>
-                    <div style={s.previewRow}><span>VAT</span><span>{money(invoicePreview.vatTotal)}</span></div>
-                    <div style={{ ...s.previewRow, ...s.previewTotal }}><span>Total</span><span>{money(invoicePreview.grandTotal)}</span></div>
-                  </div>
-                )}
 
                 {/* Payment type */}
                 <div style={s.paymentSection}>

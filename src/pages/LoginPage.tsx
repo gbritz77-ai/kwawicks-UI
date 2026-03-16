@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { isLoggedIn, login, saveAuthTokens } from "../api/auth";
+import { hasRole, isLoggedIn, login, saveAuthTokens } from "../api/auth";
 import PinInput from "../components/PinInput";
 
 export default function LoginPage() {
@@ -14,7 +14,7 @@ export default function LoginPage() {
 
   // If already logged in, skip this screen
   useEffect(() => {
-    if (isLoggedIn()) nav("/app", { replace: true });
+    if (isLoggedIn()) nav(hasRole("Driver") ? "/driver" : "/app", { replace: true });
   }, [nav]);
 
   const canSubmit = useMemo(() => {
@@ -34,7 +34,7 @@ export default function LoginPage() {
       const resp = await login(usernameOrEmail.trim(), pin);
 
       saveAuthTokens(resp);
-      nav("/app", { replace: true });
+      nav(hasRole("Driver") ? "/driver" : "/app", { replace: true });
     } catch (err: any) {
       const msg = String(err?.message ?? "");
       if (msg.toLowerCase().includes("incorrect") || msg.toLowerCase().includes("unauthorized")) {
