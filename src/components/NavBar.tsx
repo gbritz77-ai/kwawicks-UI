@@ -20,9 +20,10 @@ export default function NavBar() {
   const { pathname, search } = useLocation();
   const profile = getProfileFromIdToken();
 
-  const isOperational = hasAnyRole("Owner", "Finance", "Admin", "HubStaff");
-  const isFinancial   = hasAnyRole("Owner", "Finance", "Admin");
-  const isDriverRole  = hasRole("Driver");
+  const isOperational  = hasAnyRole("Owner", "Finance", "Admin", "HubStaff");
+  const isFinancial    = hasAnyRole("Owner", "Finance");
+  const isUserManager  = hasAnyRole("Owner", "Admin");
+  const isDriverRole   = hasRole("Driver");
 
   const items: NavItem[] = [];
 
@@ -36,7 +37,7 @@ export default function NavBar() {
     items.push({ label: "Invoices",         path: "/app/reports", tabParam: "invoices" });
     items.push({ label: "Statements",       path: "/app/reports", tabParam: "statement" });
   }
-  if (isOperational) {
+  if (isUserManager) {
     items.push({ label: "Users",            path: "/app/users" });
   }
   if (isDriverRole) {

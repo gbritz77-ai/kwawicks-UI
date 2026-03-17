@@ -20,11 +20,12 @@ type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "i
 
 export default function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab = (searchParams.get("tab") as Tab) || "revenue";
-  const isFinancialUser = hasAnyRole("Owner", "Finance", "Admin");
+  const isFinancialUser = hasAnyRole("Owner", "Finance");
+  const defaultTab: Tab = isFinancialUser ? "revenue" : "drivers";
+  const tab = (searchParams.get("tab") as Tab) || defaultTab;
 
   function setTab(t: Tab) {
-    setSearchParams(t === "revenue" ? {} : { tab: t }, { replace: true });
+    setSearchParams(t === defaultTab ? {} : { tab: t }, { replace: true });
   }
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
