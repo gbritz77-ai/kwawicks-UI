@@ -10,6 +10,7 @@ import DriverPage from "./pages/DriverPage";
 import AdminReportsPage from "./pages/AdminReportsPage";
 import DriverReportsPage from "./pages/DriverReportsPage";
 import StatementPage from "./pages/StatementPage";
+import UserManagementPage from "./pages/UserManagementPage";
 
 function AuthLayout({ children }: { children: React.ReactElement }) {
   return (
@@ -24,17 +25,20 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
 
-      <Route path="/app"               element={<AuthLayout><AppShell /></AuthLayout>} />
-      <Route path="/app/hub-tasks"     element={<AuthLayout><HubTasksPage /></AuthLayout>} />
+      <Route path="/app"                 element={<AuthLayout><AppShell /></AuthLayout>} />
+      <Route path="/app/hub-tasks"       element={<AuthLayout><HubTasksPage /></AuthLayout>} />
       <Route path="/app/delivery-orders" element={<AuthLayout><DeliveryOrdersPage /></AuthLayout>} />
-      <Route path="/app/reports"       element={<AuthLayout><AdminReportsPage /></AuthLayout>} />
-      <Route path="/driver"            element={<AuthLayout><DriverPage /></AuthLayout>} />
-      <Route path="/driver/reports"    element={<AuthLayout><DriverReportsPage /></AuthLayout>} />
+      <Route path="/app/reports"         element={<AuthLayout><AdminReportsPage /></AuthLayout>} />
+      <Route path="/app/users"           element={<AuthLayout><UserManagementPage /></AuthLayout>} />
+      <Route path="/driver"              element={<AuthLayout><DriverPage /></AuthLayout>} />
+      <Route path="/driver/reports"      element={<AuthLayout><DriverReportsPage /></AuthLayout>} />
 
       {/* Statement is print-only — no nav bar */}
       <Route path="/app/statement" element={<RequireAuth><StatementPage /></RequireAuth>} />
+
+      {/* Catch-all must be last so it never shadows real routes */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );
 }
