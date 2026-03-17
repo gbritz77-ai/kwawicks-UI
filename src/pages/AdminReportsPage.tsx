@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { CSSProperties } from "react";
 import { useSearchParams } from "react-router-dom";
+import { hasAnyRole } from "../api/auth";
 import { reportsApi } from "../api/reportsApi";
 import { invoicesApi } from "../api/invoicesApi";
 import { clientsApi } from "../api/clientsApi";
@@ -20,6 +21,7 @@ type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "i
 export default function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = (searchParams.get("tab") as Tab) || "revenue";
+  const isFinancialUser = hasAnyRole("Owner", "Finance", "Admin");
 
   function setTab(t: Tab) {
     setSearchParams(t === "revenue" ? {} : { tab: t }, { replace: true });
@@ -83,7 +85,12 @@ export default function AdminReportsPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["revenue", "outstanding", "invoices", "drivers", "returns", "deliveries", "species", "statement"] as Tab[]).map((t) => (
+        {(["revenue", "outstanding", "invoices", "drivers", "returns", "deliveries", "species", "statement"] as Tab[])
+          .filter(t => {
+            const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "statement"];
+            return isFinancialUser || !financialTabs.includes(t);
+          })
+          .map((t) => (
           <button key={t} style={tab === t ? { ...s.tab, ...s.tabActive } : s.tab} onClick={() => setTab(t)}>
             {t === "revenue" && "Revenue"}
             {t === "outstanding" && "Outstanding"}

@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { clearAuth, getProfileFromIdToken, hasRole } from "../api/auth";
+import { clearAuth, getProfileFromIdToken, hasRole, hasAnyRole } from "../api/auth";
 
 type NavItem = { label: string; path: string; tabParam?: string };
 
@@ -20,23 +20,26 @@ export default function NavBar() {
   const { pathname, search } = useLocation();
   const profile = getProfileFromIdToken();
 
-  const isAdmin    = hasRole("Admin");
-  const isHubStaff = hasRole("HubStaff");
-  const isDriver   = hasRole("Driver");
+  const isOperational = hasAnyRole("Owner", "Finance", "Admin", "HubStaff");
+  const isFinancial   = hasAnyRole("Owner", "Finance", "Admin");
+  const isDriverRole  = hasRole("Driver");
 
   const items: NavItem[] = [];
 
-  if (isAdmin || isHubStaff) {
+  if (isOperational) {
     items.push({ label: "Dashboard",        path: "/app" });
     items.push({ label: "Hub Tasks",        path: "/app/hub-tasks" });
     items.push({ label: "Delivery Orders",  path: "/app/delivery-orders" });
-  }
-  if (isAdmin) {
     items.push({ label: "Reports",          path: "/app/reports" });
+  }
+  if (isFinancial) {
     items.push({ label: "Invoices",         path: "/app/reports", tabParam: "invoices" });
     items.push({ label: "Statements",       path: "/app/reports", tabParam: "statement" });
   }
-  if (isDriver) {
+  if (isOperational) {
+    items.push({ label: "Users",            path: "/app/users" });
+  }
+  if (isDriverRole) {
     items.push({ label: "My Deliveries",    path: "/driver" });
     items.push({ label: "Delivery History", path: "/driver/reports" });
   }
@@ -49,7 +52,7 @@ export default function NavBar() {
   return (
     <nav style={s.bar}>
       {/* Brand */}
-      <button style={s.brand} onClick={() => nav(isDriver ? "/driver" : "/app")}>
+      <button style={s.brand} onClick={() => nav(isDriverRole ? "/driver" : "/app")}>
         KwaWicks
       </button>
 
