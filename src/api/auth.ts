@@ -44,7 +44,9 @@ export function getAccessToken(): string | null {
   if (!Number.isFinite(expiresAt)) return token;
 
   if (Date.now() >= expiresAt) {
-    clearAuth();
+    // Token expired — return null so apiClient can attempt a refresh.
+    // Do NOT clear auth here; that would wipe the refresh token before
+    // the caller gets a chance to use it.
     return null;
   }
 
@@ -52,7 +54,9 @@ export function getAccessToken(): string | null {
 }
 
 export function isLoggedIn(): boolean {
-  return !!getAccessToken();
+  // Still considered logged in if we have a refresh token, even if the
+  // access token has expired — the apiClient will silently refresh it.
+  return !!(getAccessToken() || localStorage.getItem(REFRESH_TOKEN));
 }
 export function getExpiresAt(): number | null {
   const raw = localStorage.getItem("kw_expiresAt");
