@@ -70,7 +70,7 @@ export default function UserManagementPage() {
   async function handleCreate() {
     if (!formUsername.trim()) { setModalError("Username is required."); return; }
     if (!formPin) { setModalError("PIN / password is required."); return; }
-    if (formPin.length < 8) { setModalError("PIN must be at least 8 characters."); return; }
+    if (formPin.length < 6) { setModalError("PIN must be at least 6 characters."); return; }
     if (formPin !== formPinConfirm) { setModalError("PINs do not match."); return; }
     setSaving(true);
     setModalError("");
@@ -88,7 +88,7 @@ export default function UserManagementPage() {
   async function handleEdit() {
     if (!editTarget) return;
     if (formPin) {
-      if (formPin.length < 8) { setModalError("PIN must be at least 8 characters."); return; }
+      if (formPin.length < 6) { setModalError("PIN must be at least 6 characters."); return; }
       if (formPin !== formPinConfirm) { setModalError("PINs do not match."); return; }
     }
     setSaving(true);
@@ -233,7 +233,7 @@ export default function UserManagementPage() {
                   value={formPin}
                   onChange={(e) => setFormPin(e.target.value)}
                   style={s.input}
-                  placeholder={modal === "create" ? "Min. 8 characters" : "Leave blank to keep unchanged"}
+                  placeholder={modal === "create" ? "Min. 6 characters" : "Leave blank to keep unchanged"}
                   autoComplete="new-password"
                 />
               </div>
