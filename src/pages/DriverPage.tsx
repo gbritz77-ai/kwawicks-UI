@@ -726,7 +726,9 @@ const s: Record<string, React.CSSProperties> = {
   backdrop: {
     position: "fixed",
     inset: 0,
-    background: "rgba(0,0,0,0.5)",
+    background: "rgba(15,23,42,0.4)",
+    backdropFilter: "blur(6px)",
+    WebkitBackdropFilter: "blur(6px)",
     display: "grid",
     placeItems: "start center",
     padding: "16px 16px 40px",
