@@ -388,6 +388,7 @@ export default function DeliveryOrdersPage() {
                     ...p,
                     customerId: clientId,
                     deliveryAddressLine1: client?.clientAddress ?? p.deliveryAddressLine1,
+                    city: client?.clientCity ?? p.city,
                   }));
                 }}
                 disabled={busy || loadingRefs}

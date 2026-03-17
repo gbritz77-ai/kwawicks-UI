@@ -43,6 +43,9 @@ type ClientFormState = {
   clientId?: string;
   clientName: string;
   clientAddress: string;
+  clientCity: string;
+  clientProvince: string;
+  clientPostalCode: string;
   clientContactDetails: string;
   clientType: ClientType;
 };
@@ -50,6 +53,9 @@ type ClientFormState = {
 const emptyClientForm: ClientFormState = {
   clientName: "",
   clientAddress: "",
+  clientCity: "",
+  clientProvince: "",
+  clientPostalCode: "",
   clientContactDetails: "",
   clientType: 0,
 };
@@ -267,6 +273,9 @@ export default function HubTasksPage() {
       clientId: c.clientId,
       clientName: c.clientName,
       clientAddress: c.clientAddress,
+      clientCity: c.clientCity ?? "",
+      clientProvince: c.clientProvince ?? "",
+      clientPostalCode: c.clientPostalCode ?? "",
       clientContactDetails: c.clientContactDetails,
       clientType: c.clientType,
     });
@@ -286,6 +295,9 @@ export default function HubTasksPage() {
       const payload = {
         clientName,
         clientAddress: clientForm.clientAddress.trim(),
+        clientCity: clientForm.clientCity.trim(),
+        clientProvince: clientForm.clientProvince.trim(),
+        clientPostalCode: clientForm.clientPostalCode.trim(),
         clientContactDetails: clientForm.clientContactDetails.trim(),
         clientType: clientForm.clientType,
       };
@@ -660,12 +672,46 @@ export default function HubTasksPage() {
                 </label>
 
                 <label style={s.label}>
-                  Client Address
+                  Street Address
                   <input
                     style={s.input}
                     value={clientForm.clientAddress}
                     onChange={(e) => setClientForm((p) => ({ ...p, clientAddress: e.target.value }))}
                     disabled={busy}
+                    placeholder="e.g. 12 Main Road"
+                  />
+                </label>
+
+                <label style={s.label}>
+                  City
+                  <input
+                    style={s.input}
+                    value={clientForm.clientCity}
+                    onChange={(e) => setClientForm((p) => ({ ...p, clientCity: e.target.value }))}
+                    disabled={busy}
+                    placeholder="e.g. Durban"
+                  />
+                </label>
+
+                <label style={s.label}>
+                  Province
+                  <input
+                    style={s.input}
+                    value={clientForm.clientProvince}
+                    onChange={(e) => setClientForm((p) => ({ ...p, clientProvince: e.target.value }))}
+                    disabled={busy}
+                    placeholder="e.g. KwaZulu-Natal"
+                  />
+                </label>
+
+                <label style={s.label}>
+                  Postal Code
+                  <input
+                    style={s.input}
+                    value={clientForm.clientPostalCode}
+                    onChange={(e) => setClientForm((p) => ({ ...p, clientPostalCode: e.target.value }))}
+                    disabled={busy}
+                    placeholder="e.g. 4001"
                   />
                 </label>
 

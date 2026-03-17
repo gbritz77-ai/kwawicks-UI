@@ -6,6 +6,9 @@ export type ClientDto = {
   clientId: string;
   clientName: string;
   clientAddress: string;
+  clientCity: string;
+  clientProvince: string;
+  clientPostalCode: string;
   clientContactDetails: string;
   clientType: ClientType;
   createdAtUtc: string;
@@ -15,6 +18,9 @@ export type ClientDto = {
 export type CreateClientRequest = {
   clientName: string;
   clientAddress: string;
+  clientCity: string;
+  clientProvince: string;
+  clientPostalCode: string;
   clientContactDetails: string;
   clientType: ClientType;
 };
