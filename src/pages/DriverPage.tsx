@@ -6,7 +6,7 @@ import { invoicesApi } from "../api/invoicesApi";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type PaymentType = "Cash" | "EFT" | "Credit";
+type PaymentType = "Cash" | "EFT" | "Credit" | "CardMachine";
 
 type ReturnLine = {
   speciesId: string;
@@ -449,7 +449,7 @@ export default function DriverPage() {
                 <div style={s.paymentSection}>
                   <div style={s.paymentHeading}>Payment Method</div>
                   <div style={s.paymentOptions}>
-                    {(["Cash", "EFT", "Credit"] as PaymentType[]).map((pt) => (
+                    {(["Cash", "EFT", "CardMachine", "Credit"] as PaymentType[]).map((pt) => (
                       <button
                         key={pt}
                         style={{ ...s.paymentOption, ...(paymentType === pt ? s.paymentOptionActive : {}) }}
@@ -458,8 +458,9 @@ export default function DriverPage() {
                       >
                         {pt === "Cash" && "💵 "}
                         {pt === "EFT" && "📱 "}
+                        {pt === "CardMachine" && "💳 "}
                         {pt === "Credit" && "📋 "}
-                        {pt}
+                        {pt === "CardMachine" ? "Card Machine" : pt}
                       </button>
                     ))}
                   </div>
@@ -726,9 +727,9 @@ const s: Record<string, React.CSSProperties> = {
   backdrop: {
     position: "fixed",
     inset: 0,
-    background: "rgba(15,23,42,0.4)",
-    backdropFilter: "blur(6px)",
-    WebkitBackdropFilter: "blur(6px)",
+    background: "rgba(248,250,252,0.75)",
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
     display: "grid",
     placeItems: "start center",
     padding: "16px 16px 40px",
