@@ -381,7 +381,15 @@ export default function DeliveryOrdersPage() {
               <select
                 style={s.input}
                 value={form.customerId}
-                onChange={(e) => setForm((p) => ({ ...p, customerId: e.target.value }))}
+                onChange={(e) => {
+                  const clientId = e.target.value;
+                  const client = clients.find((c) => c.clientId === clientId);
+                  setForm((p) => ({
+                    ...p,
+                    customerId: clientId,
+                    deliveryAddressLine1: client?.clientAddress ?? p.deliveryAddressLine1,
+                  }));
+                }}
                 disabled={busy || loadingRefs}
               >
                 <option value="">— Select client —</option>
