@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { usersApi } from "../api/usersApi";
 import type { UserDto } from "../api/usersApi";
