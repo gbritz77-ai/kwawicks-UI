@@ -5,6 +5,7 @@ import { hasAnyRole } from "../api/auth";
 import { reportsApi } from "../api/reportsApi";
 import { invoicesApi } from "../api/invoicesApi";
 import { clientsApi } from "../api/clientsApi";
+import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
 import type {
   RevenueSummaryResponse,
   OutstandingPaymentsResponse,
@@ -41,6 +42,7 @@ export default function AdminReportsPage() {
   const [invoiceCustomer, setInvoiceCustomer] = useState("");
   const [clients, setClients] = useState<ClientDto[]>([]);
   const [speciesRevenue, setSpeciesRevenue] = useState<SpeciesRevenueResponse | null>(null);
+  const [allSpecies, setAllSpecies] = useState<SpeciesResponse[]>([]);
   const [stmtCustomer, setStmtCustomer] = useState("");
   const [stmtFrom, setStmtFrom] = useState("");
   const [stmtTo, setStmtTo] = useState("");
@@ -54,7 +56,14 @@ export default function AdminReportsPage() {
       if (tab === "revenue") setRevenue(await reportsApi.getRevenue(from || undefined, to || undefined));
       if (tab === "outstanding") setOutstanding(await reportsApi.getOutstandingPayments());
       if (tab === "drivers") setDrivers(await reportsApi.getDriverPerformance(from || undefined, to || undefined));
-      if (tab === "returns") setReturns(await reportsApi.getReturns(from || undefined, to || undefined));
+      if (tab === "returns") {
+        const [ret, spc] = await Promise.all([
+          reportsApi.getReturns(from || undefined, to || undefined),
+          allSpecies.length ? Promise.resolve(allSpecies) : speciesApi.list(),
+        ]);
+        setReturns(ret);
+        if (!allSpecies.length) setAllSpecies(spc);
+      }
       if (tab === "deliveries") setDeliveries(await reportsApi.getDeliveryStatus(from || undefined, to || undefined));
       if (tab === "invoices") {
         const [inv, cls] = await Promise.all([
@@ -324,7 +333,7 @@ export default function AdminReportsPage() {
             <tbody>
               {returns.items.map((r) => (
                 <tr key={r.speciesId}>
-                  <Td>{r.speciesId}</Td>
+                  <Td>{allSpecies.find((s) => s.speciesId === r.speciesId)?.name ?? r.speciesId}</Td>
                   <Td style={{ color: r.deadQty > 0 ? "#dc2626" : undefined }}>{r.deadQty}</Td>
                   <Td style={{ color: r.mutilatedQty > 0 ? "#d97706" : undefined }}>{r.mutilatedQty}</Td>
                   <Td>{r.notWantedQty}</Td>
