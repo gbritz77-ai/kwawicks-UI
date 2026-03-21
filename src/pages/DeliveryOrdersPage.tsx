@@ -4,12 +4,14 @@ import { deliveryOrdersApi, type DeliveryOrderResponse, type DeliveryOrderStatus
 import { clientsApi, type ClientDto } from "../api/clientsApi";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
 import { usersApi, type DriverDto } from "../api/usersApi";
+import { hasAnyRole } from "../api/auth";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type OrderLine = {
   speciesId: string;
   quantity: string;
+  unitPrice: string;
 };
 
 type CreateForm = {
@@ -33,7 +35,7 @@ const emptyForm: CreateForm = {
   city: "",
   province: "",
   postalCode: "",
-  lines: [{ speciesId: "", quantity: "" }],
+  lines: [{ speciesId: "", quantity: "", unitPrice: "" }],
 };
 
 const STATUS_LABELS: Record<DeliveryOrderStatus, string> = {
@@ -72,6 +74,8 @@ export default function DeliveryOrdersPage() {
   const [form, setForm] = useState<CreateForm>(emptyForm);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const canOverridePrice = hasAnyRole("Owner", "Finance");
 
   // ── Loaders ──────────────────────────────────────────────────────────────
 
@@ -142,7 +146,7 @@ export default function DeliveryOrdersPage() {
   }
 
   function addLine() {
-    setForm((prev) => ({ ...prev, lines: [...prev.lines, { speciesId: "", quantity: "" }] }));
+    setForm((prev) => ({ ...prev, lines: [...prev.lines, { speciesId: "", quantity: "", unitPrice: "" }] }));
   }
 
   function removeLine(idx: number) {
@@ -190,7 +194,11 @@ export default function DeliveryOrdersPage() {
         city: form.city.trim(),
         province: form.province.trim(),
         postalCode: form.postalCode.trim(),
-        lines: form.lines.map((l) => ({ speciesId: l.speciesId, quantity: Number(l.quantity) })),
+        lines: form.lines.map((l) => ({
+          speciesId: l.speciesId,
+          quantity: Number(l.quantity),
+          ...(canOverridePrice && l.unitPrice ? { unitPrice: Number(l.unitPrice) } : {}),
+        })),
       });
 
       setShowForm(false);
@@ -334,6 +342,7 @@ export default function DeliveryOrdersPage() {
                       <div style={{ ...s.linesRow, ...s.linesHeader }}>
                         <div>Species</div>
                         <div style={{ textAlign: "right" }}>Ordered</div>
+                        {canOverridePrice && <div style={{ textAlign: "right" }}>Unit Price</div>}
                         {order.status === "Delivered" && (
                           <>
                             <div style={{ textAlign: "right" }}>Delivered</div>
@@ -347,6 +356,11 @@ export default function DeliveryOrdersPage() {
                         <div key={i} style={s.linesRow}>
                           <div>{getSpeciesName(line.speciesId)}</div>
                           <div style={{ textAlign: "right", fontWeight: 700 }}>{line.quantity}</div>
+                          {canOverridePrice && (
+                            <div style={{ textAlign: "right", color: "#0f172a" }}>
+                              {line.unitPrice ? `R\u00A0${Number(line.unitPrice).toFixed(2)}` : "—"}
+                            </div>
+                          )}
                           {order.status === "Delivered" && (
                             <>
                               <div style={{ textAlign: "right", color: "#14532d", fontWeight: 700 }}>{line.deliveredQty}</div>
@@ -482,7 +496,18 @@ export default function DeliveryOrdersPage() {
                   <select
                     style={{ ...s.input, flex: 2 }}
                     value={line.speciesId}
-                    onChange={(e) => setLine(idx, "speciesId", e.target.value)}
+                    onChange={(e) => {
+                      const sp = (species as any[]).find((x: any) => x.speciesId === e.target.value);
+                      setForm((prev) => {
+                        const lines = [...prev.lines];
+                        lines[idx] = {
+                          ...lines[idx],
+                          speciesId: e.target.value,
+                          unitPrice: canOverridePrice && sp?.sellPrice != null ? String(sp.sellPrice) : lines[idx].unitPrice,
+                        };
+                        return { ...prev, lines };
+                      });
+                    }}
                     disabled={busy || loadingRefs}
                   >
                     <option value="">— Species —</option>
@@ -510,6 +535,20 @@ export default function DeliveryOrdersPage() {
                       </div>
                     )}
                   </div>
+
+                  {canOverridePrice && (
+                    <div style={{ flex: 1, display: "grid", gap: 4 }}>
+                      <input
+                        style={{ ...s.input }}
+                        placeholder="Unit Price"
+                        inputMode="decimal"
+                        value={line.unitPrice}
+                        onChange={(e) => setLine(idx, "unitPrice", e.target.value)}
+                        disabled={busy}
+                      />
+                      <div style={s.availHint}>Override price</div>
+                    </div>
+                  )}
 
                   {form.lines.length > 1 && (
                     <button style={s.removeLineBtn} onClick={() => removeLine(idx)} disabled={busy}>

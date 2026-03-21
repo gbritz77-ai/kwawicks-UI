@@ -5,6 +5,7 @@ export type DeliveryOrderStatus = "Open" | "OutForDelivery" | "Delivered";
 export type DeliveryOrderLineDto = {
   speciesId: string;
   quantity: number;
+  unitPrice: number;
   deliveredQty: number;
   returnedDeadQty: number;
   returnedMutilatedQty: number;
@@ -31,6 +32,7 @@ export type DeliveryOrderResponse = {
 export type CreateDeliveryOrderLine = {
   speciesId: string;
   quantity: number;
+  unitPrice?: number;
 };
 
 export type CreateDeliveryOrderRequest = {
