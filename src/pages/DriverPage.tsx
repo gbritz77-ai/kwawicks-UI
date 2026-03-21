@@ -202,7 +202,7 @@ export default function DriverPage() {
 
       await invoicesApi.recordPayment(invoiceId, paymentType);
 
-      if (paymentType === "EFT") {
+      if (paymentType === "EFT" || paymentType === "CardMachine") {
         setStep("receipt");
       } else {
         setStep("done");
@@ -464,8 +464,8 @@ export default function DriverPage() {
                       </button>
                     ))}
                   </div>
-                  {paymentType === "EFT" && (
-                    <div style={s.eftNote}>You'll be prompted to upload the EFT receipt after confirming.</div>
+                  {(paymentType === "EFT" || paymentType === "CardMachine") && (
+                    <div style={s.eftNote}>You'll be prompted to take a photo of the receipt after confirming.</div>
                   )}
                   {paymentType === "Credit" && (
                     <div style={s.eftNote}>Invoice will be sent to the client's account.</div>
@@ -486,7 +486,7 @@ export default function DriverPage() {
             {/* ── Step: EFT Receipt ── */}
             {step === "receipt" && (
               <>
-                <div style={s.modalTitle}>Upload EFT Receipt</div>
+                <div style={s.modalTitle}>{paymentType === "CardMachine" ? "Upload Card Machine Slip" : "Upload EFT Receipt"}</div>
                 <div style={s.modalSub}>Take a photo of the payment receipt to complete the delivery.</div>
 
                 {completionError && <div style={s.completionError}>{completionError}</div>}
