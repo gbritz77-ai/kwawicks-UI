@@ -38,7 +38,7 @@ function DonutChart({ segments }: { segments: DonutSegment[] }) {
   const r = 48, cx = 64, cy = 64;
   const circ = 2 * Math.PI * r;
   const total = segments.reduce((s, x) => s + x.value, 0);
-  let cum = 0;
+  let cumFraction = 0;
 
   return (
     <svg viewBox="0 0 128 128" width={140} height={140} style={{ flexShrink: 0 }}>
@@ -46,9 +46,10 @@ function DonutChart({ segments }: { segments: DonutSegment[] }) {
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e2e8f0" strokeWidth={22} />
       ) : (
         segments.map((seg, i) => {
-          const dash = (seg.value / total) * circ;
-          const offset = circ - (cum / total) * circ;
-          cum += seg.value;
+          const fraction = seg.value / total;
+          const arc = fraction * circ;
+          const rotation = -90 + cumFraction * 360;
+          cumFraction += fraction;
           return (
             <circle
               key={i}
@@ -56,9 +57,8 @@ function DonutChart({ segments }: { segments: DonutSegment[] }) {
               fill="none"
               stroke={seg.color}
               strokeWidth={22}
-              strokeDasharray={`${dash} ${circ}`}
-              strokeDashoffset={offset}
-              style={{ transform: "rotate(-90deg)", transformOrigin: `${cx}px ${cy}px` }}
+              strokeDasharray={`${arc} ${circ}`}
+              style={{ transform: `rotate(${rotation}deg)`, transformOrigin: `${cx}px ${cy}px` }}
             />
           );
         })
