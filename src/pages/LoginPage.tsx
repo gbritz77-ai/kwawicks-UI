@@ -99,51 +99,55 @@ export default function LoginPage() {
 
 const s: Record<string, React.CSSProperties> = {
   page: {
-  position: "fixed",
-  inset: 0,                // top:0 right:0 bottom:0 left:0
-  display: "grid",
-  placeItems: "center",    // perfect centering
-  padding: 18,
-  background: "#f1f2f5",
-  color: "#111827",
-  fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-},
+    position: "fixed",
+    inset: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+    background: "#f1f2f5",
+    color: "#111827",
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+  },
 
   card: {
-    width: "min(520px, 100%)",
+    width: "100%",
+    maxWidth: 420,
     background: "#ffffff",
     border: "1px solid #e5e7eb",
     borderRadius: 16,
-    padding: 28,
+    padding: "20px 20px",
+    boxSizing: "border-box" as const,
     boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
   },
 
   header: {
     display: "flex",
-    gap: 12,
+    gap: 10,
     alignItems: "center",
-    marginBottom: 22,
+    marginBottom: 16,
   },
 
   logo: {
-    width: 46,
-    height: 46,
+    width: 40,
+    height: 40,
     borderRadius: 999,
     display: "grid",
     placeItems: "center",
     fontWeight: 900,
     background: "#2563eb",
     color: "#ffffff",
+    flexShrink: 0,
   },
 
-  title: { fontSize: 22, fontWeight: 900 },
-  subtitle: { fontSize: 14, color: "#6b7280" },
+  title: { fontSize: 20, fontWeight: 900 },
+  subtitle: { fontSize: 13, color: "#6b7280" },
 
-  form: { display: "grid", gap: 16 },
+  form: { display: "grid", gap: 12 },
 
   label: {
     display: "grid",
-    gap: 8,
+    gap: 6,
     fontWeight: 600,
     fontSize: 14,
   },
