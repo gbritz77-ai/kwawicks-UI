@@ -47,6 +47,7 @@ type ClientFormState = {
   clientProvince: string;
   clientPostalCode: string;
   clientContactDetails: string;
+  clientPhone: string;
   clientType: ClientType;
 };
 
@@ -57,6 +58,7 @@ const emptyClientForm: ClientFormState = {
   clientProvince: "",
   clientPostalCode: "",
   clientContactDetails: "",
+  clientPhone: "",
   clientType: 0,
 };
 
@@ -279,6 +281,7 @@ export default function HubTasksPage() {
       clientProvince: c.clientProvince ?? "",
       clientPostalCode: c.clientPostalCode ?? "",
       clientContactDetails: c.clientContactDetails,
+      clientPhone: c.clientPhone,
       clientType: c.clientType,
     });
     setShowClientForm(true);
@@ -301,6 +304,7 @@ export default function HubTasksPage() {
         clientProvince: clientForm.clientProvince.trim(),
         clientPostalCode: clientForm.clientPostalCode.trim(),
         clientContactDetails: clientForm.clientContactDetails.trim(),
+        clientPhone: clientForm.clientPhone.trim(),
         clientType: clientForm.clientType,
       };
 
@@ -625,8 +629,8 @@ export default function HubTasksPage() {
                       {c.clientAddress || "—"}
                     </div>
 
-                    <div style={s.gridCell} title={c.clientContactDetails || ""}>
-                      {c.clientContactDetails || "—"}
+                    <div style={s.gridCell} title={c.clientPhone || c.clientContactDetails || ""}>
+                      {c.clientPhone || c.clientContactDetails || "—"}
                     </div>
 
                     <div style={s.gridCell}>{c.clientType === 0 ? "COD" : "Credit"}</div>
@@ -711,6 +715,17 @@ export default function HubTasksPage() {
                     value={clientForm.clientContactDetails}
                     onChange={(e) => setClientForm((p) => ({ ...p, clientContactDetails: e.target.value }))}
                     disabled={busy}
+                  />
+                </label>
+
+                <label style={s.label}>
+                  WhatsApp / Phone Number
+                  <input
+                    style={s.input}
+                    placeholder="e.g. 27821234567"
+                    value={clientForm.clientPhone}
+                    onChange={(e) => setClientForm((p) => ({ ...p, clientPhone: e.target.value }))}
+                    inputMode="tel"
                   />
                 </label>
 

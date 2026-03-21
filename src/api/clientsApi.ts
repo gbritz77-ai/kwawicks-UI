@@ -10,6 +10,7 @@ export type ClientDto = {
   clientProvince: string;
   clientPostalCode: string;
   clientContactDetails: string;
+  clientPhone: string;
   clientType: ClientType;
   createdAtUtc: string;
   updatedAtUtc: string;
@@ -22,6 +23,7 @@ export type CreateClientRequest = {
   clientProvince: string;
   clientPostalCode: string;
   clientContactDetails: string;
+  clientPhone: string;
   clientType: ClientType;
 };
 
