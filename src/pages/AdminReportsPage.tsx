@@ -756,7 +756,7 @@ function Td({ children, style }: { children: React.ReactNode; style?: CSSPropert
 }
 
 const s: Record<string, CSSProperties> = {
-  page: { padding: "24px 20px", maxWidth: 1400, margin: "0 auto" },
+  page: { padding: "16px", maxWidth: 1400, margin: "0 auto" },
   tableWrap: { overflowX: "auto" as const },
   heading: { fontSize: 22, fontWeight: 700, marginBottom: 20, color: "#1e293b" },
   subHeading: { fontSize: 16, fontWeight: 600, margin: "20px 0 10px", color: "#334155" },
@@ -790,8 +790,10 @@ const s: Record<string, CSSProperties> = {
     background: "#eff6ff", color: "#2563eb", fontSize: 13, fontWeight: 600,
   },
   modalOverlay: {
-    position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000,
-    display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+    position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)",
+    backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+    zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center",
+    padding: 20, overflowY: "auto",
   },
   modalBox: {
     background: "#fff", borderRadius: 12, padding: 20, maxWidth: 720, width: "100%",

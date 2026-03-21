@@ -281,8 +281,8 @@ export default function UserManagementPage() {
 }
 
 const s: Record<string, CSSProperties> = {
-  page: { padding: "24px 20px", maxWidth: 900, margin: "0 auto" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
+  page: { padding: "16px", maxWidth: 900, margin: "0 auto" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 },
   heading: { fontSize: 22, fontWeight: 700, color: "#1e293b", margin: 0 },
   addBtn: {
     padding: "8px 20px", borderRadius: 8, border: "none", cursor: "pointer",
@@ -306,8 +306,10 @@ const s: Record<string, CSSProperties> = {
     background: "#fee2e2", color: "#dc2626", fontSize: 13,
   },
   overlay: {
-    position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000,
-    display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+    position: "fixed", inset: 0, background: "rgba(15,23,42,0.4)",
+    backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+    zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center",
+    padding: 20, overflowY: "auto",
   },
   modalBox: {
     background: "#fff", borderRadius: 12, padding: 24, maxWidth: 480, width: "100%",

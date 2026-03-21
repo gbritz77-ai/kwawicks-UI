@@ -149,7 +149,8 @@ const s: Record<string, React.CSSProperties> = {
   },
 
   input: {
-    width: "95%",
+    width: "100%",
+    boxSizing: "border-box",
     padding: "14px",
     borderRadius: 12,
     border: "1px solid #d1d5db",

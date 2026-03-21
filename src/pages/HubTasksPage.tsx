@@ -768,13 +768,13 @@ function money(n: number) {
 
 // ✅ Styles (FIXED gridTemplateColumns + added sort + hover)
 const s: Record<string, React.CSSProperties> = {
-  page: { padding: 24, fontFamily: "system-ui" },
+  page: { padding: "16px", fontFamily: "system-ui" },
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" },
-  headerActions: { display: "flex", gap: 10, alignItems: "center" },
+  headerActions: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
   title: { fontSize: 22, fontWeight: 900 },
   sub: { opacity: 0.75, marginTop: 4 },
 
-  tabsRow: { display: "flex", gap: 10, marginTop: 14 },
+  tabsRow: { display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" },
 
   tab: {
     padding: "10px 14px",
@@ -926,7 +926,7 @@ const s: Record<string, React.CSSProperties> = {
     maxWidth: 1100,
     border: "1px solid rgba(0,0,0,0.12)",
     borderRadius: 12,
-    overflow: "hidden",
+    overflowX: "auto",
     background: "white",
   },
 
@@ -938,6 +938,7 @@ const s: Record<string, React.CSSProperties> = {
     padding: "14px 14px",
     alignItems: "center",
     fontSize: 14,
+    minWidth: 700,
   },
 
   gridHeader: {
@@ -1012,10 +1013,14 @@ const s: Record<string, React.CSSProperties> = {
   modalBackdrop: {
     position: "fixed",
     inset: 0,
-    background: "rgba(0,0,0,0.45)",
+    background: "rgba(15,23,42,0.4)",
+    backdropFilter: "blur(6px)",
+    WebkitBackdropFilter: "blur(6px)",
     display: "grid",
     placeItems: "center",
     padding: 16,
+    zIndex: 200,
+    overflowY: "auto",
   },
   modal: {
     width: "min(520px, 96vw)",

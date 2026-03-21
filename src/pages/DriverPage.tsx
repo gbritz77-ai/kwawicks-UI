@@ -569,7 +569,7 @@ export default function DriverPage() {
 // ── Styles ─────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  page: { padding: 20, fontFamily: "system-ui", maxWidth: 640, margin: "0 auto" },
+  page: { padding: "16px", fontFamily: "system-ui", maxWidth: 640, margin: "0 auto" },
 
   header: {
     display: "flex",
@@ -581,7 +581,7 @@ const s: Record<string, React.CSSProperties> = {
   title: { fontSize: 22, fontWeight: 900 },
   sub: { fontSize: 13, opacity: 0.6, marginTop: 2 },
 
-  pillRow: { display: "flex", gap: 10, marginTop: 16 },
+  pillRow: { display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" },
   pill: {
     display: "flex",
     alignItems: "center",
@@ -812,7 +812,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   returnFields: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr 1fr",
+    gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
     gap: 8,
   },
   returnLabel: {
@@ -867,9 +867,8 @@ const s: Record<string, React.CSSProperties> = {
     color: "rgba(0,0,0,0.5)",
     marginBottom: 10,
   },
-  paymentOptions: { display: "flex", gap: 10 },
+  paymentOptions: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 },
   paymentOption: {
-    flex: 1,
     padding: "14px 10px",
     borderRadius: 12,
     border: "1px solid rgba(0,0,0,0.15)",

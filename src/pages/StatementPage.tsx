@@ -109,6 +109,7 @@ function StatementDocument({ statement }: { statement: CustomerStatementResponse
       </div>
 
       {/* Invoice table */}
+      <div style={{ overflowX: "auto" }}>
       <table style={s.table}>
         <thead>
           <tr style={s.thead}>
@@ -152,6 +153,7 @@ function StatementDocument({ statement }: { statement: CustomerStatementResponse
           )}
         </tbody>
       </table>
+      </div>
 
       {/* Totals summary */}
       <div style={s.totalsBlock}>
@@ -192,7 +194,8 @@ function TotalRow({ label, value, bold, color }: { label: string; value: string;
 const s: Record<string, React.CSSProperties> = {
   printBar: {
     background: "#f8fafc", borderBottom: "1px solid #e2e8f0",
-    padding: "12px 32px", display: "flex", justifyContent: "space-between", alignItems: "center",
+    padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center",
+    flexWrap: "wrap", gap: 8,
   },
   backBtn: {
     padding: "8px 16px", borderRadius: 8, border: "1px solid #cbd5e1", cursor: "pointer",
@@ -202,9 +205,10 @@ const s: Record<string, React.CSSProperties> = {
     padding: "8px 20px", borderRadius: 8, border: "none", cursor: "pointer",
     background: "#2563eb", color: "#fff", fontSize: 14, fontWeight: 600,
   },
-  page: { maxWidth: 820, margin: "0 auto", padding: "32px 40px" },
+  page: { maxWidth: 820, margin: "0 auto", padding: "20px 16px" },
   header: {
     display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20,
+    flexWrap: "wrap", gap: 12,
   },
   companyName: { fontSize: 26, fontWeight: 800, color: "#1e293b" },
   companyMeta: { fontSize: 13, color: "#64748b", marginTop: 2 },
@@ -225,7 +229,7 @@ const s: Record<string, React.CSSProperties> = {
   altRow: { background: "#f8fafc" },
   badge: { padding: "2px 9px", borderRadius: 999, fontSize: 11, fontWeight: 600 },
   totalsBlock: { display: "flex", justifyContent: "flex-end", marginBottom: 32 },
-  totalsGrid: { width: 300 },
+  totalsGrid: { width: "min(300px, 100%)" },
   totalRow: { display: "flex", justifyContent: "space-between", padding: "5px 0" },
   totalsDivider: { borderTop: "1px solid #e2e8f0", margin: "8px 0" },
   footer: {

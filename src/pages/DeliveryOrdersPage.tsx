@@ -537,7 +537,7 @@ export default function DeliveryOrdersPage() {
 // ── Styles ─────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  page: { padding: 24, fontFamily: "system-ui" },
+  page: { padding: "16px", fontFamily: "system-ui" },
 
   headerRow: {
     display: "flex",
@@ -546,7 +546,7 @@ const s: Record<string, React.CSSProperties> = {
     gap: 12,
     flexWrap: "wrap",
   },
-  headerActions: { display: "flex", gap: 10, alignItems: "center" },
+  headerActions: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
   title: { fontSize: 22, fontWeight: 900 },
   sub: { opacity: 0.75, marginTop: 4 },
 
@@ -647,7 +647,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   detailGrid: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr",
+    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
     gap: 16,
     marginBottom: 16,
   },
@@ -711,11 +711,13 @@ const s: Record<string, React.CSSProperties> = {
   backdrop: {
     position: "fixed",
     inset: 0,
-    background: "rgba(0,0,0,0.45)",
+    background: "rgba(15,23,42,0.4)",
+    backdropFilter: "blur(6px)",
+    WebkitBackdropFilter: "blur(6px)",
     display: "grid",
-    placeItems: "center",
-    padding: 16,
-    zIndex: 100,
+    placeItems: "start center",
+    padding: "16px 16px 40px",
+    zIndex: 200,
     overflowY: "auto",
   },
   modal: {
@@ -748,13 +750,14 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "space-between",
   },
-  twoCol: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
+  twoCol: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 },
 
   lineRow: {
     display: "flex",
     gap: 10,
     alignItems: "flex-start",
     marginTop: 8,
+    flexWrap: "wrap",
   },
   availHint: { fontSize: 12, fontWeight: 700, paddingLeft: 2 },
   addLineBtn: {

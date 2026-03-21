@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { clearAuth, getProfileFromIdToken, hasRole, hasAnyRole } from "../api/auth";
 
@@ -20,29 +20,48 @@ export default function NavBar() {
   const { pathname, search } = useLocation();
   const profile = getProfileFromIdToken();
 
-  const isOperational  = hasAnyRole("Owner", "Finance", "Admin", "HubStaff");
-  const isFinancial    = hasAnyRole("Owner", "Finance");
-  const isUserManager  = hasAnyRole("Owner", "Admin");
-  const isDriverRole   = hasRole("Driver");
+  const isOperational = hasAnyRole("Owner", "Finance", "Admin", "HubStaff");
+  const isFinancial   = hasAnyRole("Owner", "Finance");
+  const isUserManager = hasAnyRole("Owner", "Admin");
+  const isDriverRole  = hasRole("Driver");
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handler = () => {
+      setIsMobile(window.innerWidth < 768);
+      if (window.innerWidth >= 768) setMenuOpen(false);
+    };
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+
+  // Close drawer on route change
+  useEffect(() => { setMenuOpen(false); }, [pathname, search]);
 
   const items: NavItem[] = [];
-
   if (isOperational) {
-    items.push({ label: "Dashboard",        path: "/app" });
-    items.push({ label: "Hub Tasks",        path: "/app/hub-tasks" });
-    items.push({ label: "Delivery Orders",  path: "/app/delivery-orders" });
-    items.push({ label: "Reports",          path: "/app/reports" });
+    items.push({ label: "Dashboard",       path: "/app" });
+    items.push({ label: "Hub Tasks",       path: "/app/hub-tasks" });
+    items.push({ label: "Delivery Orders", path: "/app/delivery-orders" });
+    items.push({ label: "Reports",         path: "/app/reports" });
   }
   if (isFinancial) {
-    items.push({ label: "Invoices",         path: "/app/reports", tabParam: "invoices" });
-    items.push({ label: "Statements",       path: "/app/reports", tabParam: "statement" });
+    items.push({ label: "Invoices",   path: "/app/reports", tabParam: "invoices" });
+    items.push({ label: "Statements", path: "/app/reports", tabParam: "statement" });
   }
   if (isUserManager) {
-    items.push({ label: "Users",            path: "/app/users" });
+    items.push({ label: "Users", path: "/app/users" });
   }
   if (isDriverRole) {
     items.push({ label: "My Deliveries",    path: "/driver" });
     items.push({ label: "Delivery History", path: "/driver/reports" });
+  }
+
+  function navigate(path: string) {
+    setMenuOpen(false);
+    nav(path);
   }
 
   function logout() {
@@ -51,37 +70,70 @@ export default function NavBar() {
   }
 
   return (
-    <nav style={s.bar}>
-      {/* Brand */}
-      <button style={s.brand} onClick={() => nav(isDriverRole ? "/driver" : "/app")}>
-        KwaWicks
-      </button>
+    <>
+      <nav style={s.bar}>
+        <button style={s.brand} onClick={() => navigate(isDriverRole ? "/driver" : "/app")}>
+          KwaWicks
+        </button>
 
-      {/* Links */}
-      <div style={s.links}>
-        {items.map((item) => {
-          const active = isActive(item, pathname, search);
-          const href = item.tabParam !== undefined ? `${item.path}?tab=${item.tabParam}` : item.path;
-          return (
-            <button
-              key={item.tabParam !== undefined ? `${item.path}?tab=${item.tabParam}` : item.path}
-              style={active ? { ...s.link, ...s.linkActive } : s.link}
-              onClick={() => nav(href)}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Right side */}
-      <div style={s.right}>
-        {profile?.username && (
-          <span style={s.username}>{profile.username}</span>
+        {/* Desktop links */}
+        {!isMobile && (
+          <div style={s.links}>
+            {items.map((item) => {
+              const active = isActive(item, pathname, search);
+              const href = item.tabParam !== undefined ? `${item.path}?tab=${item.tabParam}` : item.path;
+              return (
+                <button
+                  key={item.tabParam !== undefined ? `${item.path}?tab=${item.tabParam}` : item.path}
+                  style={active ? { ...s.link, ...s.linkActive } : s.link}
+                  onClick={() => navigate(href)}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
         )}
-        <button style={s.logoutBtn} onClick={logout}>Log out</button>
-      </div>
-    </nav>
+
+        <div style={s.right}>
+          {!isMobile && profile?.username && (
+            <span style={s.username}>{profile.username}</span>
+          )}
+          {!isMobile && (
+            <button style={s.logoutBtn} onClick={logout}>Log out</button>
+          )}
+          {isMobile && (
+            <button style={s.hamburger} onClick={() => setMenuOpen((o) => !o)} aria-label="Toggle menu">
+              {menuOpen ? "✕" : "☰"}
+            </button>
+          )}
+        </div>
+      </nav>
+
+      {/* Mobile drawer */}
+      {isMobile && menuOpen && (
+        <div style={s.drawer}>
+          {profile?.username && (
+            <div style={s.drawerUser}>Signed in as <strong>{profile.username}</strong></div>
+          )}
+          {items.map((item) => {
+            const active = isActive(item, pathname, search);
+            const href = item.tabParam !== undefined ? `${item.path}?tab=${item.tabParam}` : item.path;
+            return (
+              <button
+                key={item.tabParam !== undefined ? `${item.path}?tab=${item.tabParam}` : item.path}
+                style={active ? { ...s.drawerLink, ...s.drawerLinkActive } : s.drawerLink}
+                onClick={() => navigate(href)}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+          <div style={s.drawerDivider} />
+          <button style={s.drawerLogout} onClick={logout}>Log out</button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -89,13 +141,12 @@ const s: Record<string, React.CSSProperties> = {
   bar: {
     position: "sticky",
     top: 0,
-    zIndex: 100,
+    zIndex: 200,
     display: "flex",
     alignItems: "center",
-    gap: 0,
     background: "#1e293b",
     color: "#fff",
-    padding: "0 20px",
+    padding: "0 16px",
     height: 52,
     fontFamily: "system-ui, -apple-system, sans-serif",
     boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
@@ -158,5 +209,67 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 13,
     cursor: "pointer",
     whiteSpace: "nowrap",
+  },
+  hamburger: {
+    background: "none",
+    border: "none",
+    color: "#fff",
+    fontSize: 22,
+    cursor: "pointer",
+    padding: 0,
+    minWidth: 44,
+    minHeight: 44,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // Mobile drawer
+  drawer: {
+    position: "sticky",
+    top: 52,
+    zIndex: 199,
+    background: "#1e293b",
+    display: "flex",
+    flexDirection: "column",
+    padding: "8px 0 16px",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+    fontFamily: "system-ui, -apple-system, sans-serif",
+  },
+  drawerUser: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 13,
+    padding: "8px 20px 12px",
+  },
+  drawerLink: {
+    background: "none",
+    border: "none",
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 16,
+    fontWeight: 500,
+    cursor: "pointer",
+    padding: "14px 20px",
+    textAlign: "left",
+    borderLeft: "3px solid transparent",
+  },
+  drawerLinkActive: {
+    color: "#fff",
+    fontWeight: 700,
+    borderLeft: "3px solid #22c55e",
+    background: "rgba(255,255,255,0.05)",
+  },
+  drawerDivider: {
+    height: 1,
+    background: "rgba(255,255,255,0.1)",
+    margin: "8px 0",
+  },
+  drawerLogout: {
+    background: "none",
+    border: "none",
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 15,
+    cursor: "pointer",
+    padding: "12px 20px",
+    textAlign: "left",
   },
 };
