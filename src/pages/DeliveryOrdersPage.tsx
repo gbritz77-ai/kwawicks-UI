@@ -721,7 +721,7 @@ const s: Record<string, React.CSSProperties> = {
     overflowY: "auto",
   },
   modal: {
-    width: "min(580px, 96vw)",
+    width: "min(580px, 100%)",
     background: "white",
     borderRadius: 16,
     padding: 20,
@@ -749,6 +749,8 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
+    minWidth: 0,
+    gap: 8,
   },
   twoCol: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 },
 

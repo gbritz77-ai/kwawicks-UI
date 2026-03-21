@@ -737,7 +737,7 @@ const s: Record<string, React.CSSProperties> = {
     overflowY: "auto",
   },
   modal: {
-    width: "min(560px, 96vw)",
+    width: "min(560px, 100%)",
     background: "white",
     borderRadius: 20,
     padding: 20,
