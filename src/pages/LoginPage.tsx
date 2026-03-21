@@ -52,7 +52,7 @@ export default function LoginPage() {
       <div style={s.card}>
         <div style={s.header}>
           <img src="/logo.jpeg" alt="KwaWicks logo" style={s.logoImg} />
-          <div style={s.subtitle}>Sign in to continue</div>
+
         </div>
 
         <form onSubmit={onSubmit} style={s.form} aria-label="Login form">
