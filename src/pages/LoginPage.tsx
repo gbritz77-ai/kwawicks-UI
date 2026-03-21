@@ -52,10 +52,7 @@ export default function LoginPage() {
       <div style={s.card}>
         <div style={s.header}>
           <img src="/logo.jpeg" alt="KwaWicks logo" style={s.logoImg} />
-          <div>
-            <div style={s.title}>KwaWicks</div>
-            <div style={s.subtitle}>Sign in to continue</div>
-          </div>
+          <div style={s.subtitle}>Sign in to continue</div>
         </div>
 
         <form onSubmit={onSubmit} style={s.form} aria-label="Login form">
@@ -121,21 +118,20 @@ const s: Record<string, React.CSSProperties> = {
 
   header: {
     display: "flex",
-    gap: 10,
+    flexDirection: "column",
     alignItems: "center",
+    gap: 10,
     marginBottom: 16,
   },
 
   logoImg: {
-    width: 48,
-    height: 48,
+    width: 120,
+    height: 120,
     borderRadius: 999,
     objectFit: "cover" as const,
-    flexShrink: 0,
   },
 
-  title: { fontSize: 20, fontWeight: 900 },
-  subtitle: { fontSize: 13, color: "#6b7280" },
+  subtitle: { fontSize: 13, color: "#6b7280", textAlign: "center" },
 
   form: { display: "grid", gap: 12, minWidth: 0 },
 
