@@ -5,7 +5,7 @@
 // 3) ✅ Added row hover highlight (inline-style safe via hoveredClientId state)
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
 import { clientsApi, type ClientDto, type ClientType } from "../api/clientsApi";
 import { hasRole } from "../api/auth";
@@ -68,7 +68,8 @@ export default function HubTasksPage() {
   const navigate = useNavigate();
   const isAdmin = hasRole("Admin");
 
-  const [tab, setTab] = useState<Tab>("species");
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>((searchParams.get("tab") as Tab) ?? "species");
 
   // ---------- Species state ----------
   const [items, setItems] = useState<SpeciesResponse[]>([]);

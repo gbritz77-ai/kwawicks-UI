@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getProfileFromIdToken, hasRole, hasAnyRole } from "../api/auth";
 import { useAutoLogout } from "../hooks/useAutoLogout";
 
@@ -92,13 +93,32 @@ function HBar({ pct, color }: { pct: number; color: string }) {
 // ── Stat card ────────────────────────────────────────────────────────────────
 
 function StatCard({
-  label, value, color, icon, compact = false,
-}: { label: string; value: string | number; color: string; icon: string; compact?: boolean }) {
+  label, value, color, icon, compact = false, to,
+}: { label: string; value: string | number; color: string; icon: string; compact?: boolean; to?: string }) {
+  const navigate = useNavigate();
+  const [hovered, setHovered] = useState(false);
+  const clickable = !!to;
   return (
-    <div style={{ ...s.statCard, borderTop: `3px solid ${color}`, padding: compact ? "12px 14px" : "16px 18px" }}>
+    <div
+      onClick={clickable ? () => navigate(to!) : undefined}
+      onMouseEnter={() => clickable && setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        ...s.statCard,
+        borderTop: `3px solid ${color}`,
+        padding: compact ? "12px 14px" : "16px 18px",
+        cursor: clickable ? "pointer" : "default",
+        transform: hovered ? "translateY(-2px)" : "none",
+        boxShadow: hovered
+          ? "0 4px 16px rgba(0,0,0,0.13)"
+          : "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)",
+        transition: "transform 0.15s, box-shadow 0.15s",
+      }}
+    >
       <div style={{ ...s.statIcon, fontSize: compact ? 16 : 20, marginBottom: compact ? 6 : 10 }}>{icon}</div>
       <div style={{ ...s.statValue, color, fontSize: compact ? 20 : 28 }}>{value}</div>
       <div style={s.statLabel}>{label}</div>
+      {clickable && <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 6, letterSpacing: "0.05em" }}>TAP TO VIEW →</div>}
     </div>
   );
 }
@@ -215,10 +235,10 @@ export default function AppShell() {
           {loadingDel ? <SkeletonCards n={4} /> : (
             <div style={{ ...s.panelRow, flexDirection: isMobile ? "column" : "row" }}>
               <div style={{ ...s.kpiGrid, gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(150px, 1fr))" }}>
-                <StatCard compact={isMobile} icon="📋" label="Open"            value={deliveryData?.openCount ?? 0}      color="#f59e0b" />
-                <StatCard compact={isMobile} icon="🚚" label="Out for Delivery" value={deliveryData?.inTransitCount ?? 0} color="#2563eb" />
-                <StatCard compact={isMobile} icon="✅" label="Delivered"        value={deliveryData?.deliveredCount ?? 0}  color="#22c55e" />
-                <StatCard compact={isMobile} icon="📦" label="Total Orders"     value={delivTotal}                         color="#8b5cf6" />
+                <StatCard compact={isMobile} icon="📋" label="Open"            value={deliveryData?.openCount ?? 0}      color="#f59e0b" to="/app/delivery-orders?status=Open" />
+                <StatCard compact={isMobile} icon="🚚" label="Out for Delivery" value={deliveryData?.inTransitCount ?? 0} color="#2563eb" to="/app/delivery-orders?status=OutForDelivery" />
+                <StatCard compact={isMobile} icon="✅" label="Delivered"        value={deliveryData?.deliveredCount ?? 0}  color="#22c55e" to="/app/delivery-orders?status=Delivered" />
+                <StatCard compact={isMobile} icon="📦" label="Total Orders"     value={delivTotal}                         color="#8b5cf6" to="/app/delivery-orders" />
               </div>
 
               <div style={{ ...s.chartCard, minWidth: isMobile ? 0 : 260 }}>
@@ -255,10 +275,10 @@ export default function AppShell() {
           {loadingStock ? <SkeletonCards n={4} /> : (
             <div style={{ ...s.panelRow, flexDirection: isMobile ? "column" : "row" }}>
               <div style={{ ...s.kpiGrid, gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(150px, 1fr))" }}>
-                <StatCard compact={isMobile} icon="📦" label="Total On Hand"     value={totalOnHand}             color="#22c55e" />
-                <StatCard compact={isMobile} icon="🔒" label="Booked Out"        value={totalBooked}             color="#2563eb" />
-                <StatCard compact={isMobile} icon="✅" label="Available"          value={totalOnHand - totalBooked} color="#8b5cf6" />
-                <StatCard compact={isMobile} icon="🐔" label="Active Species"    value={activeSpecies.length}    color="#f59e0b" />
+                <StatCard compact={isMobile} icon="📦" label="Total On Hand"     value={totalOnHand}               color="#22c55e" to="/app/hub-tasks?tab=species" />
+                <StatCard compact={isMobile} icon="🔒" label="Booked Out"        value={totalBooked}               color="#2563eb" to="/app/hub-tasks?tab=species" />
+                <StatCard compact={isMobile} icon="✅" label="Available"          value={totalOnHand - totalBooked} color="#8b5cf6" to="/app/hub-tasks?tab=species" />
+                <StatCard compact={isMobile} icon="🐔" label="Active Species"    value={activeSpecies.length}      color="#f59e0b" to="/app/hub-tasks?tab=species" />
               </div>
 
               <div style={{ ...s.chartCard, flex: 2, minWidth: isMobile ? 0 : 260 }}>
@@ -300,10 +320,10 @@ export default function AppShell() {
           {(loadingRev || loadingOut) ? <SkeletonCards n={4} /> : (
             <div style={{ ...s.panelRow, flexDirection: isMobile ? "column" : "row" }}>
               <div style={{ ...s.kpiGrid, gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(150px, 1fr))" }}>
-                <StatCard compact={isMobile} icon="💵" label="Revenue"          value={money(revenueData?.totalGrandTotal ?? 0)}   color="#22c55e" />
-                <StatCard compact={isMobile} icon="🧾" label="Invoices"         value={revenueData?.totalInvoices ?? 0}            color="#2563eb" />
-                <StatCard compact={isMobile} icon="⚠️" label="Outstanding"      value={money(outstandingData?.totalOutstanding ?? 0)} color="#ef4444" />
-                <StatCard compact={isMobile} icon="⏰" label="Overdue Invoices" value={outstandingData?.count ?? 0}                color="#f59e0b" />
+                <StatCard compact={isMobile} icon="💵" label="Revenue"          value={money(revenueData?.totalGrandTotal ?? 0)}      color="#22c55e" to="/app/reports" />
+                <StatCard compact={isMobile} icon="🧾" label="Invoices"         value={revenueData?.totalInvoices ?? 0}               color="#2563eb" to="/app/reports" />
+                <StatCard compact={isMobile} icon="⚠️" label="Outstanding"      value={money(outstandingData?.totalOutstanding ?? 0)}  color="#ef4444" to="/app/reports" />
+                <StatCard compact={isMobile} icon="⏰" label="Overdue Invoices" value={outstandingData?.count ?? 0}                   color="#f59e0b" to="/app/reports" />
               </div>
 
               <div style={{ ...s.chartCard, flex: 2, minWidth: isMobile ? 0 : 260 }}>
@@ -336,8 +356,8 @@ export default function AppShell() {
         <Section icon="🚗" title="My Deliveries" sub={`Your performance — ${monthLabel}`}>
           {loadingMyDel ? <SkeletonCards n={2} /> : (
             <div style={s.kpiGrid}>
-              <StatCard compact={isMobile} icon="✅" label="Completed"          value={myDeliveries?.length ?? 0} color="#2563eb" />
-              <StatCard compact={isMobile} icon="💵" label="Total Value Delivered" value={money(myDelivTotal)}    color="#22c55e" />
+              <StatCard compact={isMobile} icon="✅" label="Completed"             value={myDeliveries?.length ?? 0} color="#2563eb" to="/driver" />
+              <StatCard compact={isMobile} icon="💵" label="Total Value Delivered" value={money(myDelivTotal)}    color="#22c55e" to="/driver/reports" />
             </div>
           )}
         </Section>

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { deliveryOrdersApi, type DeliveryOrderResponse, type DeliveryOrderStatus } from "../api/deliveryOrdersApi";
 import { clientsApi, type ClientDto } from "../api/clientsApi";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
@@ -56,7 +56,8 @@ export default function DeliveryOrdersPage() {
   // List state
   const [orders, setOrders] = useState<DeliveryOrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [searchParams] = useSearchParams();
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get("status") ?? "");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
