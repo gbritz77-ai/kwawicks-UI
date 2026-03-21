@@ -11,6 +11,7 @@ import AdminReportsPage from "./pages/AdminReportsPage";
 import DriverReportsPage from "./pages/DriverReportsPage";
 import StatementPage from "./pages/StatementPage";
 import UserManagementPage from "./pages/UserManagementPage";
+import HelpPage from "./pages/HelpPage";
 
 function AuthLayout({ children }: { children: React.ReactElement }) {
   return (
@@ -33,6 +34,9 @@ export default function App() {
       <Route path="/app/users"           element={<AuthLayout><UserManagementPage /></AuthLayout>} />
       <Route path="/driver"              element={<AuthLayout><DriverPage /></AuthLayout>} />
       <Route path="/driver/reports"      element={<AuthLayout><DriverReportsPage /></AuthLayout>} />
+
+      <Route path="/app/help" element={<AuthLayout><HelpPage /></AuthLayout>} />
+      <Route path="/driver/help" element={<AuthLayout><HelpPage /></AuthLayout>} />
 
       {/* Statement is print-only — no nav bar */}
       <Route path="/app/statement" element={<RequireAuth><StatementPage /></RequireAuth>} />

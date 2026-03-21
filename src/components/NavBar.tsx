@@ -57,6 +57,9 @@ export default function NavBar() {
   if (isDriverRole) {
     items.push({ label: "My Deliveries",    path: "/driver" });
     items.push({ label: "Delivery History", path: "/driver/reports" });
+    items.push({ label: "Help Me",          path: "/driver/help" });
+  } else {
+    items.push({ label: "Help Me", path: "/app/help" });
   }
 
   function navigate(path: string) {
