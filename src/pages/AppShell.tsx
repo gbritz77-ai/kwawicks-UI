@@ -1,6 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { getProfileFromIdToken, hasRole, hasAnyRole } from "../api/auth";
 import { useAutoLogout } from "../hooks/useAutoLogout";
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return isMobile;
+}
 import {
   reportsApi,
   type DeliveryStatusSummaryResponse,
@@ -82,12 +92,12 @@ function HBar({ pct, color }: { pct: number; color: string }) {
 // ── Stat card ────────────────────────────────────────────────────────────────
 
 function StatCard({
-  label, value, color, icon,
-}: { label: string; value: string | number; color: string; icon: string }) {
+  label, value, color, icon, compact = false,
+}: { label: string; value: string | number; color: string; icon: string; compact?: boolean }) {
   return (
-    <div style={{ ...s.statCard, borderTop: `3px solid ${color}` }}>
-      <div style={s.statIcon}>{icon}</div>
-      <div style={{ ...s.statValue, color }}>{value}</div>
+    <div style={{ ...s.statCard, borderTop: `3px solid ${color}`, padding: compact ? "12px 14px" : "16px 18px" }}>
+      <div style={{ ...s.statIcon, fontSize: compact ? 16 : 20, marginBottom: compact ? 6 : 10 }}>{icon}</div>
+      <div style={{ ...s.statValue, color, fontSize: compact ? 20 : 28 }}>{value}</div>
       <div style={s.statLabel}>{label}</div>
     </div>
   );
@@ -128,6 +138,7 @@ function SkeletonCards({ n = 4 }: { n?: number }) {
 
 export default function AppShell() {
   useAutoLogout();
+  const isMobile = useIsMobile();
   const profile = getProfileFromIdToken();
   const { from, to, today } = monthRange();
 
@@ -191,10 +202,10 @@ export default function AppShell() {
   const dateLabel  = today.toLocaleDateString("en-ZA", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
   return (
-    <div style={s.page}>
+    <div style={{ ...s.page, padding: isMobile ? "16px" : "24px" }}>
       {/* ── Page header ── */}
       <div style={s.pageHeader}>
-        <div style={s.pageTitle}>{greeting()}{profile?.username ? `, ${profile.username}` : ""} 👋</div>
+        <div style={{ ...s.pageTitle, fontSize: isMobile ? 20 : 26 }}>{greeting()}{profile?.username ? `, ${profile.username}` : ""} 👋</div>
         <div style={s.pageSub}>{dateLabel} · Overview for {monthLabel}</div>
       </div>
 
@@ -202,23 +213,23 @@ export default function AppShell() {
       {canSeeOps && (
         <Section icon="🚚" title="Deliveries" sub={`Live order status — ${monthLabel}`}>
           {loadingDel ? <SkeletonCards n={4} /> : (
-            <div style={s.panelRow}>
-              <div style={s.kpiGrid}>
-                <StatCard icon="📋" label="Open"            value={deliveryData?.openCount ?? 0}      color="#f59e0b" />
-                <StatCard icon="🚚" label="Out for Delivery" value={deliveryData?.inTransitCount ?? 0} color="#2563eb" />
-                <StatCard icon="✅" label="Delivered"        value={deliveryData?.deliveredCount ?? 0}  color="#22c55e" />
-                <StatCard icon="📦" label="Total Orders"     value={delivTotal}                         color="#8b5cf6" />
+            <div style={{ ...s.panelRow, flexDirection: isMobile ? "column" : "row" }}>
+              <div style={{ ...s.kpiGrid, gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(150px, 1fr))" }}>
+                <StatCard compact={isMobile} icon="📋" label="Open"            value={deliveryData?.openCount ?? 0}      color="#f59e0b" />
+                <StatCard compact={isMobile} icon="🚚" label="Out for Delivery" value={deliveryData?.inTransitCount ?? 0} color="#2563eb" />
+                <StatCard compact={isMobile} icon="✅" label="Delivered"        value={deliveryData?.deliveredCount ?? 0}  color="#22c55e" />
+                <StatCard compact={isMobile} icon="📦" label="Total Orders"     value={delivTotal}                         color="#8b5cf6" />
               </div>
 
-              <div style={s.chartCard}>
+              <div style={{ ...s.chartCard, minWidth: isMobile ? 0 : 260 }}>
                 <div style={s.chartTitle}>Order Status Mix</div>
-                <div style={s.donutRow}>
+                <div style={{ ...s.donutRow, flexDirection: isMobile ? "column" : "row", alignItems: "center" }}>
                   <DonutChart segments={[
                     { label: "Open",            value: deliveryData?.openCount ?? 0,      color: "#f59e0b" },
                     { label: "Out for Delivery",value: deliveryData?.inTransitCount ?? 0, color: "#2563eb" },
                     { label: "Delivered",        value: deliveryData?.deliveredCount ?? 0, color: "#22c55e" },
                   ]} />
-                  <div style={s.legend}>
+                  <div style={{ ...s.legend, width: isMobile ? "100%" : undefined }}>
                     {[
                       { label: "Open",             color: "#f59e0b", value: deliveryData?.openCount ?? 0 },
                       { label: "Out for Delivery", color: "#2563eb", value: deliveryData?.inTransitCount ?? 0 },
@@ -242,15 +253,15 @@ export default function AppShell() {
       {canSeeOps && (
         <Section icon="🏭" title="Stock" sub="Current inventory levels at hub">
           {loadingStock ? <SkeletonCards n={4} /> : (
-            <div style={s.panelRow}>
-              <div style={s.kpiGrid}>
-                <StatCard icon="📦" label="Total On Hand"     value={totalOnHand}             color="#22c55e" />
-                <StatCard icon="🔒" label="Booked Out"        value={totalBooked}             color="#2563eb" />
-                <StatCard icon="✅" label="Available"          value={totalOnHand - totalBooked} color="#8b5cf6" />
-                <StatCard icon="🐔" label="Active Species"    value={activeSpecies.length}    color="#f59e0b" />
+            <div style={{ ...s.panelRow, flexDirection: isMobile ? "column" : "row" }}>
+              <div style={{ ...s.kpiGrid, gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(150px, 1fr))" }}>
+                <StatCard compact={isMobile} icon="📦" label="Total On Hand"     value={totalOnHand}             color="#22c55e" />
+                <StatCard compact={isMobile} icon="🔒" label="Booked Out"        value={totalBooked}             color="#2563eb" />
+                <StatCard compact={isMobile} icon="✅" label="Available"          value={totalOnHand - totalBooked} color="#8b5cf6" />
+                <StatCard compact={isMobile} icon="🐔" label="Active Species"    value={activeSpecies.length}    color="#f59e0b" />
               </div>
 
-              <div style={{ ...s.chartCard, flex: 2 }}>
+              <div style={{ ...s.chartCard, flex: 2, minWidth: isMobile ? 0 : 260 }}>
                 <div style={s.chartTitle}>Top Species by Stock Level</div>
                 <div style={s.stockLegend}>
                   <span style={{ ...s.dot, background: "#22c55e" }} /> Available
@@ -287,15 +298,15 @@ export default function AppShell() {
       {canSeeFinances && (
         <Section icon="💰" title="Finances" sub={`Revenue and outstanding payments — ${monthLabel}`}>
           {(loadingRev || loadingOut) ? <SkeletonCards n={4} /> : (
-            <div style={s.panelRow}>
-              <div style={s.kpiGrid}>
-                <StatCard icon="💵" label="Revenue"          value={money(revenueData?.totalGrandTotal ?? 0)}   color="#22c55e" />
-                <StatCard icon="🧾" label="Invoices"         value={revenueData?.totalInvoices ?? 0}            color="#2563eb" />
-                <StatCard icon="⚠️" label="Outstanding"      value={money(outstandingData?.totalOutstanding ?? 0)} color="#ef4444" />
-                <StatCard icon="⏰" label="Overdue Invoices" value={outstandingData?.count ?? 0}                color="#f59e0b" />
+            <div style={{ ...s.panelRow, flexDirection: isMobile ? "column" : "row" }}>
+              <div style={{ ...s.kpiGrid, gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(150px, 1fr))" }}>
+                <StatCard compact={isMobile} icon="💵" label="Revenue"          value={money(revenueData?.totalGrandTotal ?? 0)}   color="#22c55e" />
+                <StatCard compact={isMobile} icon="🧾" label="Invoices"         value={revenueData?.totalInvoices ?? 0}            color="#2563eb" />
+                <StatCard compact={isMobile} icon="⚠️" label="Outstanding"      value={money(outstandingData?.totalOutstanding ?? 0)} color="#ef4444" />
+                <StatCard compact={isMobile} icon="⏰" label="Overdue Invoices" value={outstandingData?.count ?? 0}                color="#f59e0b" />
               </div>
 
-              <div style={{ ...s.chartCard, flex: 2 }}>
+              <div style={{ ...s.chartCard, flex: 2, minWidth: isMobile ? 0 : 260 }}>
                 <div style={s.chartTitle}>Revenue by Payment Type</div>
                 <div style={{ display: "grid", gap: 14, marginTop: 12 }}>
                   {(revenueData?.byPaymentType ?? []).length === 0 && (
@@ -325,8 +336,8 @@ export default function AppShell() {
         <Section icon="🚗" title="My Deliveries" sub={`Your performance — ${monthLabel}`}>
           {loadingMyDel ? <SkeletonCards n={2} /> : (
             <div style={s.kpiGrid}>
-              <StatCard icon="✅" label="Completed"          value={myDeliveries?.length ?? 0} color="#2563eb" />
-              <StatCard icon="💵" label="Total Value Delivered" value={money(myDelivTotal)}    color="#22c55e" />
+              <StatCard compact={isMobile} icon="✅" label="Completed"          value={myDeliveries?.length ?? 0} color="#2563eb" />
+              <StatCard compact={isMobile} icon="💵" label="Total Value Delivered" value={money(myDelivTotal)}    color="#22c55e" />
             </div>
           )}
         </Section>
