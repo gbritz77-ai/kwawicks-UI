@@ -143,13 +143,14 @@ const s: Record<string, React.CSSProperties> = {
   title: { fontSize: 20, fontWeight: 900 },
   subtitle: { fontSize: 13, color: "#6b7280" },
 
-  form: { display: "grid", gap: 12 },
+  form: { display: "grid", gap: 12, minWidth: 0 },
 
   label: {
     display: "grid",
     gap: 6,
     fontWeight: 600,
     fontSize: 14,
+    minWidth: 0,
   },
 
   input: {
@@ -177,6 +178,7 @@ const s: Record<string, React.CSSProperties> = {
   },
 
   btn: {
+    width: "100%",
     padding: "14px 16px",
     borderRadius: 12,
     border: "none",
@@ -185,6 +187,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 16,
     fontWeight: 700,
     cursor: "pointer",
+    boxSizing: "border-box" as const,
   },
 
   help: {
