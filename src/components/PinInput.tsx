@@ -74,12 +74,12 @@ export default function PinInput({
   }
 
   return (
-    <div style={{ display: "flex", gap: 10 }}>
+    <div style={{ display: "flex", gap: 8 }}>
       {digits.map((d, i) => (
         <input
           key={i}
           ref={(el) => {
-            inputs.current[i] = el; // ✅ returns void
+            inputs.current[i] = el;
           }}
           value={d}
           onChange={(e) => setAt(i, e.target.value)}
@@ -90,7 +90,9 @@ export default function PinInput({
           maxLength={1}
           disabled={disabled}
           style={{
-            width: 52,
+            flex: 1,
+            minWidth: 0,
+            maxWidth: 52,
             height: 52,
             borderRadius: 12,
             border: "1px solid rgba(255,255,255,0.12)",

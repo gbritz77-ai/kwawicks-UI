@@ -160,7 +160,7 @@ const s: Record<string, React.CSSProperties> = {
     outline: "none",
   },
 
-  pwRow: { display: "flex", gap: 10, alignItems: "center" },
+  pwRow: { display: "flex", gap: 10, alignItems: "center", width: "100%" },
 
   error: {
     padding: 12,
