@@ -125,8 +125,8 @@ const s: Record<string, React.CSSProperties> = {
   },
 
   logoImg: {
-    width: 120,
-    height: 120,
+    width: 180,
+    height: 180,
     borderRadius: 999,
     objectFit: "cover" as const,
   },
