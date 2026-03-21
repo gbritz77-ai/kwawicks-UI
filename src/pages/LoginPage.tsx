@@ -110,7 +110,7 @@ const s: Record<string, React.CSSProperties> = {
 },
 
   card: {
-    width: "min(520px, 92vw)",
+    width: "min(520px, 100%)",
     background: "#ffffff",
     border: "1px solid #e5e7eb",
     borderRadius: 16,
