@@ -74,7 +74,7 @@ export default function PinInput({
   }
 
   return (
-    <div style={{ display: "flex", gap: 8 }}>
+    <div style={{ display: "flex", gap: 8, width: "100%" }}>
       {digits.map((d, i) => (
         <input
           key={i}
