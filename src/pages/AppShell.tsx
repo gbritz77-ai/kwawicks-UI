@@ -23,7 +23,7 @@ import { speciesApi } from "../api/speciesApi";
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function money(n: number) {
-  return `R ${Number(n).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `R\u00A0${Number(n).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function greeting() {
@@ -393,7 +393,7 @@ const s: Record<string, React.CSSProperties> = {
     boxShadow: "0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)",
   },
   statIcon:  { fontSize: 20, marginBottom: 10 },
-  statValue: { fontSize: 28, fontWeight: 900, lineHeight: 1, marginBottom: 6 },
+  statValue: { fontSize: 28, fontWeight: 900, lineHeight: 1, marginBottom: 6, whiteSpace: "nowrap" },
   statLabel: {
     fontSize: 11,
     color: "#64748b",
