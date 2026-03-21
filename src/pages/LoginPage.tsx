@@ -51,9 +51,7 @@ export default function LoginPage() {
     <div style={s.page}>
       <div style={s.card}>
         <div style={s.header}>
-          <div style={s.logo} aria-hidden="true">
-            K
-          </div>
+          <img src="/logo.jpeg" alt="KwaWicks logo" style={s.logoImg} />
           <div>
             <div style={s.title}>KwaWicks</div>
             <div style={s.subtitle}>Sign in to continue</div>
@@ -128,15 +126,11 @@ const s: Record<string, React.CSSProperties> = {
     marginBottom: 16,
   },
 
-  logo: {
-    width: 40,
-    height: 40,
+  logoImg: {
+    width: 48,
+    height: 48,
     borderRadius: 999,
-    display: "grid",
-    placeItems: "center",
-    fontWeight: 900,
-    background: "#2563eb",
-    color: "#ffffff",
+    objectFit: "cover" as const,
     flexShrink: 0,
   },
 

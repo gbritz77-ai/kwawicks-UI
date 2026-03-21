@@ -73,6 +73,7 @@ export default function NavBar() {
     <>
       <nav style={s.bar}>
         <button style={s.brand} onClick={() => navigate(isDriverRole ? "/driver" : "/app")}>
+          <img src="/logo.jpeg" alt="KwaWicks" style={s.brandLogo} />
           KwaWicks
         </button>
 
@@ -161,6 +162,16 @@ const s: Record<string, React.CSSProperties> = {
     padding: "0 20px 0 0",
     letterSpacing: "-0.02em",
     whiteSpace: "nowrap",
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  brandLogo: {
+    width: 32,
+    height: 32,
+    borderRadius: "50%",
+    objectFit: "cover" as const,
+    flexShrink: 0,
   },
   links: {
     display: "flex",
