@@ -94,6 +94,7 @@ export default function HubTasksPage() {
   const [clientSortBy, setClientSortBy] = useState<ClientSortKey>("clientName");
   const [clientSortDir, setClientSortDir] = useState<SortDir>("asc");
   const [hoveredClientId, setHoveredClientId] = useState<string | null>(null);
+  const [hoveredSpeciesId, setHoveredSpeciesId] = useState<string | null>(null);
 
   // ---------- Loaders ----------
   async function loadSpecies() {
@@ -434,62 +435,49 @@ export default function HubTasksPage() {
           ) : filteredSpecies.length === 0 ? (
             <div style={s.card}>No items found.</div>
           ) : (
-            <div style={s.list}>
-              {filteredSpecies.map((x: any) => (
-                <div key={x.speciesId} style={s.item}>
-                  <div style={{ flex: 1 }}>
-                    <div style={s.itemName}>{x.name}</div>
+            <div style={s.gridWrap}>
+              {/* Header row */}
+              <div style={{ ...s.speciesRow, ...s.gridHeader }}>
+                <div>Name</div>
+                <div>Unit Cost</div>
+                <div>Sell Price</div>
+                <div>VAT</div>
+                <div>Qty on Hand</div>
+                <div>Qty Booked</div>
+                <div>Available</div>
+                <div>Status</div>
+                {isAdmin && <div style={{ textAlign: "right" }}>Actions</div>}
+              </div>
 
-                    <div style={s.kvRow}>
-                      <span style={s.kvKey}>Species id</span>
-                      <span style={s.kvValue}>: {x.speciesId}</span>
-                    </div>
-
-                    <div style={s.kvRow}>
-                      <span style={s.kvKey}>Unit Cost</span>
-                      <span style={s.kvValue}>: {money(x.unitCost)}</span>
-                    </div>
-
-                    <div style={s.kvRow}>
-                      <span style={s.kvKey}>Sell Price</span>
-                      <span style={s.kvValue}>: {x.sellPrice == null ? "—" : money(x.sellPrice)}</span>
-                    </div>
-
-                    <div style={s.kvRow}>
-                      <span style={s.kvKey}>Vat</span>
-                      <span style={s.kvValue}>: {x.vat}</span>
-                    </div>
-
-                    <div style={s.kvRow}>
-                      <span style={s.kvKey}>Qty on hand at Hub</span>
-                      <span style={s.kvValue}>: {x.qtyOnHandHub}</span>
-                    </div>
-
-                    <div style={s.kvRow}>
-                      <span style={s.kvKey}>Qty booked out for delivery</span>
-                      <span style={s.kvValue}>: {x.qtyBookedOutForDelivery}</span>
-                    </div>
-
-                    <div style={s.kvRow}>
-                      <span style={s.kvKey}>Available</span>
-                      <span style={s.kvValue}>: {x.qtyAvailable ?? x.qtyOnHandHub - x.qtyBookedOutForDelivery}</span>
-                    </div>
-
-                    <div style={s.kvRow}>
-                      <span style={s.kvKey}>Status</span>
-                      <span style={s.kvValue}>: {x.isActive ? "Active" : "Inactive"}</span>
-                    </div>
+              {/* Data rows */}
+              {filteredSpecies.map((x: any, idx: number) => {
+                const baseRow = idx % 2 === 0 ? s.gridRowEven : s.gridRowOdd;
+                const isHover = hoveredSpeciesId === x.speciesId;
+                return (
+                  <div
+                    key={x.speciesId}
+                    style={{ ...s.speciesRow, ...baseRow, ...(isHover ? s.gridRowHover : null) }}
+                    onMouseEnter={() => setHoveredSpeciesId(x.speciesId)}
+                    onMouseLeave={() => setHoveredSpeciesId(null)}
+                  >
+                    <div style={s.gridName}>{x.name}</div>
+                    <div style={s.gridCell}>{money(x.unitCost)}</div>
+                    <div style={s.gridCell}>{x.sellPrice == null ? "—" : money(x.sellPrice)}</div>
+                    <div style={s.gridCell}>{x.vat}</div>
+                    <div style={s.gridCell}>{x.qtyOnHandHub}</div>
+                    <div style={s.gridCell}>{x.qtyBookedOutForDelivery}</div>
+                    <div style={s.gridCell}>{x.qtyAvailable ?? x.qtyOnHandHub - x.qtyBookedOutForDelivery}</div>
+                    <div style={s.gridCell}>{x.isActive ? "Active" : "Inactive"}</div>
+                    {isAdmin && (
+                      <div style={s.gridActions}>
+                        <button style={s.gridEditBtn} onClick={() => openEditSpecies(x)} disabled={busy}>
+                          Edit
+                        </button>
+                      </div>
+                    )}
                   </div>
-
-                  {isAdmin && (
-                    <div style={s.actionsCol}>
-                      <button style={s.smallBtn} onClick={() => openEditSpecies(x)} disabled={busy}>
-                        Edit
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -837,52 +825,6 @@ const s: Record<string, React.CSSProperties> = {
     maxWidth: 1100,
   },
 
-  // Species list stays the same
-  list: { display: "grid", gap: 10, marginTop: 10, maxWidth: 1100 },
-  item: {
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-    padding: 14,
-    borderRadius: 14,
-    border: "1px solid rgba(0,0,0,0.12)",
-    background: "white",
-  },
-
-  itemName: {
-    fontWeight: 900,
-    fontSize: 16,
-    color: "#2563eb",
-  },
-
-  kvRow: {
-    display: "flex",
-    gap: 8,
-    marginTop: 6,
-    fontSize: 13,
-    alignItems: "baseline",
-    flexWrap: "wrap",
-  },
-  kvKey: { fontWeight: 900, color: "#111" },
-  kvValue: { color: "rgba(0,0,0,0.55)", fontWeight: 700 },
-
-  actionsCol: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-    alignItems: "stretch",
-  },
-
-  smallBtn: {
-    padding: "10px 12px",
-    borderRadius: 10,
-    border: "1px solid rgba(0,0,0,0.15)",
-    cursor: "pointer",
-    fontWeight: 800,
-    background: "white",
-  },
-
   dangerBtn: {
     padding: "10px 12px",
     borderRadius: 10,
@@ -928,6 +870,17 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 12,
     overflowX: "auto",
     background: "white",
+  },
+
+  // Species grid: Name | Unit Cost | Sell Price | VAT | Qty on Hand | Qty Booked | Available | Status | Actions
+  speciesRow: {
+    display: "grid",
+    gridTemplateColumns: "1.8fr 1fr 1fr 0.6fr 1fr 1fr 1fr 0.8fr 0.8fr",
+    gap: 12,
+    padding: "14px 14px",
+    alignItems: "center",
+    fontSize: 14,
+    minWidth: 900,
   },
 
   // ✅ FIX: 6 columns because we render 6 cells (Name, ID, Address, Contact, Type, Actions)
