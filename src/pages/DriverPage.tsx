@@ -812,7 +812,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   returnFields: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
+    gridTemplateColumns: "repeat(2, 1fr)",
     gap: 8,
   },
   returnLabel: {
@@ -825,6 +825,8 @@ const s: Record<string, React.CSSProperties> = {
     color: "rgba(0,0,0,0.55)",
   },
   returnInput: {
+    width: "100%",
+    boxSizing: "border-box" as const,
     padding: "10px 8px",
     borderRadius: 10,
     border: "1px solid rgba(0,0,0,0.15)",
