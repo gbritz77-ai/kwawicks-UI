@@ -21,7 +21,7 @@ export default function AppShell() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  page: { padding: "48px 32px", fontFamily: "system-ui, -apple-system, sans-serif" },
+  page: { padding: "20px 24px", fontFamily: "system-ui, -apple-system, sans-serif" },
   heading: { fontSize: 26, fontWeight: 800, color: "#1e293b", marginBottom: 10 },
   sub: { fontSize: 15, color: "#64748b", maxWidth: 480 },
 };

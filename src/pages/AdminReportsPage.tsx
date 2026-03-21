@@ -756,7 +756,7 @@ function Td({ children, style }: { children: React.ReactNode; style?: CSSPropert
 }
 
 const s: Record<string, CSSProperties> = {
-  page: { padding: "16px", maxWidth: 1400, margin: "0 auto" },
+  page: { padding: "20px 24px" },
   tableWrap: { overflowX: "auto" as const },
   heading: { fontSize: 22, fontWeight: 700, marginBottom: 20, color: "#1e293b" },
   subHeading: { fontSize: 16, fontWeight: 600, margin: "20px 0 10px", color: "#334155" },

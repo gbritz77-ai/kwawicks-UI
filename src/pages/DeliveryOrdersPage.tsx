@@ -537,7 +537,7 @@ export default function DeliveryOrdersPage() {
 // ── Styles ─────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  page: { padding: "16px", fontFamily: "system-ui" },
+  page: { padding: "20px 24px", fontFamily: "system-ui" },
 
   headerRow: {
     display: "flex",
@@ -582,7 +582,6 @@ const s: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(239,68,68,0.35)",
     background: "rgba(239,68,68,0.08)",
     color: "#7f1d1d",
-    maxWidth: 1100,
   },
 
   card: {
@@ -591,7 +590,6 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 12,
     border: "1px solid rgba(0,0,0,0.12)",
     background: "rgba(0,0,0,0.02)",
-    maxWidth: 1100,
   },
 
   list: { display: "grid", gap: 10, marginTop: 14, maxWidth: 1100 },

@@ -281,7 +281,7 @@ export default function UserManagementPage() {
 }
 
 const s: Record<string, CSSProperties> = {
-  page: { padding: "16px", maxWidth: 900, margin: "0 auto" },
+  page: { padding: "20px 24px" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 },
   heading: { fontSize: 22, fontWeight: 700, color: "#1e293b", margin: 0 },
   addBtn: {

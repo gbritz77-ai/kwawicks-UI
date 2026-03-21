@@ -756,7 +756,7 @@ function money(n: number) {
 
 // ✅ Styles (FIXED gridTemplateColumns + added sort + hover)
 const s: Record<string, React.CSSProperties> = {
-  page: { padding: "16px", fontFamily: "system-ui" },
+  page: { padding: "20px 24px", fontFamily: "system-ui" },
   headerRow: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" },
   headerActions: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
   title: { fontSize: 22, fontWeight: 900 },
@@ -796,7 +796,6 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 10,
     marginTop: 8,
-    maxWidth: 1100,
   },
   sortLabel: { fontWeight: 900, opacity: 0.75 },
   sortSelect: {
@@ -822,7 +821,6 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 12,
     border: "1px solid rgba(0,0,0,0.12)",
     background: "rgba(0,0,0,0.02)",
-    maxWidth: 1100,
   },
 
   dangerBtn: {
@@ -859,13 +857,11 @@ const s: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(239,68,68,0.35)",
     background: "rgba(239,68,68,0.08)",
     color: "#7f1d1d",
-    maxWidth: 1100,
   },
 
   // ✅ Clients GRID styles
   gridWrap: {
     marginTop: 10,
-    maxWidth: 1100,
     border: "1px solid rgba(0,0,0,0.12)",
     borderRadius: 12,
     overflowX: "auto",
