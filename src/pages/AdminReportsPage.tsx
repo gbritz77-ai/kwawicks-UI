@@ -6,6 +6,7 @@ import { reportsApi } from "../api/reportsApi";
 import { invoicesApi } from "../api/invoicesApi";
 import { clientsApi } from "../api/clientsApi";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
+import { whatsappApi } from "../api/whatsappApi";
 import type {
   RevenueSummaryResponse,
   OutstandingPaymentsResponse,
@@ -461,8 +462,13 @@ function InvoicesTab({
   const [confirming, setConfirming] = useState<string | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [waModal, setWaModal] = useState<{ invoiceId: string; customerId: string } | null>(null);
+  const [waPhone, setWaPhone] = useState("");
+  const [waSending, setWaSending] = useState(false);
+  const [waResult, setWaResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const clientMap = Object.fromEntries(clients.map((c) => [c.clientId, c.clientName]));
+  const clientPhoneMap = Object.fromEntries(clients.map((c) => [c.clientId, c.clientPhone ?? ""]));
 
   async function handleConfirm(invoiceId: string) {
     setConfirming(invoiceId);
@@ -551,6 +557,7 @@ function InvoicesTab({
                 <Th>Date</Th>
                 <Th>Receipt</Th>
                 <Th>Action</Th>
+                <Th>WhatsApp</Th>
               </tr>
             </thead>
             <tbody>
@@ -597,11 +604,23 @@ function InvoicesTab({
                         </button>
                       ) : "—"}
                     </Td>
+                    <Td>
+                      <button
+                        onClick={() => {
+                          setWaModal({ invoiceId: inv.invoiceId, customerId: inv.customerId });
+                          setWaPhone(clientPhoneMap[inv.customerId] ?? "");
+                          setWaResult(null);
+                        }}
+                        style={s.waBtn}
+                      >
+                        📱 WhatsApp
+                      </button>
+                    </Td>
                   </tr>
                 );
               })}
               {invoices.length === 0 && (
-                <tr><td colSpan={11} style={s.emptyCell}>No invoices found</td></tr>
+                <tr><td colSpan={12} style={s.emptyCell}>No invoices found</td></tr>
               )}
             </tbody>
           </ScrollTable>
@@ -620,6 +639,60 @@ function InvoicesTab({
             <a href={receiptUrl} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 10, fontSize: 13, color: "#2563eb" }}>
               Open full size ↗
             </a>
+          </div>
+        </div>
+      )}
+
+      {/* WhatsApp send modal */}
+      {waModal && (
+        <div style={s.modalOverlay} onClick={() => { setWaModal(null); setWaResult(null); }}>
+          <div style={s.modalBox} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <strong style={{ fontSize: 15 }}>📱 Send Invoice via WhatsApp</strong>
+              <button onClick={() => { setWaModal(null); setWaResult(null); }} style={s.modalClose}>✕</button>
+            </div>
+            <p style={{ fontSize: 13, color: "#475569", marginBottom: 12 }}>
+              Invoice: <span style={{ fontFamily: "monospace" }}>{waModal.invoiceId.slice(0, 8)}…</span>
+            </p>
+            <label style={{ fontSize: 13, color: "#64748b", display: "block", marginBottom: 4 }}>Phone number</label>
+            <input
+              type="tel"
+              value={waPhone}
+              onChange={(e) => setWaPhone(e.target.value)}
+              placeholder="e.g. 0821234567"
+              style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 14, boxSizing: "border-box" }}
+            />
+            {waResult && (
+              <p style={{ marginTop: 12, fontSize: 13, color: waResult.success ? "#166534" : "#dc2626", fontWeight: 600 }}>
+                {waResult.message}
+              </p>
+            )}
+            <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => { setWaModal(null); setWaResult(null); }}
+                style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", fontSize: 14 }}
+              >
+                Cancel
+              </button>
+              <button
+                disabled={waSending || !waPhone}
+                onClick={async () => {
+                  setWaSending(true);
+                  setWaResult(null);
+                  try {
+                    const result = await whatsappApi.sendInvoice(waModal.invoiceId, waPhone);
+                    setWaResult(result);
+                  } catch (err: any) {
+                    setWaResult({ success: false, message: err.message ?? "Failed to send" });
+                  } finally {
+                    setWaSending(false);
+                  }
+                }}
+                style={{ padding: "8px 20px", borderRadius: 6, border: "none", background: "#15803d", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600, opacity: waSending || !waPhone ? 0.6 : 1 }}
+              >
+                {waSending ? "Sending…" : "Send"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -797,6 +870,10 @@ const s: Record<string, CSSProperties> = {
   viewBtn: {
     padding: "5px 12px", borderRadius: 6, border: "1px solid #2563eb", cursor: "pointer",
     background: "#eff6ff", color: "#2563eb", fontSize: 13, fontWeight: 600,
+  },
+  waBtn: {
+    padding: "5px 12px", borderRadius: 6, border: "1px solid #15803d", cursor: "pointer",
+    background: "#f0fdf4", color: "#15803d", fontSize: 13, fontWeight: 600,
   },
   modalOverlay: {
     position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)",
