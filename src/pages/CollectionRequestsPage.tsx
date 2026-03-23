@@ -4,6 +4,7 @@ import type { CollectionRequestDto, CollectionRequestLineDto } from "../api/coll
 import { procurementOrdersApi } from "../api/procurementOrdersApi";
 import type { ProcurementOrderDto } from "../api/procurementOrdersApi";
 import { usersApi } from "../api/usersApi";
+import type { DriverDto } from "../api/usersApi";
 import { hasAnyRole, getProfileFromIdToken } from "../api/auth";
 
 function getUsername(): string | undefined {
@@ -27,7 +28,7 @@ const canCreate = () => hasAnyRole("Owner", "Admin", "HubStaff");
 export default function CollectionRequestsPage() {
   const [items, setItems] = useState<CollectionRequestDto[]>([]);
   const [pos, setPos] = useState<ProcurementOrderDto[]>([]);
-  const [drivers, setDrivers] = useState<any[]>([]);
+  const [drivers, setDrivers] = useState<DriverDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -62,11 +63,11 @@ export default function CollectionRequestsPage() {
       const [crs, poList, driverList] = await Promise.all([
         collectionRequestsApi.list(driverId ? { driverId } : undefined),
         procurementOrdersApi.list(),
-        isAdmin() ? usersApi.list().catch(() => []) : Promise.resolve([]),
+        usersApi.listDrivers().catch(() => [] as DriverDto[]),
       ]);
       setItems(crs);
       setPos(poList.filter(p => ["Submitted", "CollectionScheduled"].includes(p.status)));
-      setDrivers((driverList as any[]).filter((u: any) => u.role === "Driver" || u.groups?.includes("Driver")));
+      setDrivers(driverList);
     } catch { setError("Failed to load collection requests."); }
     finally { setLoading(false); }
   }
@@ -247,11 +248,11 @@ export default function CollectionRequestsPage() {
             <label style={s.label}>Assign Driver *
               <select style={s.input} value={createForm.assignedDriverId}
                 onChange={e => {
-                  const d = drivers.find((x: any) => x.userId === e.target.value || x.username === e.target.value);
-                  setCreateForm(p => ({ ...p, assignedDriverId: e.target.value, assignedDriverName: d?.name || d?.username || e.target.value }));
+                  const d = drivers.find(x => x.userId === e.target.value);
+                  setCreateForm(p => ({ ...p, assignedDriverId: e.target.value, assignedDriverName: d?.name || e.target.value }));
                 }} disabled={busy}>
                 <option value="">— Select driver —</option>
-                {drivers.map((d: any) => <option key={d.userId || d.username} value={d.userId || d.username}>{d.name || d.username}</option>)}
+                {drivers.map(d => <option key={d.userId} value={d.userId}>{d.name} {d.email ? `(${d.email})` : ""}</option>)}
               </select>
             </label>
             <label style={s.label}>Notes

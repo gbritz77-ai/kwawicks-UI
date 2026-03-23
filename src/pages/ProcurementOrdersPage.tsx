@@ -30,7 +30,7 @@ export default function ProcurementOrdersPage() {
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState<CreateProcurementOrderRequest>({ supplierId: "", supplierOrderReference: "", notes: "", lines: [{ speciesId: "", orderedQty: 0 }] });
+  const [form, setForm] = useState<CreateProcurementOrderRequest>({ supplierId: "", supplierOrderReference: "", notes: "", lines: [{ speciesId: "", orderedQty: 0, unitCost: 0 }] });
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -73,18 +73,18 @@ export default function ProcurementOrdersPage() {
 
   async function createOrder() {
     if (!form.supplierId) { setFormError("Please select a supplier."); return; }
-    if (form.lines.some(l => !l.speciesId || l.orderedQty <= 0)) { setFormError("All lines require a species and quantity > 0."); return; }
+    if (form.lines.some(l => !l.speciesId || l.orderedQty <= 0 || !l.unitCost || l.unitCost <= 0)) { setFormError("All lines require a species, quantity and unit cost > 0."); return; }
     setBusy(true); setFormError("");
     try {
       const created = await procurementOrdersApi.create(form);
       setOrders(o => [created, ...o]);
       setShowForm(false);
-      setForm({ supplierId: "", supplierOrderReference: "", notes: "", lines: [{ speciesId: "", orderedQty: 0 }] });
+      setForm({ supplierId: "", supplierOrderReference: "", notes: "", lines: [{ speciesId: "", orderedQty: 0, unitCost: 0 }] });
     } catch (e: any) { setFormError(e?.message ?? "Failed to create."); }
     finally { setBusy(false); }
   }
 
-  function addLine() { setForm(p => ({ ...p, lines: [...p.lines, { speciesId: "", orderedQty: 0 }] })); }
+  function addLine() { setForm(p => ({ ...p, lines: [...p.lines, { speciesId: "", orderedQty: 0, unitCost: 0 }] })); }
   function removeLine(i: number) { setForm(p => ({ ...p, lines: p.lines.filter((_, idx) => idx !== i) })); }
   function setLine(i: number, k: string, v: any) {
     setForm(p => { const ls = [...p.lines]; ls[i] = { ...ls[i], [k]: v }; return { ...p, lines: ls }; });
@@ -206,6 +206,10 @@ export default function ProcurementOrdersPage() {
                   {species.map((sp: any) => <option key={sp.speciesId} value={sp.speciesId}>{sp.name}</option>)}
                 </select>
                 <input style={{ ...s.input, flex: 1 }} placeholder="Qty" inputMode="numeric" value={line.orderedQty || ""} onChange={e => setLine(idx, "orderedQty", parseInt(e.target.value) || 0)} disabled={busy} />
+                <div style={s.unitCostWrap}>
+                  <span style={s.unitCostPrefix}>R</span>
+                  <input style={{ ...s.input, ...s.unitCostInput }} placeholder="Unit cost" inputMode="decimal" value={line.unitCost || ""} onChange={e => setLine(idx, "unitCost", parseFloat(e.target.value) || 0)} disabled={busy} />
+                </div>
                 {form.lines.length > 1 && (
                   <button style={s.removeBtn} onClick={() => removeLine(idx)} disabled={busy}>✕</button>
                 )}
@@ -256,6 +260,9 @@ const s: Record<string, React.CSSProperties> = {
   label: { display: "grid", gap: 4, fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 },
   input: { width: "100%", minWidth: 0, padding: "10px 12px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 14, boxSizing: "border-box", background: "#f9fafb", color: "#111827", outline: "none" },
   lineRow: { display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap" },
+  unitCostWrap: { display: "flex", alignItems: "center", flex: 1, minWidth: 100, position: "relative" as const },
+  unitCostPrefix: { position: "absolute" as const, left: 10, fontSize: 14, color: "#374151", fontWeight: 600, pointerEvents: "none" as const, zIndex: 1 },
+  unitCostInput: { paddingLeft: 22, width: "100%", flex: 1 },
   addLineBtn: { background: "none", border: "1px solid #16a34a", color: "#16a34a", borderRadius: 6, padding: "3px 10px", fontSize: 12, cursor: "pointer", fontWeight: 600 },
   removeBtn: { padding: "10px 12px", background: "#fef2f2", border: "1px solid #fca5a5", color: "#dc2626", borderRadius: 8, cursor: "pointer", fontSize: 14 },
   modalBtns: { display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 },

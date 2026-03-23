@@ -25,7 +25,7 @@ export type CreateProcurementOrderRequest = {
   supplierId: string;
   supplierOrderReference: string;
   notes: string;
-  lines: { speciesId: string; orderedQty: number; unitCost?: number }[];
+  lines: { speciesId: string; orderedQty: number; unitCost: number }[];
 };
 
 export const procurementOrdersApi = {
