@@ -20,10 +20,12 @@ export default function NavBar() {
   const { pathname, search } = useLocation();
   const profile = getProfileFromIdToken();
 
-  const isOperational = hasAnyRole("Owner", "Finance", "Admin", "HubStaff");
-  const isFinancial   = hasAnyRole("Owner", "Finance");
-  const isUserManager = hasAnyRole("Owner", "Admin");
-  const isDriverRole  = hasRole("Driver");
+  const isOperational  = hasAnyRole("Owner", "Finance", "Admin", "HubStaff", "Procurement");
+  const isFinancial    = hasAnyRole("Owner", "Finance");
+  const isUserManager  = hasAnyRole("Owner", "Admin");
+  const isDriverRole   = hasRole("Driver");
+  const isProcurement  = hasAnyRole("Owner", "Admin", "Procurement", "Finance");
+  const canSeeCollections = hasAnyRole("Owner", "Admin", "HubStaff", "Procurement", "Finance", "Driver");
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -53,6 +55,15 @@ export default function NavBar() {
   }
   if (isUserManager) {
     items.push({ label: "Users", path: "/app/users" });
+  }
+  if (hasAnyRole("Owner", "Admin", "Procurement")) {
+    items.push({ label: "Suppliers", path: "/app/suppliers" });
+  }
+  if (isProcurement) {
+    items.push({ label: "Procurement", path: "/app/procurement-orders" });
+  }
+  if (canSeeCollections) {
+    items.push({ label: "Collections", path: "/app/collection-requests" });
   }
   if (isDriverRole) {
     items.push({ label: "My Deliveries",    path: "/driver" });
