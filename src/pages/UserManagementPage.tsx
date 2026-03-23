@@ -4,14 +4,15 @@ import { usersApi } from "../api/usersApi";
 import type { UserDto } from "../api/usersApi";
 import { getProfileFromIdToken } from "../api/auth";
 
-const GROUPS = ["Owner", "Finance", "Admin", "HubStaff", "Driver"] as const;
+const GROUPS = ["Owner", "Finance", "Admin", "HubStaff", "Procurement", "Driver"] as const;
 
 const GROUP_COLORS: Record<string, { bg: string; color: string }> = {
-  Owner:    { bg: "#ede9fe", color: "#6d28d9" },
-  Finance:  { bg: "#dbeafe", color: "#1d4ed8" },
-  Admin:    { bg: "#dcfce7", color: "#166534" },
-  HubStaff: { bg: "#cffafe", color: "#0e7490" },
-  Driver:   { bg: "#fef9c3", color: "#92400e" },
+  Owner:       { bg: "#ede9fe", color: "#6d28d9" },
+  Finance:     { bg: "#dbeafe", color: "#1d4ed8" },
+  Admin:       { bg: "#dcfce7", color: "#166534" },
+  HubStaff:    { bg: "#cffafe", color: "#0e7490" },
+  Procurement: { bg: "#ffedd5", color: "#9a3412" },
+  Driver:      { bg: "#fef9c3", color: "#92400e" },
 };
 
 export default function UserManagementPage() {
