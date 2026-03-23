@@ -229,6 +229,93 @@ const ALL_GUIDES: Guide[] = [
     ],
   },
 
+  // ── Procurement & Stock Collection ─────────────────────────────────────────
+  {
+    id: "add-supplier",
+    title: "How to Add a Supplier",
+    icon: "🏭",
+    roles: ["Owner", "Admin", "Procurement", "Finance"],
+    steps: [
+      { text: 'Log in as Procurement, Admin, or Owner. You should see "Suppliers" in the nav bar.' },
+      { text: 'Click "Suppliers" in the nav bar.' },
+      { text: 'Click "+ Add Supplier".' },
+      { text: "Fill in the supplier name, street address, city, province, and postal code." },
+      { text: "Add a Contact Person (driver/collections) with their name and phone number." },
+      { text: "Add a Finance Contact with name, phone, and email." },
+      { text: "Enter the supplier's Bank Details: bank name, account number, branch code, and account type.", tip: "Account type options are Current, Savings, or Transmission." },
+      { text: 'Click "Create Supplier". The supplier will appear in the list immediately.' },
+    ],
+  },
+  {
+    id: "create-procurement-order",
+    title: "How to Create a Procurement Order",
+    icon: "🛒",
+    roles: ["Owner", "Admin", "Procurement", "Finance"],
+    steps: [
+      { text: 'Click "Procurement" in the nav bar.' },
+      { text: 'Click "+ New Order".' },
+      { text: "Select the supplier you want to order from." },
+      { text: "Optionally enter the supplier's order reference number (e.g. their invoice or PO number)." },
+      { text: 'Click "+ Add line" to add a species. Select the species, enter the quantity, and enter the unit cost (R per unit).' },
+      { text: "Add as many species lines as needed.", tip: "All lines require a species, quantity, and unit cost greater than zero before the order can be created." },
+      { text: 'Click "Create Order" — the order is saved with status Draft.' },
+      { text: 'Expand the order and click "Submit Order" to send it to the collection workflow — status changes to Submitted.' },
+    ],
+  },
+  {
+    id: "create-collection-request",
+    title: "How to Create a Collection Request",
+    icon: "📋",
+    roles: ["Owner", "Admin", "Procurement", "Finance"],
+    steps: [
+      { text: 'Click "Collections" in the nav bar (as Admin or HubStaff).' },
+      { text: 'Click "+ New Collection".' },
+      { text: "Select the Submitted procurement order from the dropdown.", tip: "Only Submitted orders appear — Draft orders must be submitted first." },
+      { text: "Assign a driver who will collect the stock from the supplier." },
+      { text: "Add any notes for the driver (e.g. collection time, supplier contact)." },
+      { text: 'Click "Create". The procurement order status automatically advances to CollectionScheduled.' },
+    ],
+  },
+  {
+    id: "driver-load-stock",
+    title: "How to Load and Dispatch Stock (Driver)",
+    icon: "🚛",
+    roles: ["Owner", "Admin", "Procurement", "Finance", "Driver"],
+    steps: [
+      { text: 'Log in as the assigned Driver and click "Collections" in the nav bar.' },
+      { text: "Find the collection request assigned to you with status CollectionScheduled." },
+      { text: 'Click "Start Loading" to begin loading stock at the supplier.' },
+      { text: "Enter the quantity loaded for each species line. Add notes if a species is short or unavailable." },
+      { text: 'Once the vehicle is loaded, click "Dispatch" — status changes to InTransit and the hub is notified.' },
+    ],
+  },
+  {
+    id: "hub-confirm-receipt",
+    title: "How to Confirm Stock Receipt at the Hub",
+    icon: "🏠",
+    roles: ["Owner", "Admin", "Procurement", "Finance"],
+    steps: [
+      { text: 'Log in as Admin or HubStaff and click "Collections" in the nav bar.' },
+      { text: "Find the collection with status InTransit." },
+      { text: 'Click "Confirm Receipt".' },
+      { text: "Enter the actual received quantity for each species line.", tip: "The received quantity may differ from what was dispatched if there were losses in transit." },
+      { text: 'Click "Confirm" — the received stock is automatically added to the hub inventory (Qty on Hand). Status changes to HubConfirmed.' },
+    ],
+  },
+  {
+    id: "finance-acknowledge",
+    title: "How to Acknowledge and Upload the Supplier Invoice (Finance)",
+    icon: "💼",
+    roles: ["Owner", "Admin", "Procurement", "Finance"],
+    steps: [
+      { text: 'Log in as Finance or Owner and click "Collections" in the nav bar.' },
+      { text: "Find the collection with status HubConfirmed." },
+      { text: 'Click "Upload Invoice & Acknowledge".' },
+      { text: "Upload the supplier PDF invoice received for this collection." },
+      { text: 'Click "Acknowledge" — the collection status changes to FinanceAcknowledged and the procurement order is automatically marked Completed.', tip: "The uploaded invoice PDF is stored securely and linked to the procurement order for auditing." },
+    ],
+  },
+
   // ── Price Override ─────────────────────────────────────────────────────────
   {
     id: "price-override",
