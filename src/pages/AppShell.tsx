@@ -22,6 +22,8 @@ import {
 import { speciesApi } from "../api/speciesApi";
 import { procurementOrdersApi } from "../api/procurementOrdersApi";
 import type { ProcurementOrderDto } from "../api/procurementOrdersApi";
+import { collectionRequestsApi } from "../api/collectionRequestsApi";
+import type { CollectionRequestDto } from "../api/collectionRequestsApi";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -177,6 +179,8 @@ export default function AppShell() {
   const [loadingPO,     setLoadingPO]     = useState(canSeeProcurement);
   const [poData,        setPoData]        = useState<ProcurementOrderDto[]>([]);
   const [poTab,         setPoTab]         = useState("All");
+  const [crData,        setCrData]        = useState<CollectionRequestDto[]>([]);
+  const [loadingCR,     setLoadingCR]     = useState(canSeeProcurement || canSeeFinances);
 
   const [deliveryData,     setDeliveryData]     = useState<DeliveryStatusSummaryResponse | null>(null);
   const [stockData,        setStockData]         = useState<any[] | null>(null);
@@ -204,6 +208,10 @@ export default function AppShell() {
     if (canSeeProcurement) {
       procurementOrdersApi.list()
         .then(setPoData).catch(() => {}).finally(() => setLoadingPO(false));
+    }
+    if (canSeeProcurement || canSeeFinances) {
+      collectionRequestsApi.list()
+        .then(setCrData).catch(() => {}).finally(() => setLoadingCR(false));
     }
   }, []);
 
@@ -238,6 +246,17 @@ export default function AppShell() {
     PO_STATUSES.find(s => s.key === status)?.color ?? "#94a3b8";
   const poStatusLabel = (status: string) =>
     PO_STATUSES.find(s => s.key === status)?.label ?? status;
+
+  const CR_STATUS_COLORS: Record<string, string> = {
+    Pending: "#94a3b8", Loading: "#f59e0b", InTransit: "#2563eb",
+    ArrivedAtHub: "#8b5cf6", HubConfirmed: "#0891b2", FinanceAcknowledged: "#22c55e",
+  };
+  const CR_STATUS_LABELS: Record<string, string> = {
+    Pending: "Pending", Loading: "Loading", InTransit: "In Transit",
+    ArrivedAtHub: "At Hub", HubConfirmed: "Hub Confirmed", FinanceAcknowledged: "Acknowledged",
+  };
+  const crForPo = (poId: string) => crData.filter(c => c.procurementOrderId === poId);
+  const pendingAckCRs = crData.filter(c => c.status === "HubConfirmed");
 
   const delivTotal = (deliveryData?.openCount ?? 0) +
     (deliveryData?.inTransitCount ?? 0) +
@@ -376,6 +395,67 @@ export default function AppShell() {
         </Section>
       )}
 
+      {/* ══════════════════════════════════════════════════════════════ PENDING ACK */}
+      {canSeeFinances && (
+        <Section icon="⏳" title="Pending Acknowledgments" sub="Collection requests awaiting Finance sign-off">
+          {loadingCR ? <SkeletonCards n={2} /> : pendingAckCRs.length === 0 ? (
+            <div style={{ ...s.empty, padding: "16px 0" }}>✅ All collections have been acknowledged.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 10 }}>
+              {pendingAckCRs.map(cr => {
+                const totalOrdered  = cr.lines.reduce((n, l) => n + l.orderedQty,  0);
+                const totalReceived = cr.lines.reduce((n, l) => n + l.receivedQty, 0);
+                return (
+                  <div key={cr.collectionRequestId} style={{ ...s.poCard, borderLeft: "4px solid #0891b2" }}>
+                    <div style={s.poCardHead}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 800, fontSize: 14 }}>{cr.supplierName || "—"}</div>
+                        <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                          {cr.lines.length} species · {totalOrdered.toLocaleString()} ordered · {totalReceived.toLocaleString()} received
+                          {cr.assignedDriverName ? ` · 🚛 ${cr.assignedDriverName}` : ""}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
+                          {new Date(cr.createdAt).toLocaleDateString("en-ZA")}
+                          {` · CR-${cr.collectionRequestId.split("-")[0].toUpperCase()}`}
+                        </div>
+                      </div>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999,
+                        background: "rgba(8,145,178,0.1)", color: "#0891b2", border: "1px solid rgba(8,145,178,0.3)",
+                        whiteSpace: "nowrap" as const,
+                      }}>
+                        Hub Confirmed
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#475569", marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {cr.lines.map(l => (
+                        <span key={l.speciesId} style={{
+                          background: l.receivedQty < l.orderedQty ? "rgba(239,68,68,0.08)" : "#f1f5f9",
+                          color: l.receivedQty < l.orderedQty ? "#dc2626" : "#475569",
+                          padding: "2px 8px", borderRadius: 999, fontWeight: 600,
+                          border: l.receivedQty < l.orderedQty ? "1px solid rgba(239,68,68,0.25)" : "none",
+                        }}>
+                          {l.speciesName || l.speciesId}: {l.receivedQty}/{l.orderedQty}
+                        </span>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 10 }}>
+                      <a href="/app/collection-requests" style={{
+                        fontSize: 12, fontWeight: 700, color: "#0891b2", textDecoration: "none",
+                        padding: "6px 12px", borderRadius: 8, background: "rgba(8,145,178,0.08)",
+                        border: "1px solid rgba(8,145,178,0.2)", display: "inline-block",
+                      }}>
+                        → Go to Collections to Acknowledge
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Section>
+      )}
+
       {/* ══════════════════════════════════════════════════════════════ PROCUREMENT */}
       {canSeeProcurement && (
         <Section icon="💼" title="Procurement Pipeline" sub="Procurement orders by status">
@@ -442,6 +522,7 @@ export default function AppShell() {
                     const label = poStatusLabel(po.status);
                     const totalUnits = po.lines.reduce((n, l) => n + l.orderedQty, 0);
                     const totalCost  = po.lines.reduce((n, l) => n + l.orderedQty * (l.unitCost ?? 0), 0);
+                    const linkedCRs  = crForPo(po.procurementOrderId);
                     return (
                       <div key={po.procurementOrderId} style={{ ...s.poCard, borderLeft: `4px solid ${color}` }}>
                         <div style={s.poCardHead}>
@@ -469,6 +550,32 @@ export default function AppShell() {
                                 {l.speciesName || l.speciesId}: {l.orderedQty.toLocaleString()}
                               </span>
                             ))}
+                          </div>
+                        )}
+                        {linkedCRs.length > 0 && (
+                          <div style={{ marginTop: 8, display: "flex", flexDirection: "column" as const, gap: 4 }}>
+                            {linkedCRs.map(cr => {
+                              const crColor = CR_STATUS_COLORS[cr.status] ?? "#94a3b8";
+                              const crLabel = CR_STATUS_LABELS[cr.status] ?? cr.status;
+                              return (
+                                <div key={cr.collectionRequestId} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                  <span style={{ fontSize: 11, color: "#64748b" }}>🚛</span>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>
+                                    {cr.assignedDriverName || cr.assignedDriverId || "Unassigned"}
+                                  </span>
+                                  <span style={{
+                                    fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
+                                    background: `${crColor}18`, color: crColor, border: `1px solid ${crColor}55`,
+                                    whiteSpace: "nowrap" as const,
+                                  }}>
+                                    CR: {crLabel}
+                                  </span>
+                                  {cr.notes && (
+                                    <span style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>{cr.notes}</span>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
