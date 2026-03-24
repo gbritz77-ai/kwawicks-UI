@@ -20,6 +20,7 @@ export type CollectionRequestDto = {
   hubId: string;
   status: string;
   notes: string;
+  collectionDate: string | null;
   invoiceS3Key: string;
   deliveryNoteS3Key: string;
   lines: CollectionRequestLineDto[];
@@ -33,6 +34,7 @@ export type CreateCollectionRequestRequest = {
   assignedDriverName: string;
   hubId: string;
   notes: string;
+  collectionDate?: string | null;
 };
 
 export const collectionRequestsApi = {

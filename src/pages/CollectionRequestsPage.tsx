@@ -23,7 +23,7 @@ const STATUS_COLORS: Record<string, React.CSSProperties> = {
 const isDriver = () => hasAnyRole("Driver") && !hasAnyRole("Owner", "Admin", "HubStaff", "Finance", "Procurement");
 const isAdmin = () => hasAnyRole("Owner", "Admin", "HubStaff");
 const isFinance = () => hasAnyRole("Owner", "Finance");
-const canCreate = () => hasAnyRole("Owner", "Admin", "HubStaff");
+const canCreate = () => hasAnyRole("Owner", "Admin", "HubStaff", "Procurement");
 
 export default function CollectionRequestsPage() {
   const [items, setItems] = useState<CollectionRequestDto[]>([]);
@@ -36,7 +36,7 @@ export default function CollectionRequestsPage() {
 
   // Create form
   const [showCreate, setShowCreate] = useState(false);
-  const [createForm, setCreateForm] = useState({ procurementOrderId: "", assignedDriverId: "", assignedDriverName: "", hubId: "hub-001", notes: "" });
+  const [createForm, setCreateForm] = useState({ procurementOrderId: "", assignedDriverId: "", assignedDriverName: "", hubId: "hub-001", notes: "", collectionDate: "" });
   const [createError, setCreateError] = useState("");
 
   // Loading modal (driver)
@@ -79,10 +79,13 @@ export default function CollectionRequestsPage() {
     if (!createForm.assignedDriverId) { setCreateError("Please assign a driver."); return; }
     setBusy(true); setCreateError("");
     try {
-      const created = await collectionRequestsApi.create(createForm);
+      const created = await collectionRequestsApi.create({
+        ...createForm,
+        collectionDate: createForm.collectionDate ? createForm.collectionDate : null,
+      });
       setItems(i => [created, ...i]);
       setShowCreate(false);
-      setCreateForm({ procurementOrderId: "", assignedDriverId: "", assignedDriverName: "", hubId: "hub-001", notes: "" });
+      setCreateForm({ procurementOrderId: "", assignedDriverId: "", assignedDriverName: "", hubId: "hub-001", notes: "", collectionDate: "" });
     } catch (e: any) { setCreateError(e?.message ?? "Failed to create."); }
     finally { setBusy(false); }
   }
@@ -214,6 +217,7 @@ export default function CollectionRequestsPage() {
                     <span> · {cr.assignedDriverName}</span>
                     <span> · {cr.lines.length} species</span>
                     <span> · {new Date(cr.createdAt).toLocaleDateString("en-ZA")}</span>
+                    {cr.collectionDate && <span style={{ color: "#0891b2", fontWeight: 600 }}> · 📅 {new Date(cr.collectionDate).toLocaleDateString("en-ZA")}</span>}
                   </div>
                 </div>
                 <span style={s.chevron}>{expanded === cr.collectionRequestId ? "▲" : "▼"}</span>
@@ -274,6 +278,12 @@ export default function CollectionRequestsPage() {
                 <option value="">— Select driver —</option>
                 {drivers.map(d => <option key={d.userId} value={d.userId}>{d.name} {d.email ? `(${d.email})` : ""}</option>)}
               </select>
+            </label>
+            <label style={s.label}>Collection Date
+              <input type="date" style={s.input} value={createForm.collectionDate}
+                onChange={e => setCreateForm(p => ({ ...p, collectionDate: e.target.value }))} disabled={busy}
+                min={new Date().toISOString().slice(0, 10)} />
+              <span style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>Leave blank for today. Future dates will appear on the driver's dashboard but remain inactive until due.</span>
             </label>
             <label style={s.label}>Notes
               <input style={s.input} value={createForm.notes} onChange={e => setCreateForm(p => ({ ...p, notes: e.target.value }))} disabled={busy} />

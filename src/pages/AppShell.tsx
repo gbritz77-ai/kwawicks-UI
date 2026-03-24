@@ -181,6 +181,8 @@ export default function AppShell() {
   const [poTab,         setPoTab]         = useState("All");
   const [crData,        setCrData]        = useState<CollectionRequestDto[]>([]);
   const [loadingCR,     setLoadingCR]     = useState(canSeeProcurement || canSeeFinances);
+  const [dnUrls,        setDnUrls]        = useState<Record<string, string>>({});
+  const [dnLoading,     setDnLoading]     = useState<string | null>(null);
 
   const [deliveryData,     setDeliveryData]     = useState<DeliveryStatusSummaryResponse | null>(null);
   const [stockData,        setStockData]         = useState<any[] | null>(null);
@@ -257,6 +259,16 @@ export default function AppShell() {
   };
   const crForPo = (poId: string) => crData.filter(c => c.procurementOrderId === poId);
   const pendingAckCRs = crData.filter(c => c.status === "HubConfirmed");
+
+  async function toggleDeliveryNote(crId: string) {
+    if (dnUrls[crId]) { setDnUrls(u => { const n = { ...u }; delete n[crId]; return n; }); return; }
+    setDnLoading(crId);
+    try {
+      const { viewUrl } = await collectionRequestsApi.getDeliveryNoteViewUrl(crId);
+      setDnUrls(u => ({ ...u, [crId]: viewUrl }));
+    } catch { /* non-fatal */ }
+    finally { setDnLoading(null); }
+  }
 
   const delivTotal = (deliveryData?.openCount ?? 0) +
     (deliveryData?.inTransitCount ?? 0) +
@@ -439,6 +451,31 @@ export default function AppShell() {
                         </span>
                       ))}
                     </div>
+                    {cr.deliveryNoteS3Key && (
+                      <div style={{ marginTop: 10 }}>
+                        <button
+                          onClick={() => toggleDeliveryNote(cr.collectionRequestId)}
+                          style={{
+                            fontSize: 12, fontWeight: 700, color: "#0891b2", cursor: "pointer",
+                            padding: "6px 12px", borderRadius: 8, background: "rgba(8,145,178,0.08)",
+                            border: "1px solid rgba(8,145,178,0.2)", display: "inline-block",
+                          }}
+                        >
+                          {dnLoading === cr.collectionRequestId
+                            ? "Loading…"
+                            : dnUrls[cr.collectionRequestId]
+                              ? "🖼 Hide Photo"
+                              : "📷 View Delivery Note"}
+                        </button>
+                        {dnUrls[cr.collectionRequestId] && (
+                          <img
+                            src={dnUrls[cr.collectionRequestId]}
+                            alt="Delivery note"
+                            style={{ display: "block", width: "100%", maxHeight: 300, objectFit: "contain", borderRadius: 8, marginTop: 8, border: "1px solid #e2e8f0" }}
+                          />
+                        )}
+                      </div>
+                    )}
                     <div style={{ marginTop: 10 }}>
                       <a href="/app/collection-requests" style={{
                         fontSize: 12, fontWeight: 700, color: "#0891b2", textDecoration: "none",

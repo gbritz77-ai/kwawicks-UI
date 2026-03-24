@@ -318,9 +318,18 @@ export default function DriverDashboardPage() {
 
   // ── Derived KPI values ───────────────────────────────────────────────────
 
+  function isFutureCollection(cr: CollectionRequestDto): boolean {
+    if (!cr.collectionDate) return false;
+    const due = new Date(cr.collectionDate);
+    due.setHours(0, 0, 0, 0);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return due > now;
+  }
+
   const openDeliveries    = orders.filter(o => o.status === "Open").length;
   const outForDelivery    = orders.filter(o => o.status === "OutForDelivery").length;
-  const pendingCollections = collections.filter(c => c.status === "Pending").length;
+  const pendingCollections = collections.filter(c => c.status === "Pending" && !isFutureCollection(c)).length;
   const inProgressCollections = collections.filter(c => c.status === "Loading" || c.status === "InTransit").length;
   const activeOrders = orders.filter(o => o.status === "Open" || o.status === "OutForDelivery");
   const today = new Date().toLocaleDateString("en-ZA", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -439,19 +448,28 @@ export default function DriverDashboardPage() {
         <div style={s.list}>
           {collections.map(cr => {
             const expanded = expandedCrId === cr.collectionRequestId;
+            const future = isFutureCollection(cr);
+            const dueDateStr = cr.collectionDate ? new Date(cr.collectionDate).toLocaleDateString("en-ZA") : null;
             return (
-              <div key={cr.collectionRequestId} style={s.card}>
+              <div key={cr.collectionRequestId} style={{ ...s.card, ...(future ? { opacity: 0.6, background: "#f8fafc" } : {}) }}>
                 <div style={s.cardHead} onClick={() => setExpandedCrId(expanded ? null : cr.collectionRequestId)}>
                   <div style={{ flex: 1 }}>
                     <div style={s.cardTitle}>
                       {cr.supplierName || "Collection"}
-                      <span style={{ ...s.badge, ...CR_COLORS[cr.status] }}>{cr.status}</span>
+                      {future ? (
+                        <span style={{ ...s.badge, background: "rgba(100,116,139,0.12)", color: "#475569", border: "1px solid #cbd5e1" }}>
+                          📅 Due {dueDateStr}
+                        </span>
+                      ) : (
+                        <span style={{ ...s.badge, ...CR_COLORS[cr.status] }}>{cr.status}</span>
+                      )}
                     </div>
                     <div style={s.cardMeta}>
                       <span>{cr.lines.length} species</span>
                       <span style={s.dot}>·</span>
                       <span style={s.mono}>CR-{cr.collectionRequestId.split("-")[0].toUpperCase()}</span>
-                      {cr.notes && <><span style={s.dot}>·</span><span style={{ fontStyle: "italic" }}>{cr.notes}</span></>}
+                      {future && <><span style={s.dot}>·</span><span style={{ color: "#64748b" }}>Not yet available</span></>}
+                      {!future && cr.notes && <><span style={s.dot}>·</span><span style={{ fontStyle: "italic" }}>{cr.notes}</span></>}
                     </div>
                   </div>
                   <span style={s.chevron}>{expanded ? "▲" : "▼"}</span>
@@ -459,6 +477,11 @@ export default function DriverDashboardPage() {
 
                 {expanded && (
                   <div style={s.cardBody}>
+                    {future && (
+                      <div style={{ background: "rgba(100,116,139,0.08)", border: "1px solid #cbd5e1", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: "#475569" }}>
+                        🔒 This collection is scheduled for <strong>{dueDateStr}</strong> and will become active on that date.
+                      </div>
+                    )}
                     <div style={s.crGrid}>
                       {cr.lines.map(l => (
                         <div key={l.speciesId} style={s.crLineCard}>
@@ -474,18 +497,20 @@ export default function DriverDashboardPage() {
                         </div>
                       ))}
                     </div>
-                    <div style={s.actions}>
-                      {(cr.status === "Pending" || cr.status === "Loading") && (
-                        <button style={s.startBtn} onClick={() => openCrLoadModal(cr)}>
-                          {cr.status === "Loading" ? "✏️ Update Loading" : "📦 Start Loading"}
-                        </button>
-                      )}
-                      {cr.status === "InTransit" && (
-                        <button style={s.completeBtn} onClick={() => handleArrive(cr.collectionRequestId)} disabled={crBusy}>
-                          🏠 Mark Arrived at Hub
-                        </button>
-                      )}
-                    </div>
+                    {!future && (
+                      <div style={s.actions}>
+                        {(cr.status === "Pending" || cr.status === "Loading") && (
+                          <button style={s.startBtn} onClick={() => openCrLoadModal(cr)}>
+                            {cr.status === "Loading" ? "✏️ Update Loading" : "📦 Start Loading"}
+                          </button>
+                        )}
+                        {cr.status === "InTransit" && (
+                          <button style={s.completeBtn} onClick={() => handleArrive(cr.collectionRequestId)} disabled={crBusy}>
+                            🏠 Mark Arrived at Hub
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
