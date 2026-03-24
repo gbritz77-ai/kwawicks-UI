@@ -56,6 +56,10 @@ export default function CollectionRequestsPage() {
   const [deliveryNoteUrl, setDeliveryNoteUrl] = useState<string | null>(null);
   const [deliveryNoteLoading, setDeliveryNoteLoading] = useState(false);
 
+  // Per-card delivery note photo (inline view on expanded card)
+  const [cardDnUrls, setCardDnUrls] = useState<Record<string, string>>({});
+  const [cardDnLoading, setCardDnLoading] = useState<string | null>(null);
+
   useEffect(() => { load(); }, []);
 
   async function load() {
@@ -150,6 +154,19 @@ export default function CollectionRequestsPage() {
     }
   }
 
+  async function toggleCardDn(crId: string) {
+    if (cardDnUrls[crId]) {
+      setCardDnUrls(u => { const n = { ...u }; delete n[crId]; return n; });
+      return;
+    }
+    setCardDnLoading(crId);
+    try {
+      const { viewUrl } = await collectionRequestsApi.getDeliveryNoteViewUrl(crId);
+      setCardDnUrls(u => ({ ...u, [crId]: viewUrl }));
+    } catch { /* non-fatal */ }
+    finally { setCardDnLoading(null); }
+  }
+
   async function submitAck() {
     if (!ackItem || !ackFile) { setAckError("Please select an invoice file."); return; }
     setBusy(true); setAckUploading(true); setAckError("");
@@ -227,7 +244,25 @@ export default function CollectionRequestsPage() {
                 <div style={s.cardBody}>
                   {cr.notes && <div style={s.notes}>📝 {cr.notes}</div>}
                   {cr.deliveryNoteS3Key && isFinance() && (
-                    <div style={s.dnBadge}>📷 Delivery note photo uploaded by driver</div>
+                    <div style={{ marginTop: 10 }}>
+                      <button
+                        style={{ ...s.dnBadge, cursor: "pointer", background: cardDnUrls[cr.collectionRequestId] ? "rgba(8,145,178,0.12)" : undefined }}
+                        onClick={() => toggleCardDn(cr.collectionRequestId)}
+                      >
+                        {cardDnLoading === cr.collectionRequestId
+                          ? "⏳ Loading photo…"
+                          : cardDnUrls[cr.collectionRequestId]
+                            ? "🖼 Hide Delivery Note Photo"
+                            : "📷 View Delivery Note Photo"}
+                      </button>
+                      {cardDnUrls[cr.collectionRequestId] && (
+                        <img
+                          src={cardDnUrls[cr.collectionRequestId]}
+                          alt="Delivery note"
+                          style={{ display: "block", width: "100%", maxHeight: 360, objectFit: "contain", borderRadius: 8, marginTop: 8, border: "1px solid #e2e8f0", background: "#f8fafc" }}
+                        />
+                      )}
+                    </div>
                   )}
                   <div style={s.linesGrid}>{cr.lines.map(l => renderLine(l, cr))}</div>
 
