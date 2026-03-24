@@ -25,7 +25,7 @@ export default function NavBar() {
   const isUserManager  = hasAnyRole("Owner", "Admin");
   const isDriverRole   = hasRole("Driver");
   const isProcurement  = hasAnyRole("Owner", "Admin", "Procurement", "Finance");
-  const canSeeCollections = hasAnyRole("Owner", "Admin", "HubStaff", "Procurement", "Finance", "Driver");
+  const canSeeCollections = hasAnyRole("Owner", "Admin", "HubStaff", "Procurement", "Finance");
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -66,7 +66,7 @@ export default function NavBar() {
     items.push({ label: "Collections", path: "/app/collection-requests" });
   }
   if (isDriverRole) {
-    items.push({ label: "My Deliveries",    path: "/driver" });
+    items.push({ label: "Dashboard",        path: "/driver" });
     items.push({ label: "Delivery History", path: "/driver/reports" });
     items.push({ label: "Help Me",          path: "/driver/help" });
   } else {

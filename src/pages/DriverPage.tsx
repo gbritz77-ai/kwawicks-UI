@@ -3,6 +3,8 @@ import { getProfileFromIdToken } from "../api/auth";
 import { deliveryOrdersApi, type DeliveryOrderResponse } from "../api/deliveryOrdersApi";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
 import { invoicesApi } from "../api/invoicesApi";
+import { collectionRequestsApi } from "../api/collectionRequestsApi";
+import type { CollectionRequestDto } from "../api/collectionRequestsApi";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -33,6 +35,11 @@ const STATUS_LABELS: Record<string, string> = {
   Delivered: "Delivered",
 };
 
+const CR_STATUS_COLORS: Record<string, React.CSSProperties> = {
+  Pending: { background: "#f1f5f9", color: "#475569", border: "1px solid #cbd5e1" },
+  Loading: { background: "rgba(234,179,8,0.12)", color: "#713f12", border: "1px solid rgba(234,179,8,0.4)" },
+  InTransit: { background: "rgba(37,99,235,0.1)", color: "#1e3a8a", border: "1px solid rgba(37,99,235,0.3)" },
+};
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -40,7 +47,7 @@ export default function DriverPage() {
   const profile = getProfileFromIdToken();
   const driverId = profile?.username ?? "";
 
-  // Queue state
+  // Delivery order state
   const [orders, setOrders] = useState<DeliveryOrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -50,7 +57,7 @@ export default function DriverPage() {
   // Reference data
   const [speciesList, setSpeciesList] = useState<SpeciesResponse[]>([]);
 
-  // Completion flow
+  // Delivery completion flow
   const [completing, setCompleting] = useState<DeliveryOrderResponse | null>(null);
   const [step, setStep] = useState<CompletionStep>("returns");
   const [returnLines, setReturnLines] = useState<ReturnLine[]>([]);
@@ -63,6 +70,16 @@ export default function DriverPage() {
   const [receiptDone, setReceiptDone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Collection request state
+  const [collections, setCollections] = useState<CollectionRequestDto[]>([]);
+  const [loadingCollections, setLoadingCollections] = useState(true);
+  const [collectionError, setCollectionError] = useState<string | null>(null);
+  const [expandedCrId, setExpandedCrId] = useState<string | null>(null);
+  const [loadingCrItem, setLoadingCrItem] = useState<CollectionRequestDto | null>(null);
+  const [loadLines, setLoadLines] = useState<{ speciesId: string; loadedQty: number; loadingNotes: string }[]>([]);
+  const [crBusy, setCrBusy] = useState(false);
+  const [crError, setCrError] = useState<string | null>(null);
+
   // ── Loaders ────────────────────────────────────────────────────────────────
 
   async function loadOrders() {
@@ -71,7 +88,6 @@ export default function DriverPage() {
       setQueueError(null);
       setLoading(true);
       const data = await deliveryOrdersApi.list({ driverId });
-      // Only show active orders (not already delivered)
       setOrders(data.filter((o) => o.status !== "Delivered"));
     } catch (e: any) {
       setQueueError(e?.message || "Could not load your deliveries.");
@@ -86,15 +102,30 @@ export default function DriverPage() {
       const data = await speciesApi.list();
       setSpeciesList(data);
     } catch {
-      // non-fatal — pricing will fall back to 0
+      // non-fatal
+    }
+  }
+
+  async function loadCollections() {
+    if (!driverId) return;
+    try {
+      setCollectionError(null);
+      setLoadingCollections(true);
+      const data = await collectionRequestsApi.list({ driverId });
+      setCollections(data.filter(c => ["Pending", "Loading", "InTransit"].includes(c.status)));
+    } catch (e: any) {
+      setCollectionError(e?.message || "Could not load your collections.");
+    } finally {
+      setLoadingCollections(false);
     }
   }
 
   useEffect(() => {
     loadOrders();
+    loadCollections();
   }, [driverId]);
 
-  // ── Actions ────────────────────────────────────────────────────────────────
+  // ── Delivery order actions ─────────────────────────────────────────────────
 
   async function startDelivery(order: DeliveryOrderResponse) {
     try {
@@ -147,9 +178,6 @@ export default function DriverPage() {
     });
   }
 
-
-  // ── Validation ─────────────────────────────────────────────────────────────
-
   function validateReturns(): string | null {
     for (let i = 0; i < returnLines.length; i++) {
       const rl = returnLines[i];
@@ -168,17 +196,11 @@ export default function DriverPage() {
 
   async function submitCompletion() {
     if (!completing) return;
-
     const validationError = validateReturns();
-    if (validationError) {
-      setCompletionError(validationError);
-      return;
-    }
-
+    if (validationError) { setCompletionError(validationError); return; }
     try {
       setCompletionError(null);
       setCompletionBusy(true);
-
       const lines = returnLines.map((rl) => {
         const sp = (speciesList as any[]).find((s: any) => s.speciesId === rl.speciesId);
         return {
@@ -191,17 +213,13 @@ export default function DriverPage() {
           vatRate: sp?.vat ?? 0,
         };
       });
-
       const result = await invoicesApi.createFromDelivery(completing.deliveryOrderId, {
         createdByDriverId: driverId,
         lines,
       });
-
       const invoiceId = result.invoiceId;
       setCreatedInvoiceId(invoiceId);
-
       await invoicesApi.recordPayment(invoiceId, paymentType);
-
       if (paymentType === "EFT" || paymentType === "CardMachine") {
         setStep("receipt");
       } else {
@@ -220,15 +238,8 @@ export default function DriverPage() {
     try {
       setReceiptUploading(true);
       setCompletionError(null);
-
       const { presignedUrl } = await invoicesApi.getReceiptUploadUrl(createdInvoiceId);
-
-      await fetch(presignedUrl, {
-        method: "PUT",
-        body: receiptFile,
-        headers: { "Content-Type": "image/jpeg" },
-      });
-
+      await fetch(presignedUrl, { method: "PUT", body: receiptFile, headers: { "Content-Type": "image/jpeg" } });
       setReceiptDone(true);
       setStep("done");
       setOrders((prev) => prev.filter((o) => o.deliveryOrderId !== completing?.deliveryOrderId));
@@ -244,11 +255,55 @@ export default function DriverPage() {
     setOrders((prev) => prev.filter((o) => o.deliveryOrderId !== completing?.deliveryOrderId));
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
-
   function getSpeciesName(speciesId: string) {
     return (speciesList as any[]).find((s: any) => s.speciesId === speciesId)?.name ?? speciesId.slice(0, 8) + "…";
   }
+
+  // ── Collection request actions ─────────────────────────────────────────────
+
+  function openCrLoadModal(cr: CollectionRequestDto) {
+    setLoadingCrItem(cr);
+    setLoadLines(cr.lines.map(l => ({
+      speciesId: l.speciesId,
+      loadedQty: l.loadedQty || l.orderedQty,
+      loadingNotes: l.loadingNotes || "",
+    })));
+    setCrError(null);
+  }
+
+  async function saveCrLoad(dispatch: boolean) {
+    if (!loadingCrItem) return;
+    setCrBusy(true);
+    try {
+      let updated = await collectionRequestsApi.driverLoad(loadingCrItem.collectionRequestId, loadLines);
+      if (dispatch) {
+        updated = await collectionRequestsApi.dispatch(loadingCrItem.collectionRequestId);
+      }
+      setCollections(cs =>
+        cs.map(c => c.collectionRequestId === updated.collectionRequestId ? updated : c)
+          .filter(c => ["Pending", "Loading", "InTransit"].includes(c.status))
+      );
+      setLoadingCrItem(null);
+    } catch (e: any) {
+      setCrError(e?.message || "Could not save.");
+    } finally {
+      setCrBusy(false);
+    }
+  }
+
+  async function handleCrArrive(id: string) {
+    setCrBusy(true);
+    try {
+      await collectionRequestsApi.arrive(id);
+      setCollections(cs => cs.filter(c => c.collectionRequestId !== id));
+    } catch (e: any) {
+      setCollectionError(e?.message || "Could not update status.");
+    } finally {
+      setCrBusy(false);
+    }
+  }
+
+  // ── Derived ────────────────────────────────────────────────────────────────
 
   const activeOrders = orders.filter((o) => o.status === "Open" || o.status === "OutForDelivery");
   const outForDelivery = orders.filter((o) => o.status === "OutForDelivery");
@@ -257,38 +312,46 @@ export default function DriverPage() {
 
   return (
     <div style={s.page}>
-      {/* Header */}
+
+      {/* ── Header ── */}
       <div style={s.header}>
-        <div style={s.title}>My Deliveries</div>
-        <button style={s.secondaryBtn} onClick={loadOrders} disabled={loading}>
+        <div style={s.title}>My Work</div>
+        <button style={s.secondaryBtn} onClick={() => { loadOrders(); loadCollections(); }} disabled={loading && loadingCollections}>
           Refresh
         </button>
       </div>
 
-      {/* Summary pills */}
-      {!loading && (
-        <div style={s.pillRow}>
-          <div style={s.pill}>
-            <span style={s.pillNum}>{orders.filter((o) => o.status === "Open").length}</span>
-            <span style={s.pillLabel}>Open</span>
-          </div>
-          <div style={{ ...s.pill, ...STATUS_COLORS.OutForDelivery }}>
-            <span style={s.pillNum}>{outForDelivery.length}</span>
-            <span style={s.pillLabel}>Out for Delivery</span>
-          </div>
+      {/* ── Summary pills ── */}
+      <div style={s.pillRow}>
+        <div style={s.pill}>
+          <span style={s.pillNum}>{orders.filter(o => o.status === "Open").length}</span>
+          <span style={s.pillLabel}>Open Deliveries</span>
         </div>
-      )}
+        <div style={{ ...s.pill, ...STATUS_COLORS.OutForDelivery }}>
+          <span style={s.pillNum}>{outForDelivery.length}</span>
+          <span style={s.pillLabel}>Out for Delivery</span>
+        </div>
+        <div style={{ ...s.pill, background: "rgba(124,58,237,0.08)", color: "#4c1d95", border: "1px solid rgba(124,58,237,0.25)" }}>
+          <span style={s.pillNum}>{collections.length}</span>
+          <span style={s.pillLabel}>Collections</span>
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════════════════ DELIVERIES */}
+      <div style={s.sectionHeader}>
+        <span style={s.sectionIcon}>🚚</span>
+        <span style={s.sectionTitle}>My Deliveries</span>
+      </div>
 
       {queueError && <div style={s.error}>{queueError}</div>}
 
-      {/* Order list */}
       {loading ? (
         <div style={s.emptyCard}>Loading your deliveries…</div>
       ) : activeOrders.length === 0 ? (
         <div style={s.emptyCard}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>✓</div>
+          <div style={{ fontSize: 28, marginBottom: 6 }}>✓</div>
           <div style={{ fontWeight: 900 }}>No active deliveries</div>
-          <div style={{ opacity: 0.6, marginTop: 4 }}>You're all caught up!</div>
+          <div style={{ opacity: 0.6, marginTop: 4, fontSize: 14 }}>You're all caught up!</div>
         </div>
       ) : (
         <div style={s.list}>
@@ -298,7 +361,6 @@ export default function DriverPage() {
             const isUpdating = updatingId === order.deliveryOrderId;
             return (
               <div key={order.deliveryOrderId} style={s.orderCard}>
-                {/* Card header */}
                 <div style={s.cardHeader} onClick={() => setExpandedId(isExpanded ? null : order.deliveryOrderId)}>
                   <div style={{ flex: 1 }}>
                     <div style={s.cardTitle}>
@@ -318,7 +380,6 @@ export default function DriverPage() {
                   <div style={s.chevron}>{isExpanded ? "▲" : "▼"}</div>
                 </div>
 
-                {/* Expanded detail */}
                 {isExpanded && (
                   <div style={s.cardBody}>
                     <div style={s.detailBlock}>
@@ -327,7 +388,6 @@ export default function DriverPage() {
                       {order.province && <div style={s.detailRow}><span style={s.dk}>Province</span><span style={s.dv}>{order.province}</span></div>}
                       {order.postalCode && <div style={s.detailRow}><span style={s.dk}>Postal Code</span><span style={s.dv}>{order.postalCode}</span></div>}
                     </div>
-
                     <div style={s.detailHeading}>Items to deliver</div>
                     {order.lines.map((line, i) => (
                       <div key={i} style={s.lineItem}>
@@ -335,23 +395,14 @@ export default function DriverPage() {
                         <span style={s.lineQty}>{line.quantity}</span>
                       </div>
                     ))}
-
                     <div style={s.cardActions}>
                       {!isOutForDelivery && (
-                        <button
-                          style={s.startBtn}
-                          onClick={() => startDelivery(order)}
-                          disabled={isUpdating}
-                        >
+                        <button style={s.startBtn} onClick={() => startDelivery(order)} disabled={isUpdating}>
                           {isUpdating ? "Updating…" : "🚚 Start Delivery"}
                         </button>
                       )}
                       {isOutForDelivery && (
-                        <button
-                          style={s.completeBtn}
-                          onClick={() => openCompletion(order)}
-                          disabled={isUpdating}
-                        >
+                        <button style={s.completeBtn} onClick={() => openCompletion(order)} disabled={isUpdating}>
                           ✓ Complete Delivery
                         </button>
                       )}
@@ -364,23 +415,97 @@ export default function DriverPage() {
         </div>
       )}
 
-      {/* ── Completion Modal ── */}
+      {/* ══════════════════════════════════════════════════ COLLECTIONS */}
+      <div style={{ ...s.sectionHeader, marginTop: 28 }}>
+        <span style={s.sectionIcon}>📦</span>
+        <span style={s.sectionTitle}>My Collections</span>
+      </div>
+
+      {collectionError && <div style={s.error}>{collectionError}</div>}
+
+      {loadingCollections ? (
+        <div style={s.emptyCard}>Loading your collections…</div>
+      ) : collections.length === 0 ? (
+        <div style={s.emptyCard}>
+          <div style={{ fontSize: 28, marginBottom: 6 }}>📦</div>
+          <div style={{ fontWeight: 900 }}>No active collection tasks</div>
+          <div style={{ opacity: 0.6, marginTop: 4, fontSize: 14 }}>Nothing to collect right now</div>
+        </div>
+      ) : (
+        <div style={s.list}>
+          {collections.map(cr => {
+            const isExpanded = expandedCrId === cr.collectionRequestId;
+            return (
+              <div key={cr.collectionRequestId} style={s.orderCard}>
+                <div style={s.cardHeader} onClick={() => setExpandedCrId(isExpanded ? null : cr.collectionRequestId)}>
+                  <div style={{ flex: 1 }}>
+                    <div style={s.cardTitle}>
+                      {cr.supplierName || "Collection"}
+                      <span style={{ ...s.badge, ...CR_STATUS_COLORS[cr.status] }}>{cr.status}</span>
+                    </div>
+                    <div style={s.cardMeta}>
+                      <span>{cr.lines.length} species</span>
+                      <span style={s.dot}>·</span>
+                      <span style={s.mono}>CR-{cr.collectionRequestId.split("-")[0].toUpperCase()}</span>
+                      {cr.notes && <><span style={s.dot}>·</span><span style={{ fontStyle: "italic" }}>{cr.notes}</span></>}
+                    </div>
+                  </div>
+                  <div style={s.chevron}>{isExpanded ? "▲" : "▼"}</div>
+                </div>
+
+                {isExpanded && (
+                  <div style={s.cardBody}>
+                    <div style={s.crLinesGrid}>
+                      {cr.lines.map(l => (
+                        <div key={l.speciesId} style={s.crLineCard}>
+                          <div style={s.crLineName}>{l.speciesName || l.speciesId}</div>
+                          <div style={s.crLineStats}>
+                            <span>
+                              <span style={s.crLineStatLabel}>Ordered</span>
+                              <span style={s.crLineStatVal}>{l.orderedQty}</span>
+                            </span>
+                            <span>
+                              <span style={s.crLineStatLabel}>Loaded</span>
+                              <span style={{ ...s.crLineStatVal, color: l.loadedQty > 0 ? "#16a34a" : "#94a3b8" }}>{l.loadedQty}</span>
+                            </span>
+                          </div>
+                          {l.loadingNotes ? <div style={s.crLineNote}>⚠ {l.loadingNotes}</div> : null}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={s.cardActions}>
+                      {(cr.status === "Pending" || cr.status === "Loading") && (
+                        <button style={s.startBtn} onClick={() => openCrLoadModal(cr)}>
+                          {cr.status === "Loading" ? "✏️ Update Loading" : "📦 Start Loading"}
+                        </button>
+                      )}
+                      {cr.status === "InTransit" && (
+                        <button style={s.completeBtn} onClick={() => handleCrArrive(cr.collectionRequestId)} disabled={crBusy}>
+                          🏠 Mark Arrived at Hub
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Delivery Completion Modal ── */}
       {completing && (
         <div style={s.backdrop}>
           <div style={s.modal}>
 
-            {/* ── Step: Returns ── */}
             {step === "returns" && (
               <>
                 <div style={s.modalTitle}>Complete Delivery</div>
                 <div style={s.modalSub}>
                   {completing.deliveryAddressLine1} {completing.city && `· ${completing.city}`}
                 </div>
-
                 {completionError && <div style={s.completionError}>{completionError}</div>}
-
                 <div style={s.stepNote}>Enter the actual quantities delivered and any returns.</div>
-
                 {returnLines.map((rl, idx) => {
                   const delivered = parseInt(rl.deliveredQty) || 0;
                   const dead = parseInt(rl.returnedDeadQty) || 0;
@@ -388,7 +513,6 @@ export default function DriverPage() {
                   const notWanted = parseInt(rl.returnedNotWantedQty) || 0;
                   const accounted = delivered + dead + mutilated + notWanted;
                   const ok = accounted === rl.orderedQty;
-
                   return (
                     <div key={rl.speciesId} style={s.returnBlock}>
                       <div style={s.returnSpecies}>
@@ -398,64 +522,20 @@ export default function DriverPage() {
                           {ok ? `✓ ${accounted}/${rl.orderedQty}` : `${accounted}/${rl.orderedQty}`}
                         </span>
                       </div>
-
                       <div style={s.returnFields}>
-                        <label style={s.returnLabel}>
-                          Delivered
-                          <input
-                            style={s.returnInput}
-                            inputMode="numeric"
-                            value={rl.deliveredQty}
-                            onChange={(e) => updateReturnLine(idx, "deliveredQty", e.target.value)}
-                            disabled={completionBusy}
-                          />
-                        </label>
-                        <label style={s.returnLabel}>
-                          Dead
-                          <input
-                            style={s.returnInput}
-                            inputMode="numeric"
-                            value={rl.returnedDeadQty}
-                            onChange={(e) => updateReturnLine(idx, "returnedDeadQty", e.target.value)}
-                            disabled={completionBusy}
-                          />
-                        </label>
-                        <label style={s.returnLabel}>
-                          Mutilated
-                          <input
-                            style={s.returnInput}
-                            inputMode="numeric"
-                            value={rl.returnedMutilatedQty}
-                            onChange={(e) => updateReturnLine(idx, "returnedMutilatedQty", e.target.value)}
-                            disabled={completionBusy}
-                          />
-                        </label>
-                        <label style={s.returnLabel}>
-                          Not Wanted
-                          <input
-                            style={s.returnInput}
-                            inputMode="numeric"
-                            value={rl.returnedNotWantedQty}
-                            onChange={(e) => updateReturnLine(idx, "returnedNotWantedQty", e.target.value)}
-                            disabled={completionBusy}
-                          />
-                        </label>
+                        <label style={s.returnLabel}>Delivered<input style={s.returnInput} inputMode="numeric" value={rl.deliveredQty} onChange={(e) => updateReturnLine(idx, "deliveredQty", e.target.value)} disabled={completionBusy} /></label>
+                        <label style={s.returnLabel}>Dead<input style={s.returnInput} inputMode="numeric" value={rl.returnedDeadQty} onChange={(e) => updateReturnLine(idx, "returnedDeadQty", e.target.value)} disabled={completionBusy} /></label>
+                        <label style={s.returnLabel}>Mutilated<input style={s.returnInput} inputMode="numeric" value={rl.returnedMutilatedQty} onChange={(e) => updateReturnLine(idx, "returnedMutilatedQty", e.target.value)} disabled={completionBusy} /></label>
+                        <label style={s.returnLabel}>Not Wanted<input style={s.returnInput} inputMode="numeric" value={rl.returnedNotWantedQty} onChange={(e) => updateReturnLine(idx, "returnedNotWantedQty", e.target.value)} disabled={completionBusy} /></label>
                       </div>
                     </div>
                   );
                 })}
-
-                {/* Payment type */}
                 <div style={s.paymentSection}>
                   <div style={s.paymentHeading}>Payment Method</div>
                   <div style={s.paymentOptions}>
                     {(["Cash", "EFT", "CardMachine", "Credit"] as PaymentType[]).map((pt) => (
-                      <button
-                        key={pt}
-                        style={{ ...s.paymentOption, ...(paymentType === pt ? s.paymentOptionActive : {}) }}
-                        onClick={() => setPaymentType(pt)}
-                        disabled={completionBusy}
-                      >
+                      <button key={pt} style={{ ...s.paymentOption, ...(paymentType === pt ? s.paymentOptionActive : {}) }} onClick={() => setPaymentType(pt)} disabled={completionBusy}>
                         {pt === "Cash" && "💵 "}
                         {pt === "EFT" && "📱 "}
                         {pt === "CardMachine" && "💳 "}
@@ -471,37 +551,23 @@ export default function DriverPage() {
                     <div style={s.eftNote}>Invoice will be sent to the client's account.</div>
                   )}
                 </div>
-
                 <div style={s.modalBtns}>
-                  <button style={s.secondaryBtn} onClick={closeCompletion} disabled={completionBusy}>
-                    Cancel
-                  </button>
-                  <button style={s.completeBtn} onClick={submitCompletion} disabled={completionBusy}>
-                    {completionBusy ? "Processing…" : "Confirm Delivery"}
-                  </button>
+                  <button style={s.secondaryBtn} onClick={closeCompletion} disabled={completionBusy}>Cancel</button>
+                  <button style={s.completeBtn} onClick={submitCompletion} disabled={completionBusy}>{completionBusy ? "Processing…" : "Confirm Delivery"}</button>
                 </div>
               </>
             )}
 
-            {/* ── Step: EFT Receipt ── */}
             {step === "receipt" && (
               <>
                 <div style={s.modalTitle}>{paymentType === "CardMachine" ? "Upload Card Machine Slip" : "Upload EFT Receipt"}</div>
                 <div style={s.modalSub}>Take a photo of the payment receipt to complete the delivery.</div>
-
                 {completionError && <div style={s.completionError}>{completionError}</div>}
-
                 <div style={s.receiptBox}>
                   {receiptFile ? (
                     <div style={s.receiptPreview}>
-                      <img
-                        src={URL.createObjectURL(receiptFile)}
-                        alt="Receipt"
-                        style={{ width: "100%", borderRadius: 10, maxHeight: 280, objectFit: "cover" }}
-                      />
-                      <button style={s.changePhotoBtn} onClick={() => fileInputRef.current?.click()}>
-                        Change Photo
-                      </button>
+                      <img src={URL.createObjectURL(receiptFile)} alt="Receipt" style={{ width: "100%", borderRadius: 10, maxHeight: 280, objectFit: "cover" }} />
+                      <button style={s.changePhotoBtn} onClick={() => fileInputRef.current?.click()}>Change Photo</button>
                     </div>
                   ) : (
                     <button style={s.cameraBtn} onClick={() => fileInputRef.current?.click()}>
@@ -510,55 +576,70 @@ export default function DriverPage() {
                       <div style={{ opacity: 0.6, fontSize: 13, marginTop: 4 }}>Or select from your gallery</div>
                     </button>
                   )}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] ?? null;
-                      setReceiptFile(file);
-                    }}
-                  />
+                  <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)} />
                 </div>
-
                 <div style={s.modalBtns}>
-                  <button style={s.secondaryBtn} onClick={skipReceiptUpload} disabled={receiptUploading}>
-                    Skip for now
-                  </button>
-                  <button
-                    style={s.completeBtn}
-                    onClick={uploadReceipt}
-                    disabled={!receiptFile || receiptUploading}
-                  >
-                    {receiptUploading ? "Uploading…" : "Upload & Finish"}
-                  </button>
+                  <button style={s.secondaryBtn} onClick={skipReceiptUpload} disabled={receiptUploading}>Skip for now</button>
+                  <button style={s.completeBtn} onClick={uploadReceipt} disabled={!receiptFile || receiptUploading}>{receiptUploading ? "Uploading…" : "Upload & Finish"}</button>
                 </div>
               </>
             )}
 
-            {/* ── Step: Done ── */}
             {step === "done" && (
               <div style={{ textAlign: "center", padding: "16px 0" }}>
                 <div style={{ fontSize: 56, marginBottom: 12 }}>✅</div>
                 <div style={s.modalTitle}>Delivery Complete!</div>
-                {createdInvoiceId && (
-                  <div style={{ ...s.modalSub, marginBottom: 4 }}>
-                    Invoice created
-                  </div>
-                )}
-                <div style={{ ...s.modalSub, marginBottom: 0, fontFamily: "ui-monospace, monospace", fontSize: 13 }}>
-                  {createdInvoiceId}
-                </div>
-                {paymentType === "EFT" && receiptDone && (
-                  <div style={{ marginTop: 8, color: "#16a34a", fontWeight: 700 }}>Receipt uploaded ✓</div>
-                )}
-                <button style={{ ...s.completeBtn, marginTop: 20 }} onClick={closeCompletion}>
-                  Back to deliveries
-                </button>
+                {createdInvoiceId && <div style={{ ...s.modalSub, marginBottom: 4 }}>Invoice created</div>}
+                <div style={{ ...s.modalSub, marginBottom: 0, fontFamily: "ui-monospace, monospace", fontSize: 13 }}>{createdInvoiceId}</div>
+                {paymentType === "EFT" && receiptDone && <div style={{ marginTop: 8, color: "#16a34a", fontWeight: 700 }}>Receipt uploaded ✓</div>}
+                <button style={{ ...s.completeBtn, marginTop: 20 }} onClick={closeCompletion}>Back to deliveries</button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Collection Loading Modal ── */}
+      {loadingCrItem && (
+        <div style={s.backdrop}>
+          <div style={s.modal}>
+            <div style={s.modalTitle}>Load Stock</div>
+            <div style={s.modalSub}>{loadingCrItem.supplierName} · {loadingCrItem.lines.length} species</div>
+            {crError && <div style={s.completionError}>{crError}</div>}
+            <div style={s.stepNote}>Enter the quantity you are loading onto your vehicle for each species.</div>
+            {loadLines.map((ll, i) => {
+              const orig = loadingCrItem.lines[i];
+              return (
+                <div key={ll.speciesId} style={s.returnBlock}>
+                  <div style={s.returnSpecies}>
+                    {orig?.speciesName || ll.speciesId}
+                    <span style={s.returnOrdered}>Ordered: {orig?.orderedQty}</span>
+                  </div>
+                  <div style={s.returnFields}>
+                    <label style={s.returnLabel}>
+                      Loaded Qty
+                      <input style={s.returnInput} inputMode="numeric" value={ll.loadedQty}
+                        onChange={e => setLoadLines(ls => ls.map((x, j) => j === i ? { ...x, loadedQty: parseInt(e.target.value) || 0 } : x))}
+                        disabled={crBusy}
+                      />
+                    </label>
+                    <label style={s.returnLabel}>
+                      Notes (if short)
+                      <input style={{ ...s.returnInput, fontSize: 13, textAlign: "left" as const, padding: "10px 8px" }}
+                        value={ll.loadingNotes} placeholder="Reason if not full"
+                        onChange={e => setLoadLines(ls => ls.map((x, j) => j === i ? { ...x, loadingNotes: e.target.value } : x))}
+                        disabled={crBusy}
+                      />
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
+            <div style={s.modalBtns}>
+              <button style={s.secondaryBtn} onClick={() => setLoadingCrItem(null)} disabled={crBusy}>Cancel</button>
+              <button style={{ ...s.secondaryBtn, color: "#16a34a", border: "1px solid #16a34a" }} onClick={() => saveCrLoad(false)} disabled={crBusy}>Save Progress</button>
+              <button style={s.completeBtn} onClick={() => saveCrLoad(true)} disabled={crBusy}>{crBusy ? "…" : "Dispatch 🚛"}</button>
+            </div>
           </div>
         </div>
       )}
@@ -571,349 +652,92 @@ export default function DriverPage() {
 const s: Record<string, React.CSSProperties> = {
   page: { padding: "16px", fontFamily: "system-ui", maxWidth: 640, margin: "0 auto" },
 
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap",
-  },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" },
   title: { fontSize: 22, fontWeight: 900 },
-  sub: { fontSize: 13, opacity: 0.6, marginTop: 2 },
 
-  pillRow: { display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" },
+  pillRow: { display: "flex", gap: 10, marginTop: 16, marginBottom: 24, flexWrap: "wrap" },
   pill: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "8px 14px",
-    borderRadius: 999,
-    background: "rgba(234,179,8,0.12)",
-    color: "#713f12",
-    border: "1px solid rgba(234,179,8,0.4)",
+    display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 999,
+    background: "rgba(234,179,8,0.12)", color: "#713f12", border: "1px solid rgba(234,179,8,0.4)",
   },
   pillNum: { fontWeight: 900, fontSize: 18 },
   pillLabel: { fontWeight: 700, fontSize: 13 },
 
-  error: {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 12,
-    border: "1px solid rgba(239,68,68,0.35)",
-    background: "rgba(239,68,68,0.08)",
-    color: "#7f1d1d",
-  },
+  sectionHeader: { display: "flex", alignItems: "center", gap: 10, marginBottom: 12, paddingBottom: 10, borderBottom: "2px solid #e2e8f0" },
+  sectionIcon: { fontSize: 22 },
+  sectionTitle: { fontSize: 17, fontWeight: 900, color: "#0f172a" },
 
-  emptyCard: {
-    marginTop: 24,
-    padding: 32,
-    borderRadius: 16,
-    border: "1px solid rgba(0,0,0,0.1)",
-    background: "white",
-    textAlign: "center",
-    fontSize: 16,
-  },
+  error: { marginTop: 12, padding: 12, borderRadius: 12, border: "1px solid rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.08)", color: "#7f1d1d" },
 
-  list: { display: "grid", gap: 12, marginTop: 16 },
+  emptyCard: { marginTop: 12, padding: 28, borderRadius: 16, border: "1px solid rgba(0,0,0,0.1)", background: "white", textAlign: "center", fontSize: 15, marginBottom: 8 },
 
-  orderCard: {
-    borderRadius: 16,
-    border: "1px solid rgba(0,0,0,0.12)",
-    background: "white",
-    overflow: "hidden",
-  },
-  cardHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    padding: "16px 16px",
-    cursor: "pointer",
-  },
-  cardTitle: {
-    fontWeight: 900,
-    fontSize: 16,
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  badge: {
-    fontSize: 11,
-    fontWeight: 700,
-    padding: "3px 10px",
-    borderRadius: 999,
-  },
-  cardMeta: {
-    marginTop: 4,
-    fontSize: 13,
-    color: "rgba(0,0,0,0.5)",
-    fontWeight: 600,
-    display: "flex",
-    gap: 6,
-    flexWrap: "wrap",
-    alignItems: "center",
-  },
+  list: { display: "grid", gap: 12, marginTop: 12 },
+
+  orderCard: { borderRadius: 16, border: "1px solid rgba(0,0,0,0.12)", background: "white", overflow: "hidden" },
+  cardHeader: { display: "flex", alignItems: "center", gap: 10, padding: "16px 16px", cursor: "pointer" },
+  cardTitle: { fontWeight: 900, fontSize: 16, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  badge: { fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999 },
+  cardMeta: { marginTop: 4, fontSize: 13, color: "rgba(0,0,0,0.5)", fontWeight: 600, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" },
   dot: { opacity: 0.4 },
   mono: { fontFamily: "ui-monospace, monospace", fontSize: 12 },
   chevron: { fontSize: 12, opacity: 0.4, flexShrink: 0 },
 
-  cardBody: {
-    padding: "0 16px 16px",
-    borderTop: "1px solid rgba(0,0,0,0.07)",
-    paddingTop: 14,
-  },
+  cardBody: { padding: "0 16px 16px", borderTop: "1px solid rgba(0,0,0,0.07)", paddingTop: 14 },
 
   detailBlock: { marginBottom: 12 },
   detailRow: { display: "flex", gap: 8, marginTop: 5, fontSize: 14, flexWrap: "wrap" },
   dk: { fontWeight: 800, color: "#111", minWidth: 90 },
   dv: { color: "rgba(0,0,0,0.7)", fontWeight: 600 },
 
-  detailHeading: {
-    fontWeight: 900,
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    color: "rgba(0,0,0,0.45)",
-    marginBottom: 8,
-    marginTop: 12,
-  },
+  detailHeading: { fontWeight: 900, fontSize: 12, textTransform: "uppercase" as const, letterSpacing: 0.6, color: "rgba(0,0,0,0.45)", marginBottom: 8, marginTop: 12 },
 
-  lineItem: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "10px 0",
-    borderBottom: "1px solid rgba(0,0,0,0.06)",
-    fontSize: 15,
-  },
+  lineItem: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid rgba(0,0,0,0.06)", fontSize: 15 },
   lineSpecies: { fontWeight: 700 },
   lineQty: { fontWeight: 900, fontSize: 18, color: "#2563eb" },
 
-  cardActions: { marginTop: 14, display: "flex", gap: 10 },
+  cardActions: { marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" },
 
-  startBtn: {
-    flex: 1,
-    padding: "14px",
-    borderRadius: 12,
-    border: "1px solid rgba(37,99,235,0.3)",
-    background: "rgba(37,99,235,0.08)",
-    color: "#1d4ed8",
-    fontWeight: 900,
-    fontSize: 15,
-    cursor: "pointer",
-  },
-  completeBtn: {
-    flex: 1,
-    padding: "14px",
-    borderRadius: 12,
-    border: "none",
-    background: "#16a34a",
-    color: "white",
-    fontWeight: 900,
-    fontSize: 15,
-    cursor: "pointer",
-  },
+  startBtn: { flex: 1, padding: "14px", borderRadius: 12, border: "1px solid rgba(37,99,235,0.3)", background: "rgba(37,99,235,0.08)", color: "#1d4ed8", fontWeight: 900, fontSize: 15, cursor: "pointer" },
+  completeBtn: { flex: 1, padding: "14px", borderRadius: 12, border: "none", background: "#16a34a", color: "white", fontWeight: 900, fontSize: 15, cursor: "pointer" },
+  secondaryBtn: { padding: "12px 14px", borderRadius: 12, border: "1px solid rgba(0,0,0,0.15)", cursor: "pointer", fontWeight: 900, background: "white" },
 
-  secondaryBtn: {
-    padding: "12px 14px",
-    borderRadius: 12,
-    border: "1px solid rgba(0,0,0,0.15)",
-    cursor: "pointer",
-    fontWeight: 900,
-    background: "white",
-  },
+  // Collection line cards
+  crLinesGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8, marginBottom: 12 },
+  crLineCard: { background: "#f8fafc", borderRadius: 8, padding: "8px 10px", border: "1px solid #e2e8f0" },
+  crLineName: { fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 4 },
+  crLineStats: { display: "flex", gap: 12 },
+  crLineStatLabel: { fontSize: 11, color: "#94a3b8", display: "block" as const },
+  crLineStatVal: { fontSize: 14, fontWeight: 700 },
+  crLineNote: { fontSize: 11, color: "#92400e", marginTop: 4 },
 
   // Completion modal
-  backdrop: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(248,250,252,0.75)",
-    backdropFilter: "blur(8px)",
-    WebkitBackdropFilter: "blur(8px)",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    padding: "16px 16px 40px",
-    zIndex: 100,
-    overflowY: "auto",
-  },
-  modal: {
-    width: "100%",
-    maxWidth: 560,
-    background: "white",
-    borderRadius: 20,
-    padding: 20,
-    border: "1px solid rgba(0,0,0,0.1)",
-    marginTop: 8,
-    boxSizing: "border-box" as const,
-  },
+  backdrop: { position: "fixed", inset: 0, background: "rgba(248,250,252,0.75)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", display: "flex", flexDirection: "column", alignItems: "center", padding: "16px 16px 40px", zIndex: 100, overflowY: "auto" },
+  modal: { width: "100%", maxWidth: 560, background: "white", borderRadius: 20, padding: 20, border: "1px solid rgba(0,0,0,0.1)", marginTop: 8, boxSizing: "border-box" as const },
   modalTitle: { fontSize: 20, fontWeight: 900, marginBottom: 4 },
   modalSub: { fontSize: 14, opacity: 0.6, marginBottom: 14 },
-  modalBtns: { display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" },
+  modalBtns: { display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end", flexWrap: "wrap" },
 
-  stepNote: {
-    fontSize: 13,
-    color: "rgba(0,0,0,0.55)",
-    marginBottom: 12,
-    padding: "10px 12px",
-    background: "rgba(37,99,235,0.05)",
-    borderRadius: 10,
-    border: "1px solid rgba(37,99,235,0.15)",
-  },
+  stepNote: { fontSize: 13, color: "rgba(0,0,0,0.55)", marginBottom: 12, padding: "10px 12px", background: "rgba(37,99,235,0.05)", borderRadius: 10, border: "1px solid rgba(37,99,235,0.15)" },
+  completionError: { padding: 12, borderRadius: 10, border: "1px solid rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.08)", color: "#7f1d1d", marginBottom: 12, fontSize: 14 },
 
-  completionError: {
-    padding: 12,
-    borderRadius: 10,
-    border: "1px solid rgba(239,68,68,0.35)",
-    background: "rgba(239,68,68,0.08)",
-    color: "#7f1d1d",
-    marginBottom: 12,
-    fontSize: 14,
-  },
-
-  returnBlock: {
-    marginBottom: 14,
-    padding: 14,
-    borderRadius: 12,
-    border: "1px solid rgba(0,0,0,0.1)",
-    background: "#fafafa",
-  },
-  returnSpecies: {
-    fontWeight: 900,
-    fontSize: 15,
-    marginBottom: 10,
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-  returnOrdered: {
-    fontSize: 12,
-    fontWeight: 700,
-    opacity: 0.55,
-    background: "rgba(0,0,0,0.06)",
-    padding: "2px 8px",
-    borderRadius: 999,
-  },
-  returnOk: {
-    fontSize: 12,
-    fontWeight: 700,
-    background: "rgba(34,197,94,0.12)",
-    color: "#14532d",
-    border: "1px solid rgba(34,197,94,0.3)",
-    padding: "2px 8px",
-    borderRadius: 999,
-  },
-  returnBad: {
-    fontSize: 12,
-    fontWeight: 700,
-    background: "rgba(239,68,68,0.1)",
-    color: "#7f1d1d",
-    border: "1px solid rgba(239,68,68,0.3)",
-    padding: "2px 8px",
-    borderRadius: 999,
-  },
-  returnFields: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, 1fr)",
-    gap: 8,
-  },
-  returnLabel: {
-    display: "grid",
-    gap: 4,
-    fontSize: 11,
-    fontWeight: 800,
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-    color: "rgba(0,0,0,0.55)",
-  },
-  returnInput: {
-    width: "100%",
-    boxSizing: "border-box" as const,
-    padding: "10px 8px",
-    borderRadius: 10,
-    border: "1px solid rgba(0,0,0,0.15)",
-    fontSize: 16,
-    fontWeight: 900,
-    textAlign: "center",
-    background: "white",
-  },
-
-  preview: {
-    marginTop: 14,
-    padding: "12px 14px",
-    borderRadius: 12,
-    border: "1px solid rgba(0,0,0,0.1)",
-    background: "white",
-  },
-  previewRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    fontSize: 14,
-    fontWeight: 700,
-    padding: "4px 0",
-    color: "rgba(0,0,0,0.7)",
-  },
-  previewTotal: {
-    fontSize: 16,
-    fontWeight: 900,
-    color: "#111",
-    borderTop: "1px solid rgba(0,0,0,0.1)",
-    marginTop: 4,
-    paddingTop: 8,
-  },
+  returnBlock: { marginBottom: 14, padding: 14, borderRadius: 12, border: "1px solid rgba(0,0,0,0.1)", background: "#fafafa" },
+  returnSpecies: { fontWeight: 900, fontSize: 15, marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
+  returnOrdered: { fontSize: 12, fontWeight: 700, opacity: 0.55, background: "rgba(0,0,0,0.06)", padding: "2px 8px", borderRadius: 999 },
+  returnOk: { fontSize: 12, fontWeight: 700, background: "rgba(34,197,94,0.12)", color: "#14532d", border: "1px solid rgba(34,197,94,0.3)", padding: "2px 8px", borderRadius: 999 },
+  returnBad: { fontSize: 12, fontWeight: 700, background: "rgba(239,68,68,0.1)", color: "#7f1d1d", border: "1px solid rgba(239,68,68,0.3)", padding: "2px 8px", borderRadius: 999 },
+  returnFields: { display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 },
+  returnLabel: { display: "grid", gap: 4, fontSize: 11, fontWeight: 800, textTransform: "uppercase" as const, letterSpacing: 0.4, color: "rgba(0,0,0,0.55)" },
+  returnInput: { width: "100%", boxSizing: "border-box" as const, padding: "10px 8px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)", fontSize: 16, fontWeight: 900, textAlign: "center" as const, background: "white" },
 
   paymentSection: { marginTop: 16 },
-  paymentHeading: {
-    fontWeight: 900,
-    fontSize: 13,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    color: "rgba(0,0,0,0.5)",
-    marginBottom: 10,
-  },
+  paymentHeading: { fontWeight: 900, fontSize: 13, textTransform: "uppercase" as const, letterSpacing: 0.5, color: "rgba(0,0,0,0.5)", marginBottom: 10 },
   paymentOptions: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 },
-  paymentOption: {
-    padding: "14px 10px",
-    borderRadius: 12,
-    border: "1px solid rgba(0,0,0,0.15)",
-    background: "white",
-    fontWeight: 800,
-    fontSize: 14,
-    cursor: "pointer",
-  },
-  paymentOptionActive: {
-    border: "2px solid #2563eb",
-    background: "rgba(37,99,235,0.08)",
-    color: "#1d4ed8",
-  },
-  eftNote: {
-    marginTop: 8,
-    fontSize: 13,
-    color: "rgba(0,0,0,0.55)",
-    fontStyle: "italic",
-  },
+  paymentOption: { padding: "14px 10px", borderRadius: 12, border: "1px solid rgba(0,0,0,0.15)", background: "white", fontWeight: 800, fontSize: 14, cursor: "pointer" },
+  paymentOptionActive: { border: "2px solid #2563eb", background: "rgba(37,99,235,0.08)", color: "#1d4ed8" },
+  eftNote: { marginTop: 8, fontSize: 13, color: "rgba(0,0,0,0.55)", fontStyle: "italic" },
 
-  // Receipt upload
   receiptBox: { margin: "14px 0" },
-  cameraBtn: {
-    width: "100%",
-    padding: "32px 20px",
-    borderRadius: 16,
-    border: "2px dashed rgba(37,99,235,0.3)",
-    background: "rgba(37,99,235,0.04)",
-    cursor: "pointer",
-    textAlign: "center",
-    color: "#1d4ed8",
-  },
+  cameraBtn: { width: "100%", padding: "32px 20px", borderRadius: 16, border: "2px dashed rgba(37,99,235,0.3)", background: "rgba(37,99,235,0.04)", cursor: "pointer", textAlign: "center" as const, color: "#1d4ed8" },
   receiptPreview: { display: "grid", gap: 10 },
-  changePhotoBtn: {
-    padding: "12px",
-    borderRadius: 10,
-    border: "1px solid rgba(0,0,0,0.15)",
-    background: "white",
-    cursor: "pointer",
-    fontWeight: 800,
-    width: "100%",
-  },
+  changePhotoBtn: { padding: "12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)", background: "white", cursor: "pointer", fontWeight: 800, width: "100%" },
 };

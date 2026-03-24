@@ -7,6 +7,7 @@ import Layout from "./components/Layout";
 import HubTasksPage from "./pages/HubTasksPage";
 import DeliveryOrdersPage from "./pages/DeliveryOrdersPage";
 import DriverPage from "./pages/DriverPage";
+import DriverDashboardPage from "./pages/DriverDashboardPage";
 import AdminReportsPage from "./pages/AdminReportsPage";
 import DriverReportsPage from "./pages/DriverReportsPage";
 import StatementPage from "./pages/StatementPage";
@@ -38,7 +39,8 @@ export default function App() {
       <Route path="/app/suppliers"          element={<AuthLayout><SuppliersPage /></AuthLayout>} />
       <Route path="/app/procurement-orders" element={<AuthLayout><ProcurementOrdersPage /></AuthLayout>} />
       <Route path="/app/collection-requests" element={<AuthLayout><CollectionRequestsPage /></AuthLayout>} />
-      <Route path="/driver"              element={<AuthLayout><DriverPage /></AuthLayout>} />
+      <Route path="/driver"              element={<AuthLayout><DriverDashboardPage /></AuthLayout>} />
+      <Route path="/driver/work"         element={<AuthLayout><DriverPage /></AuthLayout>} />
       <Route path="/driver/reports"      element={<AuthLayout><DriverReportsPage /></AuthLayout>} />
 
       <Route path="/app/help" element={<AuthLayout><HelpPage /></AuthLayout>} />
