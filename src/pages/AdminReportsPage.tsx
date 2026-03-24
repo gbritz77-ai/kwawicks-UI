@@ -22,7 +22,7 @@ import type {
 } from "../api/reportsApi";
 import type { ClientDto } from "../api/clientsApi";
 
-type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy";
+type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability";
 
 export default function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -87,7 +87,7 @@ export default function AdminReportsPage() {
       if (tab === "species") setSpeciesRevenue(await reportsApi.getSpeciesRevenue(from || undefined, to || undefined));
       if (tab === "supplier-spend") setPoData(await procurementOrdersApi.list());
       if (tab === "margin" && !allSpecies.length) setAllSpecies(await speciesApi.list());
-      if (tab === "load-discrepancy" || tab === "transit-discrepancy") setCrData(await collectionRequestsApi.list());
+      if (["load-discrepancy","transit-discrepancy","supplier-reliability"].includes(tab)) setCrData(await collectionRequestsApi.list());
     } catch {
       setError("Failed to load report.");
     } finally {
@@ -109,7 +109,7 @@ export default function AdminReportsPage() {
         {(["revenue", "outstanding", "invoices", "drivers", "returns", "deliveries", "species", "statement", "supplier-spend"] as Tab[])
           .filter(t => {
             const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "statement"];
-            const procurementTabs: Tab[] = ["supplier-spend", "margin", "load-discrepancy", "transit-discrepancy"];
+            const procurementTabs: Tab[] = ["supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability"];
             if (procurementTabs.includes(t)) return isProcurementUser;
             return isFinancialUser || !financialTabs.includes(t);
           })
@@ -126,7 +126,8 @@ export default function AdminReportsPage() {
             {t === "supplier-spend" && "💼 Supplier Spend"}
             {t === "margin"            && "📊 Cost vs Sell Margin"}
             {t === "load-discrepancy"      && "⚠ Load Discrepancy"}
-            {t === "transit-discrepancy"   && "🚛 Transit Loss"}
+            {t === "transit-discrepancy"    && "🚛 Transit Loss"}
+            {t === "supplier-reliability"   && "⭐ Supplier Reliability"}
           </button>
         ))}
       </div>
@@ -978,6 +979,64 @@ function InvoicesTab({
                 })}
               </tbody>
             </ScrollTable>
+          </div>
+        );
+      })()}
+
+      {/* ── Supplier Reliability ── */}
+      {tab === "supplier-reliability" && crData && !loading && (() => {
+        const confirmed = crData.filter(cr => {
+          const d = cr.createdAt.slice(0, 10);
+          if (from && d < from) return false;
+          if (to   && d > to)   return false;
+          return ["HubConfirmed","FinanceAcknowledged"].includes(cr.status);
+        });
+
+        type Row = { supplier: string; orders: number; orderedTotal: number; receivedTotal: number; fulfilPct: number };
+        const map = new Map<string, Row>();
+        for (const cr of confirmed) {
+          const key      = cr.supplierName || cr.supplierId || "Unknown";
+          const ordered  = cr.lines.reduce((s, l) => s + l.orderedQty,   0);
+          const received = cr.lines.reduce((s, l) => s + l.receivedQty,  0);
+          const ex = map.get(key) ?? { supplier: key, orders: 0, orderedTotal: 0, receivedTotal: 0, fulfilPct: 0 };
+          const newOrdered  = ex.orderedTotal  + ordered;
+          const newReceived = ex.receivedTotal + received;
+          map.set(key, { ...ex, orders: ex.orders + 1, orderedTotal: newOrdered, receivedTotal: newReceived, fulfilPct: newOrdered > 0 ? newReceived / newOrdered * 100 : 0 });
+        }
+        const rows = [...map.values()].sort((a, b) => a.fulfilPct - b.fulfilPct);
+        const overallOrdered  = rows.reduce((s, r) => s + r.orderedTotal,  0);
+        const overallReceived = rows.reduce((s, r) => s + r.receivedTotal, 0);
+        const overallPct      = overallOrdered > 0 ? overallReceived / overallOrdered * 100 : 0;
+
+        return (
+          <div>
+            <div style={s.kpiRow}>
+              <KpiCard label="Suppliers Tracked"    value={String(rows.length)} />
+              <KpiCard label="Overall Fulfilment"   value={`${overallPct.toFixed(1)}%`} highlight />
+              <KpiCard label="Total Ordered"        value={overallOrdered.toLocaleString()} />
+              <KpiCard label="Total Received"       value={overallReceived.toLocaleString()} />
+            </div>
+            {rows.length === 0 ? <p style={s.muted}>No hub-confirmed collections in this period.</p> : (
+              <ScrollTable>
+                <thead><tr><Th>Supplier</Th><Th>Collections</Th><Th>Ordered</Th><Th>Received</Th><Th>Shortfall</Th><Th>Fulfilment %</Th></tr></thead>
+                <tbody>
+                  {rows.map((r, i) => {
+                    const color = r.fulfilPct >= 98 ? "#166534" : r.fulfilPct >= 90 ? "#92400e" : "#dc2626";
+                    const bg    = r.fulfilPct >= 98 ? "#f0fdf4"  : r.fulfilPct >= 90 ? "#fefce8"  : "#fef2f2";
+                    return (
+                      <tr key={i}>
+                        <Td style={{ fontWeight: 600 }}>{r.supplier}</Td>
+                        <Td>{r.orders}</Td>
+                        <Td>{r.orderedTotal.toLocaleString()}</Td>
+                        <Td>{r.receivedTotal.toLocaleString()}</Td>
+                        <Td style={{ fontWeight: 700, color: r.orderedTotal - r.receivedTotal > 0 ? "#dc2626" : "#166534" }}>{(r.orderedTotal - r.receivedTotal).toLocaleString()}</Td>
+                        <Td><span style={{ background: bg, color, padding: "2px 10px", borderRadius: 999, fontWeight: 700, fontSize: 13 }}>{r.fulfilPct.toFixed(1)}%</span></Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </ScrollTable>
+            )}
           </div>
         );
       })()}
