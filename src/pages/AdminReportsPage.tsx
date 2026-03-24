@@ -7,6 +7,8 @@ import { invoicesApi } from "../api/invoicesApi";
 import { clientsApi } from "../api/clientsApi";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
 import { whatsappApi } from "../api/whatsappApi";
+import { procurementOrdersApi } from "../api/procurementOrdersApi";
+import type { ProcurementOrderDto } from "../api/procurementOrdersApi";
 import type {
   RevenueSummaryResponse,
   OutstandingPaymentsResponse,
@@ -18,12 +20,13 @@ import type {
 } from "../api/reportsApi";
 import type { ClientDto } from "../api/clientsApi";
 
-type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species";
+type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend";
 
 export default function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const isFinancialUser = hasAnyRole("Owner", "Finance");
-  const defaultTab: Tab = isFinancialUser ? "revenue" : "drivers";
+  const isFinancialUser    = hasAnyRole("Owner", "Finance");
+  const isProcurementUser  = hasAnyRole("Owner", "Finance", "Procurement");
+  const defaultTab: Tab = isFinancialUser ? "revenue" : isProcurementUser ? "supplier-spend" : "drivers";
   const tab = (searchParams.get("tab") as Tab) || defaultTab;
 
   function setTab(t: Tab) {
@@ -47,6 +50,7 @@ export default function AdminReportsPage() {
   const [stmtCustomer, setStmtCustomer] = useState("");
   const [stmtFrom, setStmtFrom] = useState("");
   const [stmtTo, setStmtTo] = useState("");
+  const [poData, setPoData] = useState<ProcurementOrderDto[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -78,6 +82,7 @@ export default function AdminReportsPage() {
         setClients(await clientsApi.list());
       }
       if (tab === "species") setSpeciesRevenue(await reportsApi.getSpeciesRevenue(from || undefined, to || undefined));
+      if (tab === "supplier-spend") setPoData(await procurementOrdersApi.list());
     } catch {
       setError("Failed to load report.");
     } finally {
@@ -96,9 +101,11 @@ export default function AdminReportsPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["revenue", "outstanding", "invoices", "drivers", "returns", "deliveries", "species", "statement"] as Tab[])
+        {(["revenue", "outstanding", "invoices", "drivers", "returns", "deliveries", "species", "statement", "supplier-spend"] as Tab[])
           .filter(t => {
             const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "statement"];
+            const procurementTabs: Tab[] = ["supplier-spend"];
+            if (procurementTabs.includes(t)) return isProcurementUser;
             return isFinancialUser || !financialTabs.includes(t);
           })
           .map((t) => (
@@ -111,6 +118,7 @@ export default function AdminReportsPage() {
             {t === "deliveries" && "Deliveries"}
             {t === "species" && "Species Revenue"}
             {t === "statement" && "Customer Statement"}
+            {t === "supplier-spend" && "💼 Supplier Spend"}
           </button>
         ))}
       </div>
@@ -642,6 +650,84 @@ function InvoicesTab({
           </div>
         </div>
       )}
+
+      {/* ── Supplier Spend by Month ── */}
+      {tab === "supplier-spend" && poData && !loading && (() => {
+        const nonDraft = poData.filter(p => p.status !== "Draft");
+        const filtered = nonDraft.filter(p => {
+          const d = p.createdAt.slice(0, 10);
+          if (from && d < from) return false;
+          if (to   && d > to)   return false;
+          return true;
+        });
+
+        // Aggregate: supplier → month → { orders, units, value }
+        type Row = { supplier: string; month: string; orders: number; units: number; value: number };
+        const map = new Map<string, Row>();
+        for (const po of filtered) {
+          const month = po.createdAt.slice(0, 7); // "YYYY-MM"
+          const key   = `${po.supplierName}||${month}`;
+          const poValue = po.lines.reduce((s, l) => s + l.orderedQty * (l.unitCost ?? 0), 0);
+          const poUnits = po.lines.reduce((s, l) => s + l.orderedQty, 0);
+          const existing = map.get(key) ?? { supplier: po.supplierName || po.supplierId, month, orders: 0, units: 0, value: 0 };
+          map.set(key, { ...existing, orders: existing.orders + 1, units: existing.units + poUnits, value: existing.value + poValue });
+        }
+        const rows = [...map.values()].sort((a, b) => b.month.localeCompare(a.month) || a.supplier.localeCompare(b.supplier));
+
+        const totalValue  = rows.reduce((s, r) => s + r.value, 0);
+        const totalOrders = rows.reduce((s, r) => s + r.orders, 0);
+        const totalUnits  = rows.reduce((s, r) => s + r.units,  0);
+        const suppliers   = new Set(rows.map(r => r.supplier)).size;
+
+        const formatMonth = (m: string) => {
+          const [y, mo] = m.split("-");
+          return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString("en-ZA", { month: "long", year: "numeric" });
+        };
+
+        return (
+          <div>
+            <div style={s.kpiRow}>
+              <KpiCard label="Total Spend (excl. VAT)" value={fmt(totalValue)} highlight />
+              <KpiCard label="Suppliers"               value={String(suppliers)} />
+              <KpiCard label="Orders"                  value={String(totalOrders)} />
+              <KpiCard label="Total Units"             value={totalUnits.toLocaleString()} />
+            </div>
+            {rows.length === 0 ? (
+              <p style={s.muted}>No submitted orders for the selected period.</p>
+            ) : (
+              <ScrollTable>
+                <thead>
+                  <tr>
+                    <Th>Month</Th>
+                    <Th>Supplier</Th>
+                    <Th>Orders</Th>
+                    <Th>Units</Th>
+                    <Th>Total Value (excl. VAT)</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => (
+                    <tr key={i}>
+                      <Td>{formatMonth(r.month)}</Td>
+                      <Td style={{ fontWeight: 600 }}>{r.supplier}</Td>
+                      <Td>{r.orders}</Td>
+                      <Td>{r.units.toLocaleString()}</Td>
+                      <Td style={{ fontWeight: 700, color: "#166534" }}>{fmt(r.value)}</Td>
+                    </tr>
+                  ))}
+                  <tr style={{ background: "#f8fafc", fontWeight: 700 }}>
+                    <Td style={{ fontWeight: 700 }}>TOTAL</Td>
+                    <Td>—</Td>
+                    <Td>{totalOrders}</Td>
+                    <Td>{totalUnits.toLocaleString()}</Td>
+                    <Td style={{ fontWeight: 800, color: "#166534" }}>{fmt(totalValue)}</Td>
+                  </tr>
+                </tbody>
+              </ScrollTable>
+            )}
+          </div>
+        );
+      })()}
 
       {/* WhatsApp send modal */}
       {waModal && (
