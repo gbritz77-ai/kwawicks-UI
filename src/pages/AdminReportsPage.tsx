@@ -22,7 +22,7 @@ import type {
 } from "../api/reportsApi";
 import type { ClientDto } from "../api/clientsApi";
 
-type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy";
+type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy";
 
 export default function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -87,7 +87,7 @@ export default function AdminReportsPage() {
       if (tab === "species") setSpeciesRevenue(await reportsApi.getSpeciesRevenue(from || undefined, to || undefined));
       if (tab === "supplier-spend") setPoData(await procurementOrdersApi.list());
       if (tab === "margin" && !allSpecies.length) setAllSpecies(await speciesApi.list());
-      if (tab === "load-discrepancy") setCrData(await collectionRequestsApi.list());
+      if (tab === "load-discrepancy" || tab === "transit-discrepancy") setCrData(await collectionRequestsApi.list());
     } catch {
       setError("Failed to load report.");
     } finally {
@@ -109,7 +109,7 @@ export default function AdminReportsPage() {
         {(["revenue", "outstanding", "invoices", "drivers", "returns", "deliveries", "species", "statement", "supplier-spend"] as Tab[])
           .filter(t => {
             const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "statement"];
-            const procurementTabs: Tab[] = ["supplier-spend", "margin", "load-discrepancy"];
+            const procurementTabs: Tab[] = ["supplier-spend", "margin", "load-discrepancy", "transit-discrepancy"];
             if (procurementTabs.includes(t)) return isProcurementUser;
             return isFinancialUser || !financialTabs.includes(t);
           })
@@ -125,7 +125,8 @@ export default function AdminReportsPage() {
             {t === "statement" && "Customer Statement"}
             {t === "supplier-spend" && "💼 Supplier Spend"}
             {t === "margin"            && "📊 Cost vs Sell Margin"}
-            {t === "load-discrepancy"  && "⚠ Load Discrepancy"}
+            {t === "load-discrepancy"      && "⚠ Load Discrepancy"}
+            {t === "transit-discrepancy"   && "🚛 Transit Loss"}
           </button>
         ))}
       </div>
@@ -883,6 +884,98 @@ function InvoicesTab({
                     <Td>{r.occurrences > 0 ? <span style={{ background: "#fef2f2", color: "#dc2626", padding: "2px 10px", borderRadius: 999, fontWeight: 700, fontSize: 13 }}>{r.occurrences}x</span> : <span style={{ color: "#166534" }}>✓</span>}</Td>
                   </tr>
                 ))}
+              </tbody>
+            </ScrollTable>
+          </div>
+        );
+      })()}
+
+      {/* ── Transit Loss (Loaded vs Received) ── */}
+      {tab === "transit-discrepancy" && crData && !loading && (() => {
+        // Only hub-confirmed or finance-acknowledged CRs have receivedQty
+        const confirmed = crData.filter(cr => {
+          const d = cr.createdAt.slice(0, 10);
+          if (from && d < from) return false;
+          if (to   && d > to)   return false;
+          return ["HubConfirmed","FinanceAcknowledged"].includes(cr.status);
+        });
+
+        type Row = { supplier: string; collections: number; loadedTotal: number; receivedTotal: number; lossTotal: number };
+        const supMap = new Map<string, Row>();
+        for (const cr of confirmed) {
+          const key = cr.supplierName || cr.supplierId || "Unknown";
+          const loaded   = cr.lines.reduce((s, l) => s + l.loadedQty,   0);
+          const received = cr.lines.reduce((s, l) => s + l.receivedQty, 0);
+          const loss     = Math.max(0, loaded - received);
+          const existing = supMap.get(key) ?? { supplier: key, collections: 0, loadedTotal: 0, receivedTotal: 0, lossTotal: 0 };
+          supMap.set(key, { ...existing, collections: existing.collections + 1, loadedTotal: existing.loadedTotal + loaded, receivedTotal: existing.receivedTotal + received, lossTotal: existing.lossTotal + loss });
+        }
+        const rows = [...supMap.values()].sort((a, b) => b.lossTotal - a.lossTotal);
+        const totalLoss     = rows.reduce((s, r) => s + r.lossTotal, 0);
+        const totalLoaded   = rows.reduce((s, r) => s + r.loadedTotal, 0);
+        const pctLoss       = totalLoaded > 0 ? totalLoss / totalLoaded * 100 : 0;
+
+        // Per-species loss
+        type SRow = { species: string; loaded: number; received: number; loss: number };
+        const specMap = new Map<string, SRow>();
+        for (const cr of confirmed) {
+          for (const l of cr.lines) {
+            const loss = Math.max(0, l.loadedQty - l.receivedQty);
+            const ex = specMap.get(l.speciesId) ?? { species: l.speciesName || l.speciesId, loaded: 0, received: 0, loss: 0 };
+            specMap.set(l.speciesId, { ...ex, loaded: ex.loaded + l.loadedQty, received: ex.received + l.receivedQty, loss: ex.loss + loss });
+          }
+        }
+        const specRows = [...specMap.values()].sort((a, b) => b.loss - a.loss);
+
+        return (
+          <div>
+            <div style={s.kpiRow}>
+              <KpiCard label="Confirmed Collections" value={String(confirmed.length)} />
+              <KpiCard label="Total Transit Loss"     value={totalLoss.toLocaleString()} highlight />
+              <KpiCard label="Transit Loss Rate"      value={`${pctLoss.toFixed(1)}%`} />
+              <KpiCard label="Suppliers"              value={String(rows.length)} />
+            </div>
+
+            <h3 style={s.subHeading}>By Supplier</h3>
+            {rows.length === 0 ? <p style={s.muted}>No hub-confirmed collections in this period.</p> : (
+              <ScrollTable>
+                <thead><tr><Th>Supplier</Th><Th>Collections</Th><Th>Loaded</Th><Th>Received at Hub</Th><Th>Loss</Th><Th>Loss %</Th></tr></thead>
+                <tbody>
+                  {rows.map((r, i) => {
+                    const pct = r.loadedTotal > 0 ? r.lossTotal / r.loadedTotal * 100 : 0;
+                    const color = pct === 0 ? "#166534" : pct < 3 ? "#92400e" : "#dc2626";
+                    return (
+                      <tr key={i}>
+                        <Td style={{ fontWeight: 600 }}>{r.supplier}</Td>
+                        <Td>{r.collections}</Td>
+                        <Td>{r.loadedTotal.toLocaleString()}</Td>
+                        <Td>{r.receivedTotal.toLocaleString()}</Td>
+                        <Td style={{ fontWeight: 700, color: r.lossTotal > 0 ? "#dc2626" : "#166534" }}>{r.lossTotal.toLocaleString()}</Td>
+                        <Td><span style={{ background: pct === 0 ? "#f0fdf4" : pct < 3 ? "#fefce8" : "#fef2f2", color, padding: "2px 10px", borderRadius: 999, fontWeight: 700, fontSize: 13 }}>{pct.toFixed(1)}%</span></Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </ScrollTable>
+            )}
+
+            <h3 style={s.subHeading}>By Species</h3>
+            <ScrollTable>
+              <thead><tr><Th>Species</Th><Th>Loaded</Th><Th>Received</Th><Th>Loss</Th><Th>Loss %</Th></tr></thead>
+              <tbody>
+                {specRows.map((r, i) => {
+                  const pct = r.loaded > 0 ? r.loss / r.loaded * 100 : 0;
+                  const color = pct === 0 ? "#166534" : pct < 3 ? "#92400e" : "#dc2626";
+                  return (
+                    <tr key={i}>
+                      <Td style={{ fontWeight: 600 }}>{r.species}</Td>
+                      <Td>{r.loaded.toLocaleString()}</Td>
+                      <Td>{r.received.toLocaleString()}</Td>
+                      <Td style={{ fontWeight: 700, color: r.loss > 0 ? "#dc2626" : "#166534" }}>{r.loss.toLocaleString()}</Td>
+                      <Td><span style={{ background: pct === 0 ? "#f0fdf4" : pct < 3 ? "#fefce8" : "#fef2f2", color, padding: "2px 10px", borderRadius: 999, fontWeight: 700, fontSize: 13 }}>{pct.toFixed(1)}%</span></Td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </ScrollTable>
           </div>
