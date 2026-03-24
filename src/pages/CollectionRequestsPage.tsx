@@ -59,6 +59,7 @@ export default function CollectionRequestsPage() {
   // Per-card delivery note photo (inline view on expanded card)
   const [cardDnUrls, setCardDnUrls] = useState<Record<string, string>>({});
   const [cardDnLoading, setCardDnLoading] = useState<string | null>(null);
+  const [cardDnErrors, setCardDnErrors] = useState<Record<string, string>>({});
 
   useEffect(() => { load(); }, []);
 
@@ -157,14 +158,21 @@ export default function CollectionRequestsPage() {
   async function toggleCardDn(crId: string) {
     if (cardDnUrls[crId]) {
       setCardDnUrls(u => { const n = { ...u }; delete n[crId]; return n; });
+      setCardDnErrors(e => { const n = { ...e }; delete n[crId]; return n; });
       return;
     }
     setCardDnLoading(crId);
+    setCardDnErrors(e => { const n = { ...e }; delete n[crId]; return n; });
     try {
-      const { viewUrl } = await collectionRequestsApi.getDeliveryNoteViewUrl(crId);
-      setCardDnUrls(u => ({ ...u, [crId]: viewUrl }));
-    } catch { /* non-fatal */ }
-    finally { setCardDnLoading(null); }
+      const res = await collectionRequestsApi.getDeliveryNoteViewUrl(crId);
+      const url = res.viewUrl;
+      if (!url) throw new Error("No URL returned from server.");
+      setCardDnUrls(u => ({ ...u, [crId]: url }));
+    } catch (e: any) {
+      setCardDnErrors(er => ({ ...er, [crId]: e?.message ?? "Could not load photo." }));
+    } finally {
+      setCardDnLoading(null);
+    }
   }
 
   async function submitAck() {
@@ -246,8 +254,10 @@ export default function CollectionRequestsPage() {
                   {cr.deliveryNoteS3Key && isFinance() && (
                     <div style={{ marginTop: 10 }}>
                       <button
-                        style={{ ...s.dnBadge, cursor: "pointer", background: cardDnUrls[cr.collectionRequestId] ? "rgba(8,145,178,0.12)" : undefined }}
+                        type="button"
+                        style={{ ...s.dnBadge, cursor: "pointer", border: "1px solid rgba(3,105,161,0.4)", background: cardDnUrls[cr.collectionRequestId] ? "rgba(8,145,178,0.15)" : "rgba(3,105,161,0.08)" }}
                         onClick={() => toggleCardDn(cr.collectionRequestId)}
+                        disabled={cardDnLoading === cr.collectionRequestId}
                       >
                         {cardDnLoading === cr.collectionRequestId
                           ? "⏳ Loading photo…"
@@ -255,6 +265,11 @@ export default function CollectionRequestsPage() {
                             ? "🖼 Hide Delivery Note Photo"
                             : "📷 View Delivery Note Photo"}
                       </button>
+                      {cardDnErrors[cr.collectionRequestId] && (
+                        <div style={{ fontSize: 12, color: "#dc2626", marginTop: 6 }}>
+                          ⚠ {cardDnErrors[cr.collectionRequestId]}
+                        </div>
+                      )}
                       {cardDnUrls[cr.collectionRequestId] && (
                         <img
                           src={cardDnUrls[cr.collectionRequestId]}
