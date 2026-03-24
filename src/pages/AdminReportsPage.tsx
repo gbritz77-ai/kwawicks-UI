@@ -9,6 +9,8 @@ import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
 import { whatsappApi } from "../api/whatsappApi";
 import { procurementOrdersApi } from "../api/procurementOrdersApi";
 import type { ProcurementOrderDto } from "../api/procurementOrdersApi";
+import { collectionRequestsApi } from "../api/collectionRequestsApi";
+import type { CollectionRequestDto } from "../api/collectionRequestsApi";
 import type {
   RevenueSummaryResponse,
   OutstandingPaymentsResponse,
@@ -20,7 +22,7 @@ import type {
 } from "../api/reportsApi";
 import type { ClientDto } from "../api/clientsApi";
 
-type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin";
+type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy";
 
 export default function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -50,7 +52,8 @@ export default function AdminReportsPage() {
   const [stmtCustomer, setStmtCustomer] = useState("");
   const [stmtFrom, setStmtFrom] = useState("");
   const [stmtTo, setStmtTo] = useState("");
-  const [poData, setPoData] = useState<ProcurementOrderDto[] | null>(null);
+  const [poData, setPoData]   = useState<ProcurementOrderDto[]   | null>(null);
+  const [crData, setCrData]   = useState<CollectionRequestDto[]  | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -84,6 +87,7 @@ export default function AdminReportsPage() {
       if (tab === "species") setSpeciesRevenue(await reportsApi.getSpeciesRevenue(from || undefined, to || undefined));
       if (tab === "supplier-spend") setPoData(await procurementOrdersApi.list());
       if (tab === "margin" && !allSpecies.length) setAllSpecies(await speciesApi.list());
+      if (tab === "load-discrepancy") setCrData(await collectionRequestsApi.list());
     } catch {
       setError("Failed to load report.");
     } finally {
@@ -105,7 +109,7 @@ export default function AdminReportsPage() {
         {(["revenue", "outstanding", "invoices", "drivers", "returns", "deliveries", "species", "statement", "supplier-spend"] as Tab[])
           .filter(t => {
             const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "statement"];
-            const procurementTabs: Tab[] = ["supplier-spend", "margin"];
+            const procurementTabs: Tab[] = ["supplier-spend", "margin", "load-discrepancy"];
             if (procurementTabs.includes(t)) return isProcurementUser;
             return isFinancialUser || !financialTabs.includes(t);
           })
@@ -120,7 +124,8 @@ export default function AdminReportsPage() {
             {t === "species" && "Species Revenue"}
             {t === "statement" && "Customer Statement"}
             {t === "supplier-spend" && "💼 Supplier Spend"}
-            {t === "margin"         && "📊 Cost vs Sell Margin"}
+            {t === "margin"            && "📊 Cost vs Sell Margin"}
+            {t === "load-discrepancy"  && "⚠ Load Discrepancy"}
           </button>
         ))}
       </div>
@@ -790,6 +795,94 @@ function InvoicesTab({
                     </tr>
                   );
                 })}
+              </tbody>
+            </ScrollTable>
+          </div>
+        );
+      })()}
+
+      {/* ── Load Discrepancy ── */}
+      {tab === "load-discrepancy" && crData && !loading && (() => {
+        // Only CRs that have been loaded (Loading or beyond)
+        const loaded = crData.filter(cr => {
+          const d = cr.createdAt.slice(0, 10);
+          if (from && d < from) return false;
+          if (to   && d > to)   return false;
+          return ["Loading","InTransit","ArrivedAtHub","HubConfirmed","FinanceAcknowledged"].includes(cr.status);
+        });
+
+        type DriverRow = { driver: string; collections: number; orderedTotal: number; loadedTotal: number; shortTotal: number };
+        const driverMap = new Map<string, DriverRow>();
+        for (const cr of loaded) {
+          const key = cr.assignedDriverName || cr.assignedDriverId || "Unknown";
+          const ordered = cr.lines.reduce((s, l) => s + l.orderedQty, 0);
+          const loadedQ = cr.lines.reduce((s, l) => s + l.loadedQty,  0);
+          const short   = Math.max(0, ordered - loadedQ);
+          const existing = driverMap.get(key) ?? { driver: key, collections: 0, orderedTotal: 0, loadedTotal: 0, shortTotal: 0 };
+          driverMap.set(key, { ...existing, collections: existing.collections + 1, orderedTotal: existing.orderedTotal + ordered, loadedTotal: existing.loadedTotal + loadedQ, shortTotal: existing.shortTotal + short });
+        }
+        const rows = [...driverMap.values()].sort((a, b) => b.shortTotal - a.shortTotal);
+        const totalShort   = rows.reduce((s, r) => s + r.shortTotal, 0);
+        const totalOrdered = rows.reduce((s, r) => s + r.orderedTotal, 0);
+        const pctShort     = totalOrdered > 0 ? (totalShort / totalOrdered * 100) : 0;
+
+        // Per-species discrepancy
+        type SpecRow = { species: string; orderedTotal: number; loadedTotal: number; shortTotal: number; occurrences: number };
+        const specMap = new Map<string, SpecRow>();
+        for (const cr of loaded) {
+          for (const l of cr.lines) {
+            const short = Math.max(0, l.orderedQty - l.loadedQty);
+            const existing = specMap.get(l.speciesId) ?? { species: l.speciesName || l.speciesId, orderedTotal: 0, loadedTotal: 0, shortTotal: 0, occurrences: 0 };
+            specMap.set(l.speciesId, { ...existing, orderedTotal: existing.orderedTotal + l.orderedQty, loadedTotal: existing.loadedTotal + l.loadedQty, shortTotal: existing.shortTotal + short, occurrences: existing.occurrences + (short > 0 ? 1 : 0) });
+          }
+        }
+        const specRows = [...specMap.values()].sort((a, b) => b.shortTotal - a.shortTotal);
+
+        return (
+          <div>
+            <div style={s.kpiRow}>
+              <KpiCard label="Collections Reviewed" value={String(loaded.length)} />
+              <KpiCard label="Total Short-loaded"    value={totalShort.toLocaleString()} highlight />
+              <KpiCard label="Short-load Rate"       value={`${pctShort.toFixed(1)}%`} />
+              <KpiCard label="Drivers"               value={String(rows.length)} />
+            </div>
+
+            <h3 style={s.subHeading}>By Driver</h3>
+            {rows.length === 0 ? <p style={s.muted}>No data for this period.</p> : (
+              <ScrollTable>
+                <thead><tr><Th>Driver</Th><Th>Collections</Th><Th>Ordered</Th><Th>Loaded</Th><Th>Short</Th><Th>Short %</Th></tr></thead>
+                <tbody>
+                  {rows.map((r, i) => {
+                    const pct = r.orderedTotal > 0 ? r.shortTotal / r.orderedTotal * 100 : 0;
+                    const color = pct === 0 ? "#166534" : pct < 5 ? "#92400e" : "#dc2626";
+                    return (
+                      <tr key={i}>
+                        <Td style={{ fontWeight: 600 }}>{r.driver}</Td>
+                        <Td>{r.collections}</Td>
+                        <Td>{r.orderedTotal.toLocaleString()}</Td>
+                        <Td>{r.loadedTotal.toLocaleString()}</Td>
+                        <Td style={{ fontWeight: 700, color: r.shortTotal > 0 ? "#dc2626" : "#166534" }}>{r.shortTotal.toLocaleString()}</Td>
+                        <Td><span style={{ background: pct === 0 ? "#f0fdf4" : pct < 5 ? "#fefce8" : "#fef2f2", color, padding: "2px 10px", borderRadius: 999, fontWeight: 700, fontSize: 13 }}>{pct.toFixed(1)}%</span></Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </ScrollTable>
+            )}
+
+            <h3 style={s.subHeading}>By Species</h3>
+            <ScrollTable>
+              <thead><tr><Th>Species</Th><Th>Ordered</Th><Th>Loaded</Th><Th>Short</Th><Th>Occurrences Short-loaded</Th></tr></thead>
+              <tbody>
+                {specRows.map((r, i) => (
+                  <tr key={i}>
+                    <Td style={{ fontWeight: 600 }}>{r.species}</Td>
+                    <Td>{r.orderedTotal.toLocaleString()}</Td>
+                    <Td>{r.loadedTotal.toLocaleString()}</Td>
+                    <Td style={{ fontWeight: 700, color: r.shortTotal > 0 ? "#dc2626" : "#166534" }}>{r.shortTotal.toLocaleString()}</Td>
+                    <Td>{r.occurrences > 0 ? <span style={{ background: "#fef2f2", color: "#dc2626", padding: "2px 10px", borderRadius: 999, fontWeight: 700, fontSize: 13 }}>{r.occurrences}x</span> : <span style={{ color: "#166534" }}>✓</span>}</Td>
+                  </tr>
+                ))}
               </tbody>
             </ScrollTable>
           </div>
