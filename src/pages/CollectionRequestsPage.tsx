@@ -62,7 +62,7 @@ export default function CollectionRequestsPage() {
       const driverId = isDriver() ? getUsername() : undefined;
       const [crs, poList, driverList] = await Promise.all([
         collectionRequestsApi.list(driverId ? { driverId } : undefined),
-        procurementOrdersApi.list(),
+        procurementOrdersApi.list().catch(() => [] as ProcurementOrderDto[]),
         usersApi.listDrivers().catch(() => [] as DriverDto[]),
       ]);
       setItems(crs);

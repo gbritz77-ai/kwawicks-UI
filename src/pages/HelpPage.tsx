@@ -211,7 +211,7 @@ const ALL_GUIDES: Guide[] = [
       { text: 'Click "Users" in the top menu.' },
       { text: 'Click "Add User".' },
       { text: "Enter the user's full name, email address, and phone number." },
-      { text: "Select their role: Admin, HubStaff, Finance, or Driver.", tip: "Drivers will only see their assigned deliveries. HubStaff can create orders but cannot access financial data." },
+      { text: "Select their role: Owner, Finance, Admin, HubStaff, Procurement, or Driver.", tip: "Procurement users can manage suppliers and create procurement orders. Drivers only see their assigned deliveries. HubStaff can create orders but cannot access financial data." },
       { text: 'Click "Create". The user receives an email with a temporary password to set up their account.' },
     ],
   },
@@ -266,7 +266,7 @@ const ALL_GUIDES: Guide[] = [
     id: "create-collection-request",
     title: "How to Create a Collection Request",
     icon: "📋",
-    roles: ["Owner", "Admin", "Procurement", "Finance"],
+    roles: ["Owner", "Admin", "HubStaff", "Procurement", "Finance"],
     steps: [
       { text: 'Click "Collections" in the nav bar (as Admin or HubStaff).' },
       { text: 'Click "+ New Collection".' },
@@ -283,8 +283,8 @@ const ALL_GUIDES: Guide[] = [
     roles: ["Owner", "Admin", "Procurement", "Finance", "Driver"],
     steps: [
       { text: 'Log in as the assigned Driver and click "Collections" in the nav bar.' },
-      { text: "Find the collection request assigned to you with status CollectionScheduled." },
-      { text: 'Click "Start Loading" to begin loading stock at the supplier.' },
+      { text: 'Find the collection request assigned to you — it will show status "Pending".' },
+      { text: 'Expand the card and click "Start Loading" to begin loading stock at the supplier.' },
       { text: "Enter the quantity loaded for each species line. Add notes if a species is short or unavailable." },
       { text: 'Once the vehicle is loaded, click "Dispatch" — status changes to InTransit and the hub is notified.' },
     ],
@@ -293,7 +293,7 @@ const ALL_GUIDES: Guide[] = [
     id: "hub-confirm-receipt",
     title: "How to Confirm Stock Receipt at the Hub",
     icon: "🏠",
-    roles: ["Owner", "Admin", "Procurement", "Finance"],
+    roles: ["Owner", "Admin", "HubStaff", "Procurement", "Finance"],
     steps: [
       { text: 'Log in as Admin or HubStaff and click "Collections" in the nav bar.' },
       { text: "Find the collection with status InTransit." },
