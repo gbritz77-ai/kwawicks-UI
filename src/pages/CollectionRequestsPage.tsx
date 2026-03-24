@@ -271,11 +271,24 @@ export default function CollectionRequestsPage() {
                         </div>
                       )}
                       {cardDnUrls[cr.collectionRequestId] && (
-                        <img
-                          src={cardDnUrls[cr.collectionRequestId]}
-                          alt="Delivery note"
-                          style={{ display: "block", width: "100%", maxHeight: 360, objectFit: "contain", borderRadius: 8, marginTop: 8, border: "1px solid #e2e8f0", background: "#f8fafc" }}
-                        />
+                        <div style={{ marginTop: 8 }}>
+                          <img
+                            src={cardDnUrls[cr.collectionRequestId]}
+                            alt="Delivery note"
+                            style={{ display: "block", width: "100%", maxHeight: 360, objectFit: "contain", borderRadius: 8, border: "1px solid #e2e8f0", background: "#f8fafc" }}
+                            onError={e => {
+                              (e.currentTarget as HTMLImageElement).style.display = "none";
+                              const msg = e.currentTarget.nextElementSibling as HTMLElement | null;
+                              if (msg) msg.style.display = "block";
+                            }}
+                          />
+                          <div style={{ display: "none", fontSize: 12, color: "#dc2626", marginTop: 6 }}>
+                            Could not display image. <a href={cardDnUrls[cr.collectionRequestId]} target="_blank" rel="noreferrer" style={{ color: "#0891b2", fontWeight: 700 }}>Open in new tab</a>
+                          </div>
+                          <a href={cardDnUrls[cr.collectionRequestId]} target="_blank" rel="noreferrer" style={{ display: "block", fontSize: 11, color: "#64748b", marginTop: 4, textAlign: "right" }}>
+                            ↗ Open full size
+                          </a>
+                        </div>
                       )}
                     </div>
                   )}
@@ -472,11 +485,24 @@ export default function CollectionRequestsPage() {
                 {deliveryNoteLoading ? (
                   <div style={s.dnLoading}>Loading image…</div>
                 ) : deliveryNoteUrl ? (
-                  <img
-                    src={deliveryNoteUrl}
-                    alt="Delivery note"
-                    style={{ width: "100%", borderRadius: 8, maxHeight: 320, objectFit: "contain", background: "#f1f5f9" }}
-                  />
+                  <div>
+                    <img
+                      src={deliveryNoteUrl}
+                      alt="Delivery note"
+                      style={{ width: "100%", borderRadius: 8, maxHeight: 320, objectFit: "contain", background: "#f1f5f9" }}
+                      onError={e => {
+                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                        const msg = e.currentTarget.nextElementSibling as HTMLElement | null;
+                        if (msg) msg.style.display = "block";
+                      }}
+                    />
+                    <div style={{ display: "none", fontSize: 12, color: "#dc2626", marginTop: 6 }}>
+                      Could not display image inline. <a href={deliveryNoteUrl} target="_blank" rel="noreferrer" style={{ color: "#0891b2", fontWeight: 700 }}>Open in new tab</a>
+                    </div>
+                    <a href={deliveryNoteUrl} target="_blank" rel="noreferrer" style={{ display: "block", fontSize: 11, color: "#64748b", marginTop: 4, textAlign: "right" }}>
+                      ↗ Open full size
+                    </a>
+                  </div>
                 ) : (
                   <div style={s.dnLoading}>Could not load delivery note image.</div>
                 )}
