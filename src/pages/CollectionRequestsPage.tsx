@@ -73,7 +73,7 @@ export default function CollectionRequestsPage() {
         usersApi.listDrivers().catch(() => [] as DriverDto[]),
       ]);
       setItems(crs);
-      setPos(poList.filter(p => ["Submitted", "CollectionScheduled"].includes(p.status)));
+      setPos(poList.filter(p => p.status === "Submitted"));
       setDrivers(driverList);
     } catch { setError("Failed to load collection requests."); }
     finally { setLoading(false); }
