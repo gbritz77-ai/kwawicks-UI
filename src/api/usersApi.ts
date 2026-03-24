@@ -29,7 +29,7 @@ export type UpdateGroupRequest = {
 };
 
 export const usersApi = {
-  listDrivers: () => api.get<DriverDto[]>("/api/users/drivers"),
+  listDrivers: () => api.get<DriverDto[]>("/api/drivers"),
 
   list: () => api.get<UserDto[]>("/api/users"),
 
