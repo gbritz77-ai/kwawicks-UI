@@ -329,6 +329,45 @@ export default function CollectionRequestsPage() {
                 {drivers.map(d => <option key={d.userId} value={d.userId}>{d.name} {d.email ? `(${d.email})` : ""}</option>)}
               </select>
             </label>
+            {/* Stock & cost preview when PO is selected */}
+            {createForm.procurementOrderId && (() => {
+              const selectedPo = pos.find(p => p.procurementOrderId === createForm.procurementOrderId);
+              if (!selectedPo) return null;
+              const totalCost = selectedPo.lines.reduce((sum, l) => sum + l.orderedQty * l.unitCost, 0);
+              return (
+                <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, marginBottom: 4 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Stock &amp; Cost Allocation
+                  </div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+                        <th style={{ textAlign: "left", padding: "4px 6px", color: "#64748b", fontWeight: 600 }}>Species</th>
+                        <th style={{ textAlign: "right", padding: "4px 6px", color: "#64748b", fontWeight: 600 }}>Qty</th>
+                        <th style={{ textAlign: "right", padding: "4px 6px", color: "#64748b", fontWeight: 600 }}>Unit Cost</th>
+                        <th style={{ textAlign: "right", padding: "4px 6px", color: "#64748b", fontWeight: 600 }}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedPo.lines.map(l => (
+                        <tr key={l.speciesId} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "4px 6px", fontWeight: 600 }}>{l.speciesName || l.speciesId}</td>
+                          <td style={{ padding: "4px 6px", textAlign: "right" }}>{l.orderedQty.toLocaleString()}</td>
+                          <td style={{ padding: "4px 6px", textAlign: "right" }}>R {l.unitCost.toFixed(2)}</td>
+                          <td style={{ padding: "4px 6px", textAlign: "right", fontWeight: 600 }}>R {(l.orderedQty * l.unitCost).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop: "2px solid #e2e8f0" }}>
+                        <td colSpan={3} style={{ padding: "6px 6px", fontWeight: 700, fontSize: 13 }}>Total Order Value</td>
+                        <td style={{ padding: "6px 6px", textAlign: "right", fontWeight: 800, color: "#15803d", fontSize: 14 }}>R {totalCost.toFixed(2)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              );
+            })()}
             <label style={s.label}>Collection Date
               <input type="date" style={s.input} value={createForm.collectionDate}
                 onChange={e => setCreateForm(p => ({ ...p, collectionDate: e.target.value }))} disabled={busy}
