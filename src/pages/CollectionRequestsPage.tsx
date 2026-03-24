@@ -53,6 +53,8 @@ export default function CollectionRequestsPage() {
   const [ackUploading, setAckUploading] = useState(false);
   const [ackFile, setAckFile] = useState<File | null>(null);
   const [ackError, setAckError] = useState("");
+  const [deliveryNoteUrl, setDeliveryNoteUrl] = useState<string | null>(null);
+  const [deliveryNoteLoading, setDeliveryNoteLoading] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -130,6 +132,21 @@ export default function CollectionRequestsPage() {
     finally { setBusy(false); }
   }
 
+  async function openAckModal(cr: CollectionRequestDto) {
+    setAckItem(cr);
+    setAckError("");
+    setAckFile(null);
+    setDeliveryNoteUrl(null);
+    if (cr.deliveryNoteS3Key) {
+      setDeliveryNoteLoading(true);
+      try {
+        const { viewUrl } = await collectionRequestsApi.getDeliveryNoteViewUrl(cr.collectionRequestId);
+        setDeliveryNoteUrl(viewUrl);
+      } catch { /* non-fatal — just won't show the image */ }
+      finally { setDeliveryNoteLoading(false); }
+    }
+  }
+
   async function submitAck() {
     if (!ackItem || !ackFile) { setAckError("Please select an invoice file."); return; }
     setBusy(true); setAckUploading(true); setAckError("");
@@ -205,6 +222,9 @@ export default function CollectionRequestsPage() {
               {expanded === cr.collectionRequestId && (
                 <div style={s.cardBody}>
                   {cr.notes && <div style={s.notes}>📝 {cr.notes}</div>}
+                  {cr.deliveryNoteS3Key && isFinance() && (
+                    <div style={s.dnBadge}>📷 Delivery note photo uploaded by driver</div>
+                  )}
                   <div style={s.linesGrid}>{cr.lines.map(l => renderLine(l, cr))}</div>
 
                   <div style={s.cardActions}>
@@ -223,7 +243,7 @@ export default function CollectionRequestsPage() {
                     )}
                     {/* Finance actions */}
                     {isFinance() && cr.status === "HubConfirmed" && (
-                      <button style={s.primaryBtn} onClick={() => { setAckItem(cr); setAckError(""); setAckFile(null); }}>Upload Invoice & Acknowledge</button>
+                      <button style={s.primaryBtn} onClick={() => openAckModal(cr)}>Upload Invoice & Acknowledge</button>
                     )}
                   </div>
                 </div>
@@ -339,7 +359,26 @@ export default function CollectionRequestsPage() {
         <div style={s.backdrop} onClick={() => !busy && setAckItem(null)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
             <div style={s.modalTitle}>Acknowledge Delivery</div>
-            <div style={s.modalSub}>Upload the supplier invoice to complete this collection</div>
+            <div style={s.modalSub}>{ackItem.supplierName} · {ackItem.assignedDriverName}</div>
+
+            {/* Driver's delivery note photo */}
+            {ackItem.deliveryNoteS3Key && (
+              <div style={s.dnSection}>
+                <div style={s.dnSectionTitle}>📷 Driver's Delivery Note</div>
+                {deliveryNoteLoading ? (
+                  <div style={s.dnLoading}>Loading image…</div>
+                ) : deliveryNoteUrl ? (
+                  <img
+                    src={deliveryNoteUrl}
+                    alt="Delivery note"
+                    style={{ width: "100%", borderRadius: 8, maxHeight: 320, objectFit: "contain", background: "#f1f5f9" }}
+                  />
+                ) : (
+                  <div style={s.dnLoading}>Could not load delivery note image.</div>
+                )}
+              </div>
+            )}
+
             {ackError && <div style={s.formError}>{ackError}</div>}
             <label style={s.label}>Supplier Invoice (PDF)
               <input type="file" accept="application/pdf" onChange={e => setAckFile(e.target.files?.[0] ?? null)} disabled={busy} style={{ fontSize: 14 }} />
@@ -395,4 +434,37 @@ const s: Record<string, React.CSSProperties> = {
   modalBtns: { display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20, flexWrap: "wrap" },
   primaryBtn: { padding: "10px 20px", borderRadius: 8, background: "#16a34a", color: "#fff", border: "none", fontWeight: 700, fontSize: 14, cursor: "pointer" },
   secondaryBtn: { padding: "10px 18px", borderRadius: 8, background: "#fff", border: "1px solid #d1d5db", color: "#374151", fontWeight: 600, fontSize: 14, cursor: "pointer" },
+
+  dnBadge: {
+    marginTop: 10,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#0369a1",
+    background: "rgba(3,105,161,0.08)",
+    border: "1px solid rgba(3,105,161,0.2)",
+    borderRadius: 999,
+    padding: "3px 10px",
+  },
+  dnSection: {
+    marginBottom: 16,
+    padding: 12,
+    background: "#f8fafc",
+    borderRadius: 10,
+    border: "1px solid #e2e8f0",
+  },
+  dnSectionTitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#334155",
+    marginBottom: 10,
+  },
+  dnLoading: {
+    textAlign: "center" as const,
+    padding: "20px 0",
+    color: "#94a3b8",
+    fontSize: 13,
+  },
 };
