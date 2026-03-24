@@ -455,210 +455,6 @@ export default function AdminReportsPage() {
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-function InvoicesTab({
-  invoices, clients, payFilter, setPayFilter, customer, setCustomer,
-  from, setFrom, to, setTo, loading, onApply, fmt, onConfirmed,
-}: {
-  invoices: InvoiceItem[] | null;
-  clients: ClientDto[];
-  payFilter: "" | "Pending" | "Paid";
-  setPayFilter: (v: "" | "Pending" | "Paid") => void;
-  customer: string;
-  setCustomer: (v: string) => void;
-  from: string; setFrom: (v: string) => void;
-  to: string; setTo: (v: string) => void;
-  loading: boolean;
-  onApply: () => void;
-  fmt: (n: number) => string;
-  onConfirmed: () => void;
-}) {
-  const [confirming, setConfirming] = useState<string | null>(null);
-  const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
-  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
-  const [waModal, setWaModal] = useState<{ invoiceId: string; customerId: string } | null>(null);
-  const [waPhone, setWaPhone] = useState("");
-  const [waSending, setWaSending] = useState(false);
-  const [waResult, setWaResult] = useState<{ success: boolean; message: string } | null>(null);
-
-  const clientMap = Object.fromEntries(clients.map((c) => [c.clientId, c.clientName]));
-  const clientPhoneMap = Object.fromEntries(clients.map((c) => [c.clientId, c.clientPhone ?? ""]));
-
-  async function handleConfirm(invoiceId: string) {
-    setConfirming(invoiceId);
-    try {
-      await invoicesApi.confirmPayment(invoiceId);
-      onConfirmed();
-    } finally {
-      setConfirming(null);
-    }
-  }
-
-  async function handleViewReceipt(invoiceId: string) {
-    setViewingReceipt(invoiceId);
-    try {
-      const { url } = await invoicesApi.getReceiptViewUrl(invoiceId);
-      setReceiptUrl(url);
-    } finally {
-      setViewingReceipt(null);
-    }
-  }
-
-  const totalPending = invoices?.filter((i) => i.paymentStatus === "Pending").reduce((s, i) => s + i.grandTotal, 0) ?? 0;
-  const totalPaid    = invoices?.filter((i) => i.paymentStatus === "Paid").reduce((s, i) => s + i.grandTotal, 0) ?? 0;
-
-  return (
-    <div>
-      {/* Filters */}
-      <div style={{ ...s.filterRow, marginBottom: 16 }}>
-        <label style={s.label}>Customer</label>
-        <select
-          value={customer}
-          onChange={(e) => setCustomer(e.target.value)}
-          style={{ ...s.dateInput, minWidth: 180 }}
-        >
-          <option value="">All customers</option>
-          {clients.map((c) => (
-            <option key={c.clientId} value={c.clientId}>{c.clientName}</option>
-          ))}
-        </select>
-
-        <label style={s.label}>From</label>
-        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={s.dateInput} />
-        <label style={s.label}>To</label>
-        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={s.dateInput} />
-        <button style={s.applyBtn} onClick={onApply}>Apply</button>
-      </div>
-
-      {/* Payment status toggle */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        {(["", "Pending", "Paid"] as const).map((v) => (
-          <button
-            key={v}
-            onClick={() => { setPayFilter(v); onApply(); }}
-            style={{
-              ...s.tab,
-              ...(payFilter === v ? s.tabActive : {}),
-              ...(v === "Pending" && payFilter === "Pending" ? { background: "#92400e", borderColor: "#92400e" } : {}),
-            }}
-          >
-            {v === "" ? "All" : v}
-          </button>
-        ))}
-      </div>
-
-      {loading && <p style={s.muted}>Loading…</p>}
-
-      {invoices && !loading && (
-        <>
-          <div style={s.kpiRow}>
-            <KpiCard label="Total invoices" value={String(invoices.length)} />
-            <KpiCard label="Pending" value={fmt(totalPending)} />
-            <KpiCard label="Paid" value={fmt(totalPaid)} highlight />
-          </div>
-
-          <ScrollTable>
-            <thead>
-              <tr>
-                <Th>Invoice</Th>
-                <Th>Customer</Th>
-                <Th>Driver</Th>
-                <Th>Payment Type</Th>
-                <Th>Status</Th>
-                <Th>Sub-total</Th>
-                <Th>VAT</Th>
-                <Th>Grand Total</Th>
-                <Th>Date</Th>
-                <Th>Receipt</Th>
-                <Th>Action</Th>
-                <Th>WhatsApp</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoices.map((inv) => {
-                const payColor = inv.paymentStatus === "Paid" ? "#166534" : "#854d0e";
-                const payBg    = inv.paymentStatus === "Paid" ? "#dcfce7" : "#fef9c3";
-                const hasReceipt = !!inv.receiptS3Key;
-                return (
-                  <tr key={inv.invoiceId}>
-                    <Td><span style={s.mono}>{inv.invoiceId.slice(0, 8)}…</span></Td>
-                    <Td>{clientMap[inv.customerId] ?? inv.customerId}</Td>
-                    <Td style={{ color: "#64748b", fontSize: 13 }}>{inv.createdByDriverId || "—"}</Td>
-                    <Td>{inv.paymentType || "—"}</Td>
-                    <Td>
-                      <span style={{ ...s.badge, background: payBg, color: payColor }}>
-                        {inv.paymentStatus}
-                      </span>
-                    </Td>
-                    <Td>{fmt(inv.subTotal)}</Td>
-                    <Td>{fmt(inv.vatTotal)}</Td>
-                    <Td><strong>{fmt(inv.grandTotal)}</strong></Td>
-                    <Td style={{ color: "#64748b", fontSize: 13 }}>
-                      {new Date(inv.createdAt).toLocaleDateString("en-ZA")}
-                    </Td>
-                    <Td>
-                      {hasReceipt ? (
-                        <button
-                          disabled={viewingReceipt === inv.invoiceId}
-                          onClick={() => handleViewReceipt(inv.invoiceId)}
-                          style={s.viewBtn}
-                        >
-                          {viewingReceipt === inv.invoiceId ? "…" : "View POP"}
-                        </button>
-                      ) : "—"}
-                    </Td>
-                    <Td>
-                      {inv.paymentStatus === "Pending" ? (
-                        <button
-                          disabled={confirming === inv.invoiceId}
-                          onClick={() => handleConfirm(inv.invoiceId)}
-                          style={s.confirmBtn}
-                        >
-                          {confirming === inv.invoiceId ? "…" : "Confirm"}
-                        </button>
-                      ) : "—"}
-                    </Td>
-                    <Td>
-                      <button
-                        onClick={() => {
-                          setWaModal({ invoiceId: inv.invoiceId, customerId: inv.customerId });
-                          setWaPhone(clientPhoneMap[inv.customerId] ?? "");
-                          setWaResult(null);
-                        }}
-                        style={s.waBtn}
-                      >
-                        📱 WhatsApp
-                      </button>
-                    </Td>
-                  </tr>
-                );
-              })}
-              {invoices.length === 0 && (
-                <tr><td colSpan={12} style={s.emptyCell}>No invoices found</td></tr>
-              )}
-            </tbody>
-          </ScrollTable>
-        </>
-      )}
-
-      {/* Receipt image modal */}
-      {receiptUrl && (
-        <div style={s.modalOverlay} onClick={() => setReceiptUrl(null)}>
-          <div style={s.modalBox} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <strong style={{ fontSize: 15 }}>Proof of Payment</strong>
-              <button onClick={() => setReceiptUrl(null)} style={s.modalClose}>✕</button>
-            </div>
-            <img src={receiptUrl} alt="Proof of payment" style={{ maxWidth: "100%", maxHeight: "70vh", borderRadius: 8, display: "block" }} />
-            <a href={receiptUrl} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 10, fontSize: 13, color: "#2563eb" }}>
-              Open full size ↗
-            </a>
-          </div>
-        </div>
-      )}
 
       {/* ── Supplier Spend by Month ── */}
       {tab === "supplier-spend" && poData && !loading && (() => {
@@ -778,7 +574,6 @@ function InvoicesTab({
                 {rows.map((r, i) => {
                   const good = (r.margin ?? 0) >= 20;
                   const warn = (r.margin ?? 0) > 0 && (r.margin ?? 0) < 20;
-                  const bad  = (r.margin ?? 0) <= 0;
                   const color = good ? "#166534" : warn ? "#92400e" : "#dc2626";
                   const bg    = good ? "#f0fdf4"  : warn ? "#fefce8"  : "#fef2f2";
                   return (
@@ -1040,6 +835,211 @@ function InvoicesTab({
           </div>
         );
       })()}
+
+    </div>
+  );
+}
+
+function InvoicesTab({
+  invoices, clients, payFilter, setPayFilter, customer, setCustomer,
+  from, setFrom, to, setTo, loading, onApply, fmt, onConfirmed,
+}: {
+  invoices: InvoiceItem[] | null;
+  clients: ClientDto[];
+  payFilter: "" | "Pending" | "Paid";
+  setPayFilter: (v: "" | "Pending" | "Paid") => void;
+  customer: string;
+  setCustomer: (v: string) => void;
+  from: string; setFrom: (v: string) => void;
+  to: string; setTo: (v: string) => void;
+  loading: boolean;
+  onApply: () => void;
+  fmt: (n: number) => string;
+  onConfirmed: () => void;
+}) {
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [waModal, setWaModal] = useState<{ invoiceId: string; customerId: string } | null>(null);
+  const [waPhone, setWaPhone] = useState("");
+  const [waSending, setWaSending] = useState(false);
+  const [waResult, setWaResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const clientMap = Object.fromEntries(clients.map((c) => [c.clientId, c.clientName]));
+  const clientPhoneMap = Object.fromEntries(clients.map((c) => [c.clientId, c.clientPhone ?? ""]));
+
+  async function handleConfirm(invoiceId: string) {
+    setConfirming(invoiceId);
+    try {
+      await invoicesApi.confirmPayment(invoiceId);
+      onConfirmed();
+    } finally {
+      setConfirming(null);
+    }
+  }
+
+  async function handleViewReceipt(invoiceId: string) {
+    setViewingReceipt(invoiceId);
+    try {
+      const { url } = await invoicesApi.getReceiptViewUrl(invoiceId);
+      setReceiptUrl(url);
+    } finally {
+      setViewingReceipt(null);
+    }
+  }
+
+  const totalPending = invoices?.filter((i) => i.paymentStatus === "Pending").reduce((s, i) => s + i.grandTotal, 0) ?? 0;
+  const totalPaid    = invoices?.filter((i) => i.paymentStatus === "Paid").reduce((s, i) => s + i.grandTotal, 0) ?? 0;
+
+  return (
+    <div>
+      {/* Filters */}
+      <div style={{ ...s.filterRow, marginBottom: 16 }}>
+        <label style={s.label}>Customer</label>
+        <select
+          value={customer}
+          onChange={(e) => setCustomer(e.target.value)}
+          style={{ ...s.dateInput, minWidth: 180 }}
+        >
+          <option value="">All customers</option>
+          {clients.map((c) => (
+            <option key={c.clientId} value={c.clientId}>{c.clientName}</option>
+          ))}
+        </select>
+
+        <label style={s.label}>From</label>
+        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={s.dateInput} />
+        <label style={s.label}>To</label>
+        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={s.dateInput} />
+        <button style={s.applyBtn} onClick={onApply}>Apply</button>
+      </div>
+
+      {/* Payment status toggle */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        {(["", "Pending", "Paid"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => { setPayFilter(v); onApply(); }}
+            style={{
+              ...s.tab,
+              ...(payFilter === v ? s.tabActive : {}),
+              ...(v === "Pending" && payFilter === "Pending" ? { background: "#92400e", borderColor: "#92400e" } : {}),
+            }}
+          >
+            {v === "" ? "All" : v}
+          </button>
+        ))}
+      </div>
+
+      {loading && <p style={s.muted}>Loading…</p>}
+
+      {invoices && !loading && (
+        <>
+          <div style={s.kpiRow}>
+            <KpiCard label="Total invoices" value={String(invoices.length)} />
+            <KpiCard label="Pending" value={fmt(totalPending)} />
+            <KpiCard label="Paid" value={fmt(totalPaid)} highlight />
+          </div>
+
+          <ScrollTable>
+            <thead>
+              <tr>
+                <Th>Invoice</Th>
+                <Th>Customer</Th>
+                <Th>Driver</Th>
+                <Th>Payment Type</Th>
+                <Th>Status</Th>
+                <Th>Sub-total</Th>
+                <Th>VAT</Th>
+                <Th>Grand Total</Th>
+                <Th>Date</Th>
+                <Th>Receipt</Th>
+                <Th>Action</Th>
+                <Th>WhatsApp</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoices.map((inv) => {
+                const payColor = inv.paymentStatus === "Paid" ? "#166534" : "#854d0e";
+                const payBg    = inv.paymentStatus === "Paid" ? "#dcfce7" : "#fef9c3";
+                const hasReceipt = !!inv.receiptS3Key;
+                return (
+                  <tr key={inv.invoiceId}>
+                    <Td><span style={s.mono}>{inv.invoiceId.slice(0, 8)}…</span></Td>
+                    <Td>{clientMap[inv.customerId] ?? inv.customerId}</Td>
+                    <Td style={{ color: "#64748b", fontSize: 13 }}>{inv.createdByDriverId || "—"}</Td>
+                    <Td>{inv.paymentType || "—"}</Td>
+                    <Td>
+                      <span style={{ ...s.badge, background: payBg, color: payColor }}>
+                        {inv.paymentStatus}
+                      </span>
+                    </Td>
+                    <Td>{fmt(inv.subTotal)}</Td>
+                    <Td>{fmt(inv.vatTotal)}</Td>
+                    <Td><strong>{fmt(inv.grandTotal)}</strong></Td>
+                    <Td style={{ color: "#64748b", fontSize: 13 }}>
+                      {new Date(inv.createdAt).toLocaleDateString("en-ZA")}
+                    </Td>
+                    <Td>
+                      {hasReceipt ? (
+                        <button
+                          disabled={viewingReceipt === inv.invoiceId}
+                          onClick={() => handleViewReceipt(inv.invoiceId)}
+                          style={s.viewBtn}
+                        >
+                          {viewingReceipt === inv.invoiceId ? "…" : "View POP"}
+                        </button>
+                      ) : "—"}
+                    </Td>
+                    <Td>
+                      {inv.paymentStatus === "Pending" ? (
+                        <button
+                          disabled={confirming === inv.invoiceId}
+                          onClick={() => handleConfirm(inv.invoiceId)}
+                          style={s.confirmBtn}
+                        >
+                          {confirming === inv.invoiceId ? "…" : "Confirm"}
+                        </button>
+                      ) : "—"}
+                    </Td>
+                    <Td>
+                      <button
+                        onClick={() => {
+                          setWaModal({ invoiceId: inv.invoiceId, customerId: inv.customerId });
+                          setWaPhone(clientPhoneMap[inv.customerId] ?? "");
+                          setWaResult(null);
+                        }}
+                        style={s.waBtn}
+                      >
+                        📱 WhatsApp
+                      </button>
+                    </Td>
+                  </tr>
+                );
+              })}
+              {invoices.length === 0 && (
+                <tr><td colSpan={12} style={s.emptyCell}>No invoices found</td></tr>
+              )}
+            </tbody>
+          </ScrollTable>
+        </>
+      )}
+
+      {/* Receipt image modal */}
+      {receiptUrl && (
+        <div style={s.modalOverlay} onClick={() => setReceiptUrl(null)}>
+          <div style={s.modalBox} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <strong style={{ fontSize: 15 }}>Proof of Payment</strong>
+              <button onClick={() => setReceiptUrl(null)} style={s.modalClose}>✕</button>
+            </div>
+            <img src={receiptUrl} alt="Proof of payment" style={{ maxWidth: "100%", maxHeight: "70vh", borderRadius: 8, display: "block" }} />
+            <a href={receiptUrl} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 10, fontSize: 13, color: "#2563eb" }}>
+              Open full size ↗
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* WhatsApp send modal */}
       {waModal && (
