@@ -336,8 +336,13 @@ export default function CollectionRequestsPage() {
               const totalCost = selectedPo.lines.reduce((sum, l) => sum + l.orderedQty * l.unitCost, 0);
               return (
                 <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, marginBottom: 4 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    Stock &amp; Cost Allocation
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Stock &amp; Cost Allocation
+                    </div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#b45309", background: "rgba(251,191,36,0.15)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 6, padding: "2px 8px" }}>
+                      ⚠ All prices must be entered excluding VAT
+                    </div>
                   </div>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
