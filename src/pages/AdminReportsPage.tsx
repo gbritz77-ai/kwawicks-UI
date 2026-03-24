@@ -20,7 +20,7 @@ import type {
 } from "../api/reportsApi";
 import type { ClientDto } from "../api/clientsApi";
 
-type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend";
+type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin";
 
 export default function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -83,6 +83,7 @@ export default function AdminReportsPage() {
       }
       if (tab === "species") setSpeciesRevenue(await reportsApi.getSpeciesRevenue(from || undefined, to || undefined));
       if (tab === "supplier-spend") setPoData(await procurementOrdersApi.list());
+      if (tab === "margin" && !allSpecies.length) setAllSpecies(await speciesApi.list());
     } catch {
       setError("Failed to load report.");
     } finally {
@@ -104,7 +105,7 @@ export default function AdminReportsPage() {
         {(["revenue", "outstanding", "invoices", "drivers", "returns", "deliveries", "species", "statement", "supplier-spend"] as Tab[])
           .filter(t => {
             const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "statement"];
-            const procurementTabs: Tab[] = ["supplier-spend"];
+            const procurementTabs: Tab[] = ["supplier-spend", "margin"];
             if (procurementTabs.includes(t)) return isProcurementUser;
             return isFinancialUser || !financialTabs.includes(t);
           })
@@ -119,6 +120,7 @@ export default function AdminReportsPage() {
             {t === "species" && "Species Revenue"}
             {t === "statement" && "Customer Statement"}
             {t === "supplier-spend" && "💼 Supplier Spend"}
+            {t === "margin"         && "📊 Cost vs Sell Margin"}
           </button>
         ))}
       </div>
@@ -725,6 +727,71 @@ function InvoicesTab({
                 </tbody>
               </ScrollTable>
             )}
+          </div>
+        );
+      })()}
+
+      {/* ── Cost vs Sell Price Margin ── */}
+      {tab === "margin" && !loading && (() => {
+        const rows = allSpecies
+          .filter(sp => sp.isActive)
+          .map(sp => {
+            const cost   = Number(sp.unitCost   ?? 0);
+            const sell   = Number(sp.sellPrice  ?? 0);
+            const margin = sell > 0 ? ((sell - cost) / sell) * 100 : null;
+            const rand   = sell - cost;
+            return { name: sp.name, cost, sell, rand, margin };
+          })
+          .sort((a, b) => (b.margin ?? -999) - (a.margin ?? -999));
+
+        const avgMargin = rows.filter(r => r.margin !== null).reduce((s, r) => s + (r.margin ?? 0), 0) / (rows.filter(r => r.margin !== null).length || 1);
+
+        return (
+          <div>
+            <div style={s.kpiRow}>
+              <KpiCard label="Active Species"   value={String(rows.length)} />
+              <KpiCard label="Avg Gross Margin" value={`${avgMargin.toFixed(1)}%`} highlight />
+              <KpiCard label="Best Margin"      value={rows[0]?.margin != null ? `${rows[0].margin.toFixed(1)}%` : "—"} />
+              <KpiCard label="Lowest Margin"    value={rows[rows.length - 1]?.margin != null ? `${rows[rows.length - 1].margin!.toFixed(1)}%` : "—"} />
+            </div>
+            <p style={{ fontSize: 12, color: "#94a3b8", marginBottom: 12 }}>
+              ⚠ Unit cost and sell price are excl. VAT. Margin = (Sell − Cost) / Sell × 100.
+            </p>
+            <ScrollTable>
+              <thead>
+                <tr>
+                  <Th>Species</Th>
+                  <Th>Unit Cost (excl. VAT)</Th>
+                  <Th>Sell Price (excl. VAT)</Th>
+                  <Th>Margin (R)</Th>
+                  <Th>Margin (%)</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => {
+                  const good = (r.margin ?? 0) >= 20;
+                  const warn = (r.margin ?? 0) > 0 && (r.margin ?? 0) < 20;
+                  const bad  = (r.margin ?? 0) <= 0;
+                  const color = good ? "#166534" : warn ? "#92400e" : "#dc2626";
+                  const bg    = good ? "#f0fdf4"  : warn ? "#fefce8"  : "#fef2f2";
+                  return (
+                    <tr key={i}>
+                      <Td style={{ fontWeight: 600 }}>{r.name}</Td>
+                      <Td>{fmt(r.cost)}</Td>
+                      <Td>{r.sell > 0 ? fmt(r.sell) : <span style={{ color: "#94a3b8" }}>Not set</span>}</Td>
+                      <Td style={{ fontWeight: 700, color }}>{r.sell > 0 ? fmt(r.rand) : "—"}</Td>
+                      <Td>
+                        {r.margin !== null ? (
+                          <span style={{ background: bg, color, padding: "2px 10px", borderRadius: 999, fontWeight: 700, fontSize: 13 }}>
+                            {r.margin.toFixed(1)}%
+                          </span>
+                        ) : <span style={{ color: "#94a3b8" }}>—</span>}
+                      </Td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </ScrollTable>
           </div>
         );
       })()}
