@@ -106,6 +106,8 @@ export default function DriverDashboardPage() {
   const [loadLines, setLoadLines] = useState<{ speciesId: string; loadedQty: number; loadingNotes: string }[]>([]);
   const [crBusy, setCrBusy] = useState(false);
   const [crError, setCrError] = useState<string | null>(null);
+  const [deliveryNoteFile, setDeliveryNoteFile] = useState<File | null>(null);
+  const deliveryNoteInputRef = useRef<HTMLInputElement>(null);
 
   // ── Data loading ─────────────────────────────────────────────────────────
 
@@ -272,12 +274,22 @@ export default function DriverDashboardPage() {
       loadingNotes: l.loadingNotes || "",
     })));
     setCrError(null);
+    setDeliveryNoteFile(null);
   }
 
   async function saveCrLoad(dispatch: boolean) {
     if (!loadingCrItem) return;
     setCrBusy(true);
     try {
+      // Upload delivery note photo first if one was selected
+      if (deliveryNoteFile) {
+        const { uploadUrl } = await collectionRequestsApi.getDeliveryNoteUploadUrl(loadingCrItem.collectionRequestId);
+        await fetch(uploadUrl, {
+          method: "PUT",
+          body: deliveryNoteFile,
+          headers: { "Content-Type": "image/jpeg" },
+        });
+      }
       let updated = await collectionRequestsApi.driverLoad(loadingCrItem.collectionRequestId, loadLines);
       if (dispatch) updated = await collectionRequestsApi.dispatch(loadingCrItem.collectionRequestId);
       setCollections(cs =>
@@ -626,6 +638,42 @@ export default function DriverDashboardPage() {
                 </div>
               );
             })}
+              {/* Delivery note / invoice photo upload */}
+            <div style={s.dnSection}>
+              <div style={s.dnLabel}>📄 Delivery Note / Supplier Invoice <span style={{ fontWeight: 400, opacity: 0.6 }}>(optional)</span></div>
+              {deliveryNoteFile ? (
+                <div style={{ display: "grid", gap: 8 }}>
+                  <img
+                    src={URL.createObjectURL(deliveryNoteFile)}
+                    alt="Delivery note"
+                    style={{ width: "100%", borderRadius: 10, maxHeight: 220, objectFit: "cover" }}
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button style={{ ...s.secondaryBtn, flex: 1, fontSize: 13 }} onClick={() => deliveryNoteInputRef.current?.click()} disabled={crBusy}>
+                      📷 Retake
+                    </button>
+                    <button style={{ ...s.secondaryBtn, flex: 1, fontSize: 13, color: "#ef4444" }} onClick={() => setDeliveryNoteFile(null)} disabled={crBusy}>
+                      ✕ Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button style={s.dnCameraBtn} onClick={() => deliveryNoteInputRef.current?.click()} disabled={crBusy}>
+                  <div style={{ fontSize: 28 }}>📷</div>
+                  <div style={{ fontWeight: 700, marginTop: 6, fontSize: 14 }}>Take Photo of Delivery Note</div>
+                  <div style={{ opacity: 0.55, fontSize: 12, marginTop: 3 }}>Or select from gallery</div>
+                </button>
+              )}
+              <input
+                ref={deliveryNoteInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: "none" }}
+                onChange={e => setDeliveryNoteFile(e.target.files?.[0] ?? null)}
+              />
+            </div>
+
             <div style={s.modalBtns}>
               <button style={s.secondaryBtn} onClick={() => setLoadingCrItem(null)} disabled={crBusy}>Cancel</button>
               <button style={{ ...s.secondaryBtn, color: "#16a34a", border: "1px solid #16a34a" }}
@@ -739,4 +787,29 @@ const s: Record<string, React.CSSProperties> = {
   payNote:    { marginTop: 8, fontSize: 13, color: "rgba(0,0,0,0.55)", fontStyle: "italic" },
 
   cameraBtn: { width: "100%", padding: "32px 20px", borderRadius: 16, border: "2px dashed rgba(37,99,235,0.3)", background: "rgba(37,99,235,0.04)", cursor: "pointer", textAlign: "center" as const, color: "#1d4ed8" },
+
+  // Delivery note upload
+  dnSection: {
+    marginTop: 16,
+    padding: "14px",
+    borderRadius: 12,
+    border: "1px solid #e2e8f0",
+    background: "#f8fafc",
+  },
+  dnLabel: {
+    fontSize: 13,
+    fontWeight: 800,
+    color: "#334155",
+    marginBottom: 10,
+  },
+  dnCameraBtn: {
+    width: "100%",
+    padding: "20px",
+    borderRadius: 12,
+    border: "2px dashed #cbd5e1",
+    background: "white",
+    cursor: "pointer",
+    textAlign: "center" as const,
+    color: "#475569",
+  },
 };

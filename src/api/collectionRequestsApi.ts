@@ -21,6 +21,7 @@ export type CollectionRequestDto = {
   status: string;
   notes: string;
   invoiceS3Key: string;
+  deliveryNoteS3Key: string;
   lines: CollectionRequestLineDto[];
   createdAt: string;
   updatedAt: string;
@@ -53,4 +54,5 @@ export const collectionRequestsApi = {
   financeAcknowledge: (id: string, invoiceS3Key: string) =>
     api.put<CollectionRequestDto>(`/api/collection-requests/${id}/finance-acknowledge`, { invoiceS3Key }),
   getInvoiceUploadUrl: (id: string) => api.get<{ uploadUrl: string; s3Key: string }>(`/api/collection-requests/${id}/invoice-upload-url`),
+  getDeliveryNoteUploadUrl: (id: string) => api.get<{ uploadUrl: string; s3Key: string }>(`/api/collection-requests/${id}/delivery-note-upload-url`),
 };
