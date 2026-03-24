@@ -20,6 +20,8 @@ import {
   type MyDeliveryItem,
 } from "../api/reportsApi";
 import { speciesApi } from "../api/speciesApi";
+import { procurementOrdersApi } from "../api/procurementOrdersApi";
+import type { ProcurementOrderDto } from "../api/procurementOrdersApi";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -162,15 +164,19 @@ export default function AppShell() {
   const profile = getProfileFromIdToken();
   const { from, to, today } = monthRange();
 
-  const canSeeOps      = hasAnyRole("Owner", "Admin", "HubStaff");
-  const canSeeFinances = hasAnyRole("Owner", "Finance");
-  const isDriver       = hasRole("Driver");
+  const canSeeOps          = hasAnyRole("Owner", "Admin", "HubStaff");
+  const canSeeFinances     = hasAnyRole("Owner", "Finance");
+  const canSeeProcurement  = hasAnyRole("Owner", "Admin", "Procurement", "Finance");
+  const isDriver           = hasRole("Driver");
 
   const [loadingDel,    setLoadingDel]    = useState(canSeeOps);
   const [loadingStock,  setLoadingStock]  = useState(canSeeOps);
   const [loadingRev,    setLoadingRev]    = useState(canSeeFinances);
   const [loadingOut,    setLoadingOut]    = useState(canSeeFinances);
   const [loadingMyDel,  setLoadingMyDel]  = useState(isDriver);
+  const [loadingPO,     setLoadingPO]     = useState(canSeeProcurement);
+  const [poData,        setPoData]        = useState<ProcurementOrderDto[]>([]);
+  const [poTab,         setPoTab]         = useState("All");
 
   const [deliveryData,     setDeliveryData]     = useState<DeliveryStatusSummaryResponse | null>(null);
   const [stockData,        setStockData]         = useState<any[] | null>(null);
@@ -195,6 +201,10 @@ export default function AppShell() {
       reportsApi.getMyDeliveries(from, to)
         .then(setMyDeliveries).catch(() => {}).finally(() => setLoadingMyDel(false));
     }
+    if (canSeeProcurement) {
+      procurementOrdersApi.list()
+        .then(setPoData).catch(() => {}).finally(() => setLoadingPO(false));
+    }
   }, []);
 
   // ── Derived values ───────────────────────────────────────────────────────
@@ -213,6 +223,21 @@ export default function AppShell() {
   const PAYMENT_COLORS: Record<string, string> = {
     Cash: "#22c55e", EFT: "#2563eb", Credit: "#8b5cf6", CardMachine: "#f59e0b",
   };
+
+  const PO_STATUSES = [
+    { key: "Draft",               label: "Draft",       color: "#94a3b8" },
+    { key: "Submitted",           label: "Submitted",   color: "#f59e0b" },
+    { key: "CollectionScheduled", label: "Scheduled",   color: "#8b5cf6" },
+    { key: "InTransit",           label: "In Transit",  color: "#2563eb" },
+    { key: "DeliveredToHub",      label: "At Hub",      color: "#0891b2" },
+    { key: "Completed",           label: "Completed",   color: "#22c55e" },
+  ];
+
+  const filteredPOs = poTab === "All" ? poData : poData.filter(p => p.status === poTab);
+  const poStatusColor = (status: string) =>
+    PO_STATUSES.find(s => s.key === status)?.color ?? "#94a3b8";
+  const poStatusLabel = (status: string) =>
+    PO_STATUSES.find(s => s.key === status)?.label ?? status;
 
   const delivTotal = (deliveryData?.openCount ?? 0) +
     (deliveryData?.inTransitCount ?? 0) +
@@ -347,6 +372,116 @@ export default function AppShell() {
                 </div>
               </div>
             </div>
+          )}
+        </Section>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════ PROCUREMENT */}
+      {canSeeProcurement && (
+        <Section icon="💼" title="Procurement Pipeline" sub="Procurement orders by status">
+          {loadingPO ? <SkeletonCards n={6} /> : (
+            <>
+              {/* KPI cards — one per status */}
+              <div style={{ ...s.kpiGrid, gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(6, 1fr)", marginBottom: 20 }}>
+                {PO_STATUSES.map(st => (
+                  <div
+                    key={st.key}
+                    onClick={() => setPoTab(poTab === st.key ? "All" : st.key)}
+                    style={{
+                      ...s.statCard,
+                      borderTop: `3px solid ${st.color}`,
+                      padding: isMobile ? "10px 10px" : "14px 16px",
+                      cursor: "pointer",
+                      outline: poTab === st.key ? `2px solid ${st.color}` : "none",
+                      outlineOffset: 2,
+                    }}
+                  >
+                    <div style={{ fontSize: isMobile ? 20 : 26, fontWeight: 900, color: st.color, lineHeight: 1, marginBottom: 4 }}>
+                      {poData.filter(p => p.status === st.key).length}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>
+                      {st.label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tab strip */}
+              <div style={s.poTabStrip}>
+                {["All", ...PO_STATUSES.map(s => s.key)].map(key => {
+                  const label = key === "All" ? "All" : poStatusLabel(key);
+                  const active = poTab === key;
+                  const color = key === "All" ? "#1e293b" : poStatusColor(key);
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setPoTab(key)}
+                      style={{
+                        ...s.poTab,
+                        ...(active ? { background: color, color: "white", borderColor: color } : {}),
+                      }}
+                    >
+                      {label}
+                      <span style={{ ...s.poTabCount, ...(active ? { background: "rgba(255,255,255,0.25)", color: "white" } : {}) }}>
+                        {key === "All" ? poData.length : poData.filter(p => p.status === key).length}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* PO list */}
+              {filteredPOs.length === 0 ? (
+                <div style={{ ...s.empty, marginTop: 12, padding: "20px 0", textAlign: "center" as const }}>
+                  No procurement orders for this status.
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+                  {filteredPOs.slice(0, 10).map(po => {
+                    const color = poStatusColor(po.status);
+                    const label = poStatusLabel(po.status);
+                    const totalUnits = po.lines.reduce((n, l) => n + l.orderedQty, 0);
+                    const totalCost  = po.lines.reduce((n, l) => n + l.orderedQty * (l.unitCost ?? 0), 0);
+                    return (
+                      <div key={po.procurementOrderId} style={{ ...s.poCard, borderLeft: `4px solid ${color}` }}>
+                        <div style={s.poCardHead}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 800, fontSize: 14 }}>{po.supplierName || "—"}</div>
+                            <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                              {po.lines.length} species · {totalUnits.toLocaleString()} units
+                              {totalCost > 0 && ` · R\u00A0${totalCost.toLocaleString("en-ZA", { minimumFractionDigits: 2 })}`}
+                              {po.supplierOrderReference ? ` · Ref: ${po.supplierOrderReference}` : ""}
+                            </div>
+                          </div>
+                          <span style={{
+                            fontSize: 11, fontWeight: 700, padding: "3px 10px",
+                            borderRadius: 999, background: `${color}1a`,
+                            color, border: `1px solid ${color}66`,
+                            whiteSpace: "nowrap" as const,
+                          }}>
+                            {label}
+                          </span>
+                        </div>
+                        {po.lines.length > 0 && (
+                          <div style={{ fontSize: 12, color: "#475569", marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            {po.lines.map(l => (
+                              <span key={l.speciesId} style={{ background: "#f1f5f9", padding: "2px 8px", borderRadius: 999, fontWeight: 600 }}>
+                                {l.speciesName || l.speciesId}: {l.orderedQty.toLocaleString()}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {filteredPOs.length > 10 && (
+                    <div style={{ textAlign: "center" as const, fontSize: 13, color: "#94a3b8", padding: "8px 0" }}>
+                      + {filteredPOs.length - 10} more — <button style={s.poViewAll} onClick={() => {}}>View all in Procurement</button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </Section>
       )}
@@ -501,5 +636,55 @@ const s: Record<string, React.CSSProperties> = {
     color: "#94a3b8",
     fontSize: 13,
     fontStyle: "italic",
+  },
+
+  // Procurement pipeline
+  poTabStrip: {
+    display: "flex",
+    gap: 6,
+    flexWrap: "wrap" as const,
+    marginBottom: 4,
+  },
+  poTab: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "7px 12px",
+    borderRadius: 999,
+    border: "1px solid #e2e8f0",
+    background: "white",
+    color: "#475569",
+    fontWeight: 700,
+    fontSize: 13,
+    cursor: "pointer",
+    whiteSpace: "nowrap" as const,
+  },
+  poTabCount: {
+    background: "#f1f5f9",
+    color: "#64748b",
+    fontSize: 11,
+    fontWeight: 800,
+    padding: "1px 7px",
+    borderRadius: 999,
+  },
+  poCard: {
+    background: "white",
+    borderRadius: 10,
+    padding: "12px 14px",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+  },
+  poCardHead: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  poViewAll: {
+    background: "none",
+    border: "none",
+    color: "#2563eb",
+    cursor: "pointer",
+    fontWeight: 700,
+    fontSize: 13,
+    padding: 0,
   },
 };
