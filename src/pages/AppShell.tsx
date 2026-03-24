@@ -180,7 +180,7 @@ export default function AppShell() {
   const [poData,        setPoData]        = useState<ProcurementOrderDto[]>([]);
   const [poTab,         setPoTab]         = useState("All");
   const [crData,        setCrData]        = useState<CollectionRequestDto[]>([]);
-  const [loadingCR,     setLoadingCR]     = useState(canSeeProcurement || canSeeFinances);
+  const [loadingCR,     setLoadingCR]     = useState(canSeeProcurement || canSeeFinances || canSeeOps);
   const [dnUrls,        setDnUrls]        = useState<Record<string, string>>({});
   const [dnLoading,     setDnLoading]     = useState<string | null>(null);
 
@@ -211,7 +211,7 @@ export default function AppShell() {
       procurementOrdersApi.list()
         .then(setPoData).catch(() => {}).finally(() => setLoadingPO(false));
     }
-    if (canSeeProcurement || canSeeFinances) {
+    if (canSeeProcurement || canSeeFinances || canSeeOps) {
       collectionRequestsApi.list()
         .then(setCrData).catch(() => {}).finally(() => setLoadingCR(false));
     }
@@ -258,7 +258,8 @@ export default function AppShell() {
     ArrivedAtHub: "At Hub", HubConfirmed: "Hub Confirmed", FinanceAcknowledged: "Acknowledged",
   };
   const crForPo = (poId: string) => crData.filter(c => c.procurementOrderId === poId);
-  const pendingAckCRs = crData.filter(c => c.status === "HubConfirmed");
+  const pendingAckCRs     = crData.filter(c => c.status === "HubConfirmed");
+  const arrivedAtHubCRs  = crData.filter(c => c.status === "ArrivedAtHub");
 
   async function toggleDeliveryNote(crId: string) {
     if (dnUrls[crId]) { setDnUrls(u => { const n = { ...u }; delete n[crId]; return n; }); return; }
@@ -320,6 +321,68 @@ export default function AppShell() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+        </Section>
+      )}
+
+      {/* ══════════════════════════════════════ ARRIVED AT HUB — CONFIRM RECEIPT */}
+      {canSeeOps && (
+        <Section icon="📦" title="Arrived at Hub — Awaiting Confirmation"
+          sub={arrivedAtHubCRs.length > 0 ? `${arrivedAtHubCRs.length} collection${arrivedAtHubCRs.length !== 1 ? "s" : ""} need hub confirmation` : "Hub receipt confirmation"}>
+          {loadingCR ? <SkeletonCards n={2} /> : arrivedAtHubCRs.length === 0 ? (
+            <div style={{ ...s.empty, padding: "16px 0" }}>✅ No collections awaiting confirmation.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 10 }}>
+              {arrivedAtHubCRs.map(cr => {
+                const totalOrdered = cr.lines.reduce((n, l) => n + l.orderedQty,  0);
+                const totalLoaded  = cr.lines.reduce((n, l) => n + l.loadedQty,   0);
+                return (
+                  <div key={cr.collectionRequestId} style={{ ...s.poCard, borderLeft: "4px solid #8b5cf6" }}>
+                    <div style={s.poCardHead}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 800, fontSize: 14 }}>{cr.supplierName || "—"}</div>
+                        <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                          {cr.lines.length} species · {totalOrdered.toLocaleString()} ordered · {totalLoaded.toLocaleString()} loaded
+                          {cr.assignedDriverName ? ` · 🚛 ${cr.assignedDriverName}` : ""}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
+                          {new Date(cr.createdAt).toLocaleDateString("en-ZA")}
+                          {` · CR-${cr.collectionRequestId.split("-")[0].toUpperCase()}`}
+                        </div>
+                      </div>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999,
+                        background: "rgba(139,92,246,0.1)", color: "#8b5cf6",
+                        border: "1px solid rgba(139,92,246,0.3)", whiteSpace: "nowrap" as const,
+                      }}>
+                        At Hub
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#475569", marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {cr.lines.map(l => (
+                        <span key={l.speciesId} style={{
+                          background: l.loadedQty < l.orderedQty ? "rgba(239,68,68,0.08)" : "#f1f5f9",
+                          color: l.loadedQty < l.orderedQty ? "#dc2626" : "#475569",
+                          padding: "2px 8px", borderRadius: 999, fontWeight: 600,
+                          border: l.loadedQty < l.orderedQty ? "1px solid rgba(239,68,68,0.25)" : "none",
+                        }}>
+                          {l.speciesName || l.speciesId}: {l.loadedQty}/{l.orderedQty}
+                        </span>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 10 }}>
+                      <a href="/app/collection-requests" style={{
+                        fontSize: 12, fontWeight: 700, color: "#8b5cf6", textDecoration: "none",
+                        padding: "6px 12px", borderRadius: 8, background: "rgba(139,92,246,0.08)",
+                        border: "1px solid rgba(139,92,246,0.25)", display: "inline-block",
+                      }}>
+                        → Go to Collections to Confirm Receipt
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </Section>
