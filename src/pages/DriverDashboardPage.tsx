@@ -3,6 +3,7 @@ import { getProfileFromIdToken } from "../api/auth";
 import { deliveryOrdersApi, type DeliveryOrderResponse } from "../api/deliveryOrdersApi";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
 import { invoicesApi } from "../api/invoicesApi";
+import { clientsApi } from "../api/clientsApi";
 import { collectionRequestsApi } from "../api/collectionRequestsApi";
 import type { CollectionRequestDto } from "../api/collectionRequestsApi";
 
@@ -95,6 +96,8 @@ export default function DriverDashboardPage() {
   const [receiptUploading, setReceiptUploading] = useState(false);
   const [receiptDone, setReceiptDone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [clientHasPhone, setClientHasPhone] = useState(true);
+  const [clientPhone, setClientPhone] = useState("");
 
   // ── Collection request state ──────────────────────────────────────────────
 
@@ -173,11 +176,21 @@ export default function DriverDashboardPage() {
     setReceiptFile(null);
     setReceiptDone(false);
     setPaymentType("Cash");
+    setClientPhone("");
     setReturnLines(order.lines.map(l => ({
       speciesId: l.speciesId, orderedQty: l.quantity,
       deliveredQty: String(l.quantity), returnedDeadQty: "0",
       returnedMutilatedQty: "0", returnedNotWantedQty: "0",
     })));
+    // Check if client has a WhatsApp number saved
+    try {
+      const client = await clientsApi.getById(order.customerId);
+      const hasPhone = !!client.clientPhone?.trim() || !!client.clientContactDetails?.trim();
+      setClientHasPhone(hasPhone);
+      if (hasPhone) setClientPhone(client.clientPhone?.trim() || client.clientContactDetails?.trim() || "");
+    } catch {
+      setClientHasPhone(true); // non-fatal, don't block completion
+    }
   }
 
   function closeCompletion() {
@@ -222,7 +235,7 @@ export default function DriverDashboardPage() {
           vatRate: sp?.vat ?? 0,
         };
       });
-      const result = await invoicesApi.createFromDelivery(completing.deliveryOrderId, { createdByDriverId: driverId, lines });
+      const result = await invoicesApi.createFromDelivery(completing.deliveryOrderId, { createdByDriverId: driverId, lines, clientPhone: clientPhone.trim() || undefined });
       setCreatedInvoiceId(result.invoiceId);
       await invoicesApi.recordPayment(result.invoiceId, paymentType);
       if (paymentType === "EFT" || paymentType === "CardMachine") {
@@ -572,6 +585,23 @@ export default function DriverDashboardPage() {
                   </div>
                   {(paymentType === "EFT" || paymentType === "CardMachine") && (
                     <div style={s.payNote}>You'll be prompted to take a photo of the receipt.</div>
+                  )}
+                </div>
+                {/* WhatsApp phone — required if client has none */}
+                <div style={{ marginTop: 14, padding: "10px 12px", background: "rgba(22,163,74,0.07)", border: "1px solid rgba(22,163,74,0.25)", borderRadius: 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: "#15803d", marginBottom: 6 }}>📱 WhatsApp Invoice</div>
+                  {clientHasPhone ? (
+                    <div style={{ fontSize: 12, color: "#475569" }}>Invoice will be sent to <strong>{clientPhone}</strong> via WhatsApp.</div>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: 12, color: "#92400e", marginBottom: 6 }}>⚠ No WhatsApp number on file. Enter one to send invoice automatically:</div>
+                      <input
+                        style={{ width: "100%", padding: "7px 10px", border: "1px solid #f59e0b", borderRadius: 6, fontSize: 13, boxSizing: "border-box" }}
+                        placeholder="e.g. 0821234567"
+                        value={clientPhone}
+                        onChange={e => setClientPhone(e.target.value)}
+                      />
+                    </>
                   )}
                 </div>
                 <div style={s.modalBtns}>

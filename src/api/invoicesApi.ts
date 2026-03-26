@@ -17,6 +17,7 @@ export type CreateInvoiceRequest = {
   province: string;
   postalCode: string;
   lines: CreateInvoiceLine[];
+  clientPhone?: string;
 };
 
 // ── Driver-side: create invoice from delivery order ────────────────────────
@@ -34,6 +35,7 @@ export type CreateInvoiceFromDeliveryLine = {
 export type CreateInvoiceFromDeliveryRequest = {
   createdByDriverId: string;
   lines: CreateInvoiceFromDeliveryLine[];
+  clientPhone?: string;
 };
 
 // ── Response types ─────────────────────────────────────────────────────────
