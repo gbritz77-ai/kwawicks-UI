@@ -92,6 +92,7 @@ export default function DriverDashboardPage() {
   const [completionBusy, setCompletionBusy] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
   const [createdInvoiceId, setCreatedInvoiceId] = useState<string | null>(null);
+  const [whatsAppError, setWhatsAppError] = useState<string | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptUploading, setReceiptUploading] = useState(false);
   const [receiptDone, setReceiptDone] = useState(false);
@@ -237,6 +238,7 @@ export default function DriverDashboardPage() {
       });
       const result = await invoicesApi.createFromDelivery(completing.deliveryOrderId, { createdByDriverId: driverId, lines, clientPhone: clientPhone.trim() || undefined });
       setCreatedInvoiceId(result.invoiceId);
+      setWhatsAppError((result as any).whatsAppError ?? null);
       await invoicesApi.recordPayment(result.invoiceId, paymentType);
       if (paymentType === "EFT" || paymentType === "CardMachine") {
         setStep("receipt");
@@ -650,6 +652,10 @@ export default function DriverDashboardPage() {
                 {createdInvoiceId && <div style={{ ...s.modalSub, marginBottom: 4 }}>Invoice created</div>}
                 <div style={{ fontFamily: "ui-monospace, monospace", fontSize: 13, color: "#64748b" }}>{createdInvoiceId}</div>
                 {paymentType === "EFT" && receiptDone && <div style={{ marginTop: 8, color: "#16a34a", fontWeight: 700 }}>Receipt uploaded ✓</div>}
+                {whatsAppError
+                  ? <div style={{ marginTop: 8, fontSize: 12, color: "#dc2626" }}>⚠ WhatsApp not sent: {whatsAppError}</div>
+                  : <div style={{ marginTop: 8, fontSize: 12, color: "#16a34a", fontWeight: 600 }}>📱 Invoice sent via WhatsApp ✓</div>
+                }
                 <button style={{ ...s.completeBtn, marginTop: 20 }} onClick={closeCompletion}>Back to dashboard</button>
               </div>
             )}
