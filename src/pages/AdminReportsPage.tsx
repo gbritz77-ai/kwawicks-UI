@@ -866,7 +866,8 @@ function InvoicesTab({
   const [waResult, setWaResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const clientMap = Object.fromEntries(clients.map((c) => [c.clientId, c.clientName]));
-  const clientPhoneMap = Object.fromEntries(clients.map((c) => [c.clientId, c.clientPhone ?? ""]));
+  const clientPhoneMap = Object.fromEntries(clients.map((c) => [c.clientId, c.clientPhone || c.clientContactDetails || ""]));
+  const clientFullMap = Object.fromEntries(clients.map((c) => [c.clientId, c]));
 
   async function handleConfirm(invoiceId: string) {
     setConfirming(invoiceId);
@@ -1049,9 +1050,13 @@ function InvoicesTab({
               <strong style={{ fontSize: 15 }}>📱 Send Invoice via WhatsApp</strong>
               <button onClick={() => { setWaModal(null); setWaResult(null); }} style={s.modalClose}>✕</button>
             </div>
-            <p style={{ fontSize: 13, color: "#475569", marginBottom: 12 }}>
-              Invoice: <span style={{ fontFamily: "monospace" }}>{waModal.invoiceId.slice(0, 8)}…</span>
-            </p>
+            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "8px 12px", marginBottom: 14, fontSize: 13 }}>
+              <div><span style={{ color: "#94a3b8" }}>Invoice:</span> <span style={{ fontFamily: "monospace" }}>{waModal.invoiceId.slice(0, 8)}…</span></div>
+              <div><span style={{ color: "#94a3b8" }}>Client:</span> <strong>{clientFullMap[waModal.customerId]?.clientName ?? "—"}</strong></div>
+              {clientFullMap[waModal.customerId]?.clientCity && (
+                <div><span style={{ color: "#94a3b8" }}>City:</span> {clientFullMap[waModal.customerId].clientCity}</div>
+              )}
+            </div>
             <label style={{ fontSize: 13, color: "#64748b", display: "block", marginBottom: 4 }}>Phone number</label>
             <input
               type="tel"
