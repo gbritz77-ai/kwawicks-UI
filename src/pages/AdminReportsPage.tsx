@@ -316,7 +316,7 @@ export default function AdminReportsPage() {
                       <Td style={{ color: "#64748b", fontSize: 13 }}>{o.deliveryAddress}</Td>
                       <Td>{o.totalItems}</Td>
                       <Td style={{ fontSize: 12, fontFamily: "monospace", color: "#64748b" }}>
-                        {o.invoiceId ? o.invoiceId.slice(0, 8) + "…" : "—"}
+                        {o.invoiceId ? (o.invoiceNumber || o.invoiceId.slice(0, 8) + "…") : "—"}
                       </Td>
                       <Td>{o.grandTotal > 0 ? fmt(o.grandTotal) : "—"}</Td>
                       <Td>{o.paymentType || "—"}</Td>
@@ -860,7 +860,7 @@ function InvoicesTab({
   const [confirming, setConfirming] = useState<string | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
-  const [waModal, setWaModal] = useState<{ invoiceId: string; customerId: string } | null>(null);
+  const [waModal, setWaModal] = useState<{ invoiceId: string; invoiceNumber: string; customerId: string } | null>(null);
   const [waPhone, setWaPhone] = useState("");
   const [waSending, setWaSending] = useState(false);
   const [waResult, setWaResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -966,7 +966,7 @@ function InvoicesTab({
                 const hasReceipt = !!inv.receiptS3Key;
                 return (
                   <tr key={inv.invoiceId}>
-                    <Td><span style={s.mono}>{inv.invoiceId.slice(0, 8)}…</span></Td>
+                    <Td><span style={s.mono}>{inv.invoiceNumber || inv.invoiceId.slice(0, 8) + "…"}</span></Td>
                     <Td>{clientMap[inv.customerId] ?? inv.customerId}</Td>
                     <Td style={{ color: "#64748b", fontSize: 13 }}>{inv.createdByDriverId || "—"}</Td>
                     <Td>{inv.paymentType || "—"}</Td>
@@ -1006,7 +1006,7 @@ function InvoicesTab({
                     <Td>
                       <button
                         onClick={() => {
-                          setWaModal({ invoiceId: inv.invoiceId, customerId: inv.customerId });
+                          setWaModal({ invoiceId: inv.invoiceId, invoiceNumber: inv.invoiceNumber, customerId: inv.customerId });
                           setWaPhone(clientPhoneMap[inv.customerId] ?? "");
                           setWaResult(null);
                         }}
@@ -1051,7 +1051,7 @@ function InvoicesTab({
               <button onClick={() => { setWaModal(null); setWaResult(null); }} style={s.modalClose}>✕</button>
             </div>
             <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "8px 12px", marginBottom: 14, fontSize: 13 }}>
-              <div><span style={{ color: "#94a3b8" }}>Invoice:</span> <span style={{ fontFamily: "monospace" }}>{waModal.invoiceId.slice(0, 8)}…</span></div>
+              <div><span style={{ color: "#94a3b8" }}>Invoice:</span> <span style={{ fontFamily: "monospace" }}>{waModal.invoiceNumber || waModal.invoiceId.slice(0, 8) + "…"}</span></div>
               <div><span style={{ color: "#94a3b8" }}>Client:</span> <strong>{clientFullMap[waModal.customerId]?.clientName ?? "—"}</strong></div>
               {clientFullMap[waModal.customerId]?.clientCity && (
                 <div><span style={{ color: "#94a3b8" }}>City:</span> {clientFullMap[waModal.customerId].clientCity}</div>
@@ -1151,7 +1151,7 @@ function OutstandingTable({
         <tbody>
           {outstanding.items.map((i) => (
             <tr key={i.invoiceId}>
-              <Td><span style={s.mono}>{i.invoiceId.slice(0, 8)}…</span></Td>
+              <Td><span style={s.mono}>{(i as any).invoiceNumber || i.invoiceId.slice(0, 8) + "…"}</span></Td>
               <Td>{i.customerId}</Td>
               <Td>{i.paymentType}</Td>
               <Td>{fmt(i.grandTotal)}</Td>

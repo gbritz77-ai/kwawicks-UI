@@ -205,7 +205,7 @@ function StatementDocument({ statement }: { statement: CustomerStatementResponse
             <tr key={line.invoiceId} style={i % 2 === 0 ? {} : s.altRow}>
               <td style={s.td}>{fmtDate(line.date)}</td>
               <td style={{ ...s.td, fontFamily: "monospace", fontSize: 12 }}>
-                {line.invoiceId.slice(0, 8)}…
+                {(line as any).invoiceNumber || line.invoiceId.slice(0, 8) + "…"}
               </td>
               <td style={s.td}>{line.paymentType || "—"}</td>
               <td style={{ ...s.td, textAlign: "right" }}>{fmt(line.subTotal)}</td>

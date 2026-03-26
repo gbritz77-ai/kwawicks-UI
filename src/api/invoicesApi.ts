@@ -50,6 +50,7 @@ export type InvoiceLineResponse = {
 
 export type InvoiceResponse = {
   invoiceId: string;
+  invoiceNumber: string;
   customerId: string;
   hubId: string;
   deliveryOrderId: string;
