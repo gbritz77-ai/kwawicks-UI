@@ -1151,7 +1151,7 @@ function OutstandingTable({
         <tbody>
           {outstanding.items.map((i) => (
             <tr key={i.invoiceId}>
-              <Td><span style={s.mono}>{(i as any).invoiceNumber || i.invoiceId.slice(0, 8) + "…"}</span></Td>
+              <Td><span style={s.mono}>{i.invoiceNumber || i.invoiceId.slice(0, 8) + "…"}</span></Td>
               <Td>{i.customerId}</Td>
               <Td>{i.paymentType}</Td>
               <Td>{fmt(i.grandTotal)}</Td>

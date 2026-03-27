@@ -6,7 +6,6 @@ import type { SpeciesResponse } from "../api/speciesApi";
 import { staffMembersApi } from "../api/staffMembersApi";
 import type { StaffMemberDto } from "../api/staffMembersApi";
 import { hubSalesApi } from "../api/hubSalesApi";
-import { hasAnyRole } from "../api/auth";
 
 const VAT_RATE = 0.15;
 

@@ -20,6 +20,7 @@ export type RevenueSummaryResponse = {
 
 export type OutstandingPaymentItem = {
   invoiceId: string;
+  invoiceNumber: string;
   customerId: string;
   paymentType: string;
   grandTotal: number;
@@ -76,6 +77,7 @@ export type DeliveryStatusItem = {
   createdAt: string;
   updatedAt: string;
   invoiceId: string;
+  invoiceNumber: string;
   paymentType: string;
   paymentStatus: string;
   grandTotal: number;
@@ -101,6 +103,7 @@ export type InvoiceLineItem = {
 
 export type InvoiceItem = {
   invoiceId: string;
+  invoiceNumber: string;
   customerId: string;
   hubId: string;
   deliveryOrderId: string;
