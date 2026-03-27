@@ -6,6 +6,8 @@ import { invoicesApi } from "../api/invoicesApi";
 import { clientsApi } from "../api/clientsApi";
 import { collectionRequestsApi } from "../api/collectionRequestsApi";
 import type { CollectionRequestDto } from "../api/collectionRequestsApi";
+import { pettyCashApi } from "../api/pettyCashApi";
+import type { PettyCashEntryDto } from "../api/pettyCashApi";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -100,6 +102,17 @@ export default function DriverDashboardPage() {
   const [clientHasPhone, setClientHasPhone] = useState(true);
   const [clientPhone, setClientPhone] = useState("");
 
+  // ── Petty cash state ─────────────────────────────────────────────────────
+
+  const [pettyCashEntries, setPettyCashEntries] = useState<PettyCashEntryDto[]>([]);
+  const [loadingPettyCash, setLoadingPettyCash] = useState(true);
+  const [slipUploadEntry, setSlipUploadEntry] = useState<PettyCashEntryDto | null>(null);
+  const [slipFile, setSlipFile] = useState<File | null>(null);
+  const [slipUploading, setSlipUploading] = useState(false);
+  const [slipDone, setSlipDone] = useState(false);
+  const [slipError, setSlipError] = useState<string | null>(null);
+  const slipInputRef = useRef<HTMLInputElement>(null);
+
   // ── Collection request state ──────────────────────────────────────────────
 
   const [collections, setCollections] = useState<CollectionRequestDto[]>([]);
@@ -129,6 +142,16 @@ export default function DriverDashboardPage() {
     }
   }
 
+  async function loadPettyCash() {
+    if (!driverId) return;
+    setLoadingPettyCash(true);
+    try {
+      const entries = await pettyCashApi.getMyEntries();
+      setPettyCashEntries(entries.filter(e => !e.cashupId));
+    } catch { /* non-fatal */ }
+    finally { setLoadingPettyCash(false); }
+  }
+
   async function loadCollections() {
     if (!driverId) return;
     setCollectionsError(null);
@@ -151,6 +174,7 @@ export default function DriverDashboardPage() {
   useEffect(() => {
     loadOrders();
     loadCollections();
+    loadPettyCash();
   }, [driverId]);
 
   // ── Delivery actions ─────────────────────────────────────────────────────
@@ -279,6 +303,25 @@ export default function DriverDashboardPage() {
     return (speciesList as any[]).find((s: any) => s.speciesId === id)?.name ?? id.slice(0, 8) + "…";
   }
 
+  // ── Petty cash slip upload ────────────────────────────────────────────────
+
+  async function uploadSlip() {
+    if (!slipUploadEntry || !slipFile) return;
+    setSlipUploading(true);
+    setSlipError(null);
+    try {
+      const { uploadUrl, s3Key } = await pettyCashApi.getSlipUploadUrl(slipUploadEntry.entryId);
+      await fetch(uploadUrl, { method: "PUT", body: slipFile, headers: { "Content-Type": "image/jpeg" } });
+      const updated = await pettyCashApi.confirmSlipUploaded(slipUploadEntry.entryId, s3Key);
+      setPettyCashEntries(prev => prev.map(e => e.entryId === updated.entryId ? updated : e));
+      setSlipDone(true);
+    } catch (e: any) {
+      setSlipError(e?.message || "Could not upload slip.");
+    } finally {
+      setSlipUploading(false);
+    }
+  }
+
   // ── Collection actions ───────────────────────────────────────────────────
 
   function openCrLoadModal(cr: CollectionRequestDto) {
@@ -358,7 +401,7 @@ export default function DriverDashboardPage() {
       <div style={s.pageHeader}>
         <div style={s.pageTitle}>{greeting()}{profile?.username ? `, ${profile.username}` : ""} 👋</div>
         <div style={s.pageSub}>{today}</div>
-        <button style={s.refreshBtn} onClick={() => { loadOrders(); loadCollections(); }}>
+        <button style={s.refreshBtn} onClick={() => { loadOrders(); loadCollections(); loadPettyCash(); }}>
           Refresh
         </button>
       </div>
@@ -658,6 +701,96 @@ export default function DriverDashboardPage() {
                 }
                 <button style={{ ...s.completeBtn, marginTop: 20 }} onClick={closeCompletion}>Back to dashboard</button>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════ PETTY CASH */}
+      {!loadingPettyCash && pettyCashEntries.length > 0 && (
+        <>
+          <SectionHead icon="💵" title="My Cash Allocations" />
+          <div style={s.list}>
+            {pettyCashEntries.map(e => (
+              <div key={e.entryId} style={s.card}>
+                <div style={{ padding: "14px 16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: "#0f172a", marginBottom: 4 }}>{e.description}</div>
+                      <div style={{ fontSize: 12, color: "#64748b" }}>{e.category} · {e.entryDate}</div>
+                      {e.recordedBy && <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>Issued by: {e.recordedBy}</div>}
+                    </div>
+                    <div style={{ textAlign: "right" as const }}>
+                      <div style={{ fontSize: 20, fontWeight: 900, color: "#ef4444" }}>R {e.amount.toFixed(2)}</div>
+                      {e.slipS3Key ? (
+                        <span style={{ fontSize: 11, color: "#16a34a", fontWeight: 600 }}>✓ Slip Uploaded</span>
+                      ) : (
+                        <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 600 }}>Slip Required</span>
+                      )}
+                    </div>
+                  </div>
+                  {!e.slipS3Key && (
+                    <button
+                      style={{ ...s.startBtn, marginTop: 10, width: "100%", fontSize: 14 }}
+                      onClick={() => { setSlipUploadEntry(e); setSlipFile(null); setSlipDone(false); setSlipError(null); }}
+                    >
+                      📷 Upload Petrol / Expense Slip
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* ══════════════════════════════════════════ SLIP UPLOAD MODAL */}
+      {slipUploadEntry && (
+        <div style={s.backdrop}>
+          <div style={s.modal}>
+            {slipDone ? (
+              <div style={{ textAlign: "center", padding: "16px 0" }}>
+                <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+                <div style={s.modalTitle}>Slip Uploaded!</div>
+                <div style={s.modalSub}>{slipUploadEntry.description}</div>
+                <button style={{ ...s.completeBtn, marginTop: 20 }} onClick={() => setSlipUploadEntry(null)}>
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={s.modalTitle}>Upload Expense Slip</div>
+                <div style={s.modalSub}>{slipUploadEntry.description} · R {slipUploadEntry.amount.toFixed(2)}</div>
+                {slipError && <div style={s.modalError}>{slipError}</div>}
+                <div style={{ margin: "14px 0" }}>
+                  {slipFile ? (
+                    <div style={{ display: "grid", gap: 10 }}>
+                      <img src={URL.createObjectURL(slipFile)} alt="Slip" style={{ width: "100%", borderRadius: 10, maxHeight: 280, objectFit: "cover" }} />
+                      <button style={s.secondaryBtn} onClick={() => slipInputRef.current?.click()}>Change Photo</button>
+                    </div>
+                  ) : (
+                    <button style={s.cameraBtn} onClick={() => slipInputRef.current?.click()}>
+                      <div style={{ fontSize: 36 }}>📷</div>
+                      <div style={{ fontWeight: 900, marginTop: 8 }}>Take Photo of Slip</div>
+                      <div style={{ opacity: 0.6, fontSize: 13, marginTop: 4 }}>Petrol / expense receipt</div>
+                    </button>
+                  )}
+                  <input
+                    ref={slipInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    style={{ display: "none" }}
+                    onChange={e => setSlipFile(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+                <div style={s.modalBtns}>
+                  <button style={s.secondaryBtn} onClick={() => setSlipUploadEntry(null)} disabled={slipUploading}>Cancel</button>
+                  <button style={s.completeBtn} onClick={uploadSlip} disabled={!slipFile || slipUploading}>
+                    {slipUploading ? "Uploading…" : "Upload Slip"}
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>
