@@ -12,6 +12,7 @@ export type ClientDto = {
   clientContactDetails: string;
   clientPhone: string;
   clientType: ClientType;
+  isWalkIn: boolean;
   createdAtUtc: string;
   updatedAtUtc: string;
 };
@@ -25,6 +26,7 @@ export type CreateClientRequest = {
   clientContactDetails: string;
   clientPhone: string;
   clientType: ClientType;
+  isWalkIn?: boolean;
 };
 
 export type UpdateClientRequest = CreateClientRequest;
