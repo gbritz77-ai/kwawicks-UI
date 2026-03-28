@@ -329,6 +329,165 @@ const ALL_GUIDES: Guide[] = [
       { text: 'Leave the field as-is to use the default price. The override only applies to this order — the species master price is not changed.', tip: "The unit price is stored on the order and will appear on the invoice the driver creates." },
     ],
   },
+
+  // ── WhatsApp Invoices ───────────────────────────────────────────────────────
+  {
+    id: "whatsapp-invoice",
+    title: "How to Send an Invoice via WhatsApp",
+    icon: "📱",
+    roles: ["Owner", "Finance", "Admin", "HubStaff"],
+    steps: [
+      { text: 'Click "Invoices" in the menu (Finance/Owner) or find the invoice in the Reports section.' },
+      { text: "Expand the invoice row to see the full detail." },
+      { text: 'Click the "Send WhatsApp" button (green button with the WhatsApp icon).' },
+      { text: "The invoice PDF is generated and sent directly to the client's WhatsApp number on file." },
+      { text: "A confirmation message appears if the send was successful, or an error message if it failed.", tip: "Invoices are also sent automatically when a driver confirms a delivery — you only need to use this button to resend or for manually created hub-side invoices." },
+      { text: "If the client has no phone number saved, you will see a warning. Update the client's profile with their WhatsApp number first.", tip: "The phone number must be a valid South African mobile number (starting with 0 or 27)." },
+    ],
+  },
+
+  // ── Invoice Numbers ─────────────────────────────────────────────────────────
+  {
+    id: "invoice-numbers",
+    title: "Understanding Invoice Numbers",
+    icon: "🔢",
+    roles: ["Owner", "Finance", "Admin", "HubStaff"],
+    steps: [
+      { text: "Every invoice gets a sequential number in the format INV000001, INV000002, etc." },
+      { text: "This number is printed on the invoice PDF and shown in the invoice list." },
+      { text: "Invoice numbers are assigned automatically — you cannot change or skip them.", tip: "The sequential counter is shared across all invoice types (delivery invoices and hub direct sales)." },
+      { text: "Use the invoice number (e.g. INV000042) when communicating with clients or reconciling payments." },
+    ],
+  },
+
+  // ── Hub Direct Sales ────────────────────────────────────────────────────────
+  {
+    id: "hub-direct-sale",
+    title: "How to Process a Hub Direct Sale",
+    icon: "🏪",
+    roles: ["Owner", "Finance", "Admin", "HubStaff"],
+    steps: [
+      { text: 'Click "Hub Sales" in the nav bar.' },
+      { text: "Choose the customer type:", tip: "Existing Client = a client already in the system. Walk-In = a new customer buying once-off. Staff Member = an employee buying on account." },
+      { text: "For Existing Client: search for and select the client from the dropdown." },
+      { text: "For Walk-In: fill in the customer's name, phone number, and any address details. They are saved to the system with a Walk-In flag for reporting." },
+      { text: "For Staff Member: select the staff member from the dropdown. No WhatsApp is sent — the sale is recorded to their account." },
+      { text: 'Click "+ Add Item", select a species, adjust the quantity and unit price if needed.' },
+      { text: "Add as many items as required. Totals (excluding and including VAT) update live." },
+      { text: "Select the payment type: Cash, EFT, or Card." },
+      { text: 'Click "Process Sale" — an invoice is created instantly and a WhatsApp is sent to the client (non-staff customers).', tip: "Staff member sales are recorded as on-account purchases. They appear in the monthly staff statement." },
+    ],
+  },
+
+  // ── Staff Members ───────────────────────────────────────────────────────────
+  {
+    id: "staff-members",
+    title: "How to Manage Staff Members",
+    icon: "👷",
+    roles: ["Owner", "Finance", "Admin"],
+    steps: [
+      { text: 'Click "Staff" in the nav bar.' },
+      { text: "All active and inactive staff members are shown in a card grid." },
+      { text: 'To add a new staff member, click "+ Add Staff Member".' },
+      { text: "Enter their name, phone number, and department, then click Save." },
+      { text: 'To edit a staff member, click "Edit" on their card.' },
+      { text: 'To deactivate a staff member, edit their record and toggle "Active" off.', tip: "Inactive staff members cannot be selected in Hub Sales, but their purchase history is preserved." },
+      { text: "Staff purchases via Hub Sales are recorded as on-account transactions linked to the staff member for monthly reporting." },
+    ],
+  },
+
+  // ── Petty Cash ──────────────────────────────────────────────────────────────
+  {
+    id: "petty-cash-entry",
+    title: "How to Record a Petty Cash Entry",
+    icon: "💵",
+    roles: ["Owner", "Finance"],
+    steps: [
+      { text: 'Click "Petty Cash" in the nav bar.' },
+      { text: 'On the "Cash Book" tab, click "+ Add Entry".' },
+      { text: "Select the Type: Out (payment made) or In (cash received/returned)." },
+      { text: "Enter the amount in Rands." },
+      { text: "Select the category: Fuel, Maintenance, Supplies, Driver Expense, or Other." },
+      { text: "Enter a description of what the cash was used for (e.g. Diesel for Truck 3)." },
+      { text: "Optionally enter the recipient's name (e.g. the driver who received the cash)." },
+      { text: 'To assign the entry to a specific driver so they can see it on their dashboard, enter their username in the "Assign to Driver" field.', tip: "Assigned drivers will see the entry on their dashboard and can upload a photo of the petrol slip or expense receipt as proof." },
+      { text: 'Click "Save Entry". The balance on the summary cards updates immediately.' },
+    ],
+  },
+  {
+    id: "petty-cash-cashup",
+    title: "How to Perform a Petty Cash Cashup",
+    icon: "🧮",
+    roles: ["Owner", "Finance"],
+    steps: [
+      { text: 'Click "Petty Cash" in the nav bar, then click the "Do Cashup" tab.' },
+      { text: "The system shows a preview of all open entries since the last cashup: Opening Balance, total Cash In, total Cash Out, and the Expected Balance." },
+      { text: "Physically count the cash in the petty cash tin/box." },
+      { text: 'Enter the "Actual Cash Count" — the amount you physically counted.' },
+      { text: "The Variance is calculated automatically (Actual minus Expected).", tip: "A variance of zero (green) means your cash balances perfectly. A small variance (amber) is a minor discrepancy. A large variance (red) should be investigated." },
+      { text: "Add any notes to explain a discrepancy (optional)." },
+      { text: 'Click "Confirm Cashup". All open entries are marked as cashed up and the new balance becomes the opening balance for the next period.' },
+      { text: 'View past cashups on the "Cashup History" tab.' },
+    ],
+  },
+  {
+    id: "petty-cash-driver-slip",
+    title: "How to Upload an Expense Slip (Driver)",
+    icon: "🧾",
+    roles: ["Driver"],
+    steps: [
+      { text: "When Finance assigns you a petty cash entry (e.g. R500 for diesel), it appears on your driver dashboard under \"My Cash Allocations\"." },
+      { text: "The card shows the description, category, and amount allocated to you." },
+      { text: 'Tap "Upload Petrol / Expense Slip" on the allocation card.' },
+      { text: "Tap the camera button to take a photo of the slip, or select from your gallery." },
+      { text: 'Tap "Upload Slip" — the image is saved and linked to the petty cash entry.', tip: "Finance and Owner can see the slip upload status in the Petty Cash module." },
+    ],
+  },
+
+  // ── Hub Requests ────────────────────────────────────────────────────────────
+  {
+    id: "hub-request-create",
+    title: "How to Send a Hub Request",
+    icon: "📋",
+    roles: ["Owner", "Finance", "Admin"],
+    steps: [
+      { text: 'Click "Hub Requests" in the nav bar.' },
+      { text: 'Click "+ New Request".' },
+      { text: "Type a clear description of what you need the hub team to do — e.g. \"Please create a delivery order for Client ABC, 50 boxes of Nile Perch, delivery 2026-04-01, EFT payment\"." },
+      { text: 'Click "Send Request".' },
+      { text: "A WhatsApp notification is sent automatically to the hub's number.", tip: "Make sure the HUB_WHATSAPP_NUMBER is configured in the system settings. Contact your system administrator if notifications are not being received." },
+      { text: "The request appears in the list with status Pending — visible to all hub staff." },
+      { text: "Once the hub team creates the order, they will mark the request as Actioned and link it to the order they created." },
+    ],
+  },
+  {
+    id: "hub-request-action",
+    title: "How to Action a Hub Request",
+    icon: "✅",
+    roles: ["Owner", "Finance", "Admin", "HubStaff", "Procurement"],
+    steps: [
+      { text: 'Click "Hub Requests" in the nav bar. You will see all Pending requests.' },
+      { text: "Click on a request to expand it and read the full message from the requester." },
+      { text: 'Click "Mark as Actioned".' },
+      { text: "In the Action Notes field, describe what was done (e.g. \"Created delivery order for Client ABC\")." },
+      { text: "Select the Order Type from the dropdown: Delivery Order, Procurement Order, or Other." },
+      { text: "Enter the Order Reference so it is clear which order was created (e.g. DO#abc123)." },
+      { text: "Optionally paste the order's system ID if you have it.", tip: "The order reference and ID are stored permanently with the request for audit purposes — Finance and the requester can look up the original request and see exactly what was done." },
+      { text: 'Click "Confirm Actioned". The request status changes to Actioned and is archived.' },
+    ],
+  },
+  {
+    id: "hub-request-audit",
+    title: "How to View Hub Request History (Audit)",
+    icon: "🔎",
+    roles: ["Owner", "Finance", "Admin"],
+    steps: [
+      { text: 'Click "Hub Requests" in the nav bar.' },
+      { text: 'Use the filter tabs to switch between "Pending", "Actioned", and "Cancelled" requests.' },
+      { text: "Click any request to expand the full audit trail: who requested it, when, the full message, who actioned it, their notes, and the linked order." },
+      { text: "This provides a complete paper trail connecting a verbal or WhatsApp instruction to the actual order created in the system.", tip: "For audits, the Actioned tab shows every request that was fulfilled, who fulfilled it, and which order was created as a result." },
+    ],
+  },
 ];
 
 function roleMatches(guide: Guide): boolean {
