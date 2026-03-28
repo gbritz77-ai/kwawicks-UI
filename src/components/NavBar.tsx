@@ -28,7 +28,8 @@ export default function NavBar() {
   const canSeeCollections = hasAnyRole("Owner", "Admin", "HubStaff", "Procurement", "Finance");
   const canSeeHubSales = hasAnyRole("Owner", "Finance", "Admin", "HubStaff");
   const canSeeStaff      = hasAnyRole("Owner", "Finance", "Admin");
-  const canSeePettyCash  = hasAnyRole("Owner", "Finance");
+  const canSeePettyCash   = hasAnyRole("Owner", "Finance");
+  const canSeeHubRequests = hasAnyRole("Owner", "Finance", "Admin", "HubStaff", "Procurement");
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -76,6 +77,9 @@ export default function NavBar() {
   }
   if (canSeePettyCash) {
     items.push({ label: "Petty Cash", path: "/app/petty-cash" });
+  }
+  if (canSeeHubRequests) {
+    items.push({ label: "Hub Requests", path: "/app/hub-requests" });
   }
   if (isDriverRole) {
     items.push({ label: "Dashboard",        path: "/driver" });
