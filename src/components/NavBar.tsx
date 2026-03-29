@@ -26,7 +26,8 @@ export default function NavBar() {
   const isDriverRole   = hasRole("Driver");
   const isProcurement  = hasAnyRole("Owner", "Admin", "Procurement", "Finance");
   const canSeeCollections = hasAnyRole("Owner", "Admin", "HubStaff", "Procurement", "Finance");
-  const canSeeHubSales = hasAnyRole("Owner", "Finance", "Admin", "HubStaff");
+  const canSeeHubSales     = hasAnyRole("Owner", "Finance", "Admin", "HubStaff");
+  const canManageClients   = hasAnyRole("Owner", "Finance", "Admin", "Procurement");
   const canSeeStaff      = hasAnyRole("Owner", "Finance", "Admin");
   const canSeePettyCash   = hasAnyRole("Owner", "Finance");
   const canSeeHubRequests = hasAnyRole("Owner", "Finance", "Admin", "HubStaff", "Procurement");
@@ -49,9 +50,12 @@ export default function NavBar() {
   const items: NavItem[] = [];
   if (isOperational) {
     items.push({ label: "Dashboard",       path: "/app" });
-    items.push({ label: "Hub Tasks",       path: "/app/hub-tasks" });
+    items.push({ label: "Species",         path: "/app/hub-tasks", tabParam: "species" });
     items.push({ label: "Delivery Orders", path: "/app/delivery-orders" });
     items.push({ label: "Reports",         path: "/app/reports" });
+  }
+  if (canManageClients) {
+    items.push({ label: "Clients", path: "/app/hub-tasks", tabParam: "clients" });
   }
   if (isFinancial) {
     items.push({ label: "Invoices",   path: "/app/reports", tabParam: "invoices" });

@@ -25,13 +25,14 @@ const ALL_GUIDES: Guide[] = [
     id: "create-client",
     title: "How to Create a Client",
     icon: "🧑‍💼",
-    roles: ["Owner", "Admin", "HubStaff"],
+    roles: ["Owner", "Finance", "Admin", "Procurement"],
     steps: [
-      { text: 'Navigate to Hub Tasks using the top menu, then click the "Clients" tab.' },
-      { text: 'Click the "Add Client" button in the top-right corner.' },
-      { text: "Fill in the client's name and select their payment type: CODCASH, CODEFT, or Credit." },
-      { text: "Enter the full delivery address: Street Address, City, Province, and Postal Code." },
-      { text: 'Click "Save" to create the client. They will appear in the client list immediately.' },
+      { text: 'Click "Clients" in the top menu.' },
+      { text: 'Click the "+ Add Client" button in the top-right corner.' },
+      { text: "Fill in the client's name and select their client type: COD or Credit." },
+      { text: "Enter the delivery address: Street, City, Province, and Postal Code." },
+      { text: "Enter the client's WhatsApp / phone number so invoices can be sent automatically.", tip: "Use the international format starting with 27 (e.g. 27821234567) or the local 0 format — the system converts it automatically." },
+      { text: 'Click "Save". The client is immediately available when creating delivery orders.' },
     ],
   },
 
@@ -42,7 +43,7 @@ const ALL_GUIDES: Guide[] = [
     icon: "🐔",
     roles: ["Owner", "Admin", "HubStaff"],
     steps: [
-      { text: 'Navigate to Hub Tasks using the top menu, then click the "Species" tab.' },
+      { text: 'Click "Species" in the top menu.' },
       { text: 'Click "Add Species".' },
       { text: "Enter the species name (e.g. Broiler, Layer) and the sell price per unit." },
       { text: "Set the opening quantity on hand at the hub." },
@@ -55,7 +56,7 @@ const ALL_GUIDES: Guide[] = [
     icon: "📦",
     roles: ["Owner", "Admin", "HubStaff"],
     steps: [
-      { text: 'Go to Hub Tasks → "Species" tab.' },
+      { text: 'Click "Species" in the top menu.' },
       { text: "Click on the species row you want to update." },
       { text: "Edit the Qty on Hand field to reflect the current physical count at the hub." },
       { text: 'Click "Save". Stock availability for new orders updates immediately.' },

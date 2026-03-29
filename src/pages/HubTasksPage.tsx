@@ -8,7 +8,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
 import { clientsApi, type ClientDto, type ClientType } from "../api/clientsApi";
-import { hasRole } from "../api/auth";
+import { hasRole, hasAnyRole } from "../api/auth";
 
 type Tab = "species" | "clients";
 
@@ -69,6 +69,7 @@ type SortDir = "asc" | "desc";
 export default function HubTasksPage() {
   const navigate = useNavigate();
   const isAdmin = hasRole("Admin");
+  const canManageClients = hasAnyRole("Owner", "Finance", "Admin", "Procurement");
 
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>((searchParams.get("tab") as Tab) ?? "species");
@@ -114,7 +115,7 @@ export default function HubTasksPage() {
   }
 
   async function loadClients() {
-    if (!isAdmin) return;
+    if (!canManageClients) return;
     try {
       setError(null);
       setLoadingClients(true);
@@ -132,8 +133,8 @@ export default function HubTasksPage() {
   }, []);
 
   useEffect(() => {
-    if (tab === "clients" && isAdmin) loadClients();
-  }, [tab, isAdmin]);
+    if (tab === "clients" && canManageClients) loadClients();
+  }, [tab, canManageClients]);
 
   // ---------- Filters ----------
   const filteredSpecies = useMemo(() => {
@@ -264,14 +265,14 @@ export default function HubTasksPage() {
 
   // ---------- Client actions ----------
   function openCreateClient() {
-    if (!isAdmin) return;
+    if (!canManageClients) return;
     setError(null);
     setClientForm(emptyClientForm);
     setShowClientForm(true);
   }
 
   function openEditClient(c: ClientDto) {
-    if (!isAdmin) return;
+    if (!canManageClients) return;
     setError(null);
     setClientForm({
       clientId: c.clientId,
@@ -288,7 +289,7 @@ export default function HubTasksPage() {
   }
 
   async function saveClient() {
-    if (!isAdmin) return;
+    if (!canManageClients) return;
 
     const clientName = clientForm.clientName.trim();
     if (!clientName) return setError("Client Name is required.");
@@ -326,7 +327,7 @@ export default function HubTasksPage() {
   }
 
   async function deleteClient(clientId: string) {
-    if (!isAdmin) return;
+    if (!canManageClients) return;
     if (!confirm("Delete this client?")) return;
 
     try {
@@ -373,7 +374,7 @@ export default function HubTasksPage() {
             </button>
           )}
 
-          {isAdmin && tab === "clients" && (
+          {canManageClients && tab === "clients" && (
             <button style={s.primaryBtn} onClick={openCreateClient} disabled={busy}>
               + Add Client
             </button>
@@ -386,7 +387,7 @@ export default function HubTasksPage() {
           Species
         </button>
 
-        {isAdmin && (
+        {canManageClients && (
           <button style={tab === "clients" ? s.tabActive : s.tab} onClick={() => setTab("clients")} disabled={busy}>
             Clients
           </button>
@@ -403,8 +404,8 @@ export default function HubTasksPage() {
         />
       </div>
 
-      {/* ✅ Sort controls (Clients only) */}
-      {tab === "clients" && isAdmin && (
+      {/* Sort controls (Clients only) */}
+      {tab === "clients" && canManageClients && (
         <div style={s.sortRow}>
           <div style={s.sortLabel}>Sort by</div>
 
@@ -582,8 +583,8 @@ export default function HubTasksPage() {
         </>
       )}
 
-      {/* ===== CLIENTS TAB (Admin-only) ===== */}
-      {tab === "clients" && isAdmin && (
+      {/* ===== CLIENTS TAB ===== */}
+      {tab === "clients" && canManageClients && (
         <>
           {loadingClients ? (
             <div style={s.card}>Loading…</div>
@@ -751,7 +752,7 @@ export default function HubTasksPage() {
                   <button style={s.secondaryBtn} onClick={() => setShowClientForm(false)} disabled={busy}>
                     Cancel
                   </button>
-                  <button style={s.primaryBtn} onClick={saveClient} disabled={busy || !isAdmin}>
+                  <button style={s.primaryBtn} onClick={saveClient} disabled={busy || !canManageClients}>
                     {busy ? "Saving…" : "Save"}
                   </button>
                 </div>
@@ -761,7 +762,7 @@ export default function HubTasksPage() {
         </>
       )}
 
-      {tab === "clients" && !isAdmin && <div style={s.card}>Clients management is available to Admin users only.</div>}
+      {tab === "clients" && !canManageClients && <div style={s.card}>Clients management is available to Owner, Finance, Admin, and Procurement users.</div>}
     </div>
   );
 }
