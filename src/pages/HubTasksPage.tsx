@@ -74,6 +74,12 @@ export default function HubTasksPage() {
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>((searchParams.get("tab") as Tab) ?? "species");
 
+  // Sync tab with URL search param whenever navigation changes it
+  useEffect(() => {
+    const t = searchParams.get("tab") as Tab;
+    if (t === "species" || t === "clients") setTab(t);
+  }, [searchParams]);
+
   // ---------- Species state ----------
   const [items, setItems] = useState<SpeciesResponse[]>([]);
   const [loading, setLoading] = useState(true);
