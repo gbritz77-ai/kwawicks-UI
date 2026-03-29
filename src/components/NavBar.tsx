@@ -30,6 +30,7 @@ export default function NavBar() {
   const canManageClients   = hasAnyRole("Owner", "Finance", "Admin", "Procurement");
   const canSeeStaff      = hasAnyRole("Owner", "Finance", "Admin");
   const canSeePettyCash   = hasAnyRole("Owner", "Finance");
+  const isOwner           = hasRole("Owner");
   const canSeeHubRequests = hasAnyRole("Owner", "Finance", "Admin", "HubStaff", "Procurement");
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -84,6 +85,9 @@ export default function NavBar() {
   }
   if (canSeeHubRequests) {
     items.push({ label: "Hub Requests", path: "/app/hub-requests" });
+  }
+  if (isOwner) {
+    items.push({ label: "Settings", path: "/app/settings" });
   }
   if (isDriverRole) {
     items.push({ label: "Dashboard",        path: "/driver" });
