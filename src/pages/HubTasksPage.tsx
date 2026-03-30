@@ -269,6 +269,21 @@ export default function HubTasksPage() {
     }
   }
 
+  async function deleteSpecies(speciesId: string, name: string) {
+    if (!canManageSpecies) return;
+    if (!confirm(`Delete species "${name}"? This cannot be undone.`)) return;
+    try {
+      setError(null);
+      setBusy(true);
+      await speciesApi.delete(speciesId);
+      setItems((prev) => prev.filter((x: any) => x.speciesId !== speciesId));
+    } catch (e: any) {
+      setError(e?.message || "Delete failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // ---------- Client actions ----------
   function openCreateClient() {
     if (!canManageClients) return;
@@ -484,6 +499,9 @@ export default function HubTasksPage() {
                       <div style={s.gridActions}>
                         <button style={s.gridEditBtn} onClick={() => openEditSpecies(x)} disabled={busy}>
                           Edit
+                        </button>
+                        <button style={s.gridDeleteBtn} onClick={() => deleteSpecies((x as any).speciesId, (x as any).name)} disabled={busy}>
+                          Delete
                         </button>
                       </div>
                     )}

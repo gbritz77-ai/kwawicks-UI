@@ -41,7 +41,7 @@ const ALL_GUIDES: Guide[] = [
     id: "create-species",
     title: "How to Add a Species / Product",
     icon: "🐔",
-    roles: ["Owner", "Admin", "HubStaff"],
+    roles: ["Owner", "Admin"],
     steps: [
       { text: 'Click "Species" in the top menu.' },
       { text: 'Click "Add Species".' },
@@ -54,7 +54,7 @@ const ALL_GUIDES: Guide[] = [
     id: "update-stock",
     title: "How to Update Stock Levels",
     icon: "📦",
-    roles: ["Owner", "Admin", "HubStaff"],
+    roles: ["Owner", "Admin"],
     steps: [
       { text: 'Click "Species" in the top menu.' },
       { text: "Click on the species row you want to update." },
@@ -102,9 +102,8 @@ const ALL_GUIDES: Guide[] = [
     icon: "✅",
     roles: ["Owner", "Admin", "HubStaff"],
     steps: [
-      { text: 'Click "Hub Tasks" in the menu.' },
-      { text: "Hub Tasks shows all pending operational tasks. A Delivery type task is auto-created whenever a new delivery order is placed." },
-      { text: "Use the tabs to switch between task types (Delivery, etc.) or view All tasks." },
+      { text: 'Click "Species" or "Clients" in the top menu — both are listed individually in the nav bar.' },
+      { text: "Hub Tasks are auto-created whenever a new delivery order is placed. A task tracks the order through preparation to dispatch." },
       { text: "Click a task row to see more detail including which delivery order it relates to." },
       { text: "Tasks close automatically when the driver completes the delivery." },
     ],
@@ -213,7 +212,8 @@ const ALL_GUIDES: Guide[] = [
       { text: 'Click "Add User".' },
       { text: "Enter the user's full name, email address, and phone number." },
       { text: "Select their role: Owner, Finance, Admin, HubStaff, Procurement, or Driver.", tip: "Procurement users can manage suppliers and create procurement orders. Drivers only see their assigned deliveries. HubStaff can create orders but cannot access financial data." },
-      { text: 'Click "Create". The user receives an email with a temporary password to set up their account.' },
+      { text: 'Enter a PIN / password for the user — they will use this to log in immediately. No email is sent.', tip: "Share the PIN with the user directly. They can ask an Admin to change it at any time via the Users page." },
+      { text: 'Click "Create". The user account is active straight away.' },
     ],
   },
   {
@@ -442,6 +442,22 @@ const ALL_GUIDES: Guide[] = [
       { text: 'Tap "Upload Petrol / Expense Slip" on the allocation card.' },
       { text: "Tap the camera button to take a photo of the slip, or select from your gallery." },
       { text: 'Tap "Upload Slip" — the image is saved and linked to the petty cash entry.', tip: "Finance and Owner can see the slip upload status in the Petty Cash module." },
+    ],
+  },
+
+  // ── Settings ────────────────────────────────────────────────────────────────
+  {
+    id: "settings-whatsapp",
+    title: "How to Update the Hub WhatsApp Number",
+    icon: "⚙️",
+    roles: ["Owner"],
+    steps: [
+      { text: 'Click "Settings" in the top nav bar (visible to Owner only).' },
+      { text: 'Find the "Hub WhatsApp Number" section.' },
+      { text: 'Click "✏️ Edit".' },
+      { text: "Enter the South African mobile number that should receive Hub Request notifications.", tip: "Both formats work: local (0821234567) or international (27821234567). The system normalises them automatically." },
+      { text: 'Click "Save". The new number is stored immediately — no restart or redeploy required.' },
+      { text: "The last-updated timestamp and username are shown so you always know when the number was last changed.", tip: "This number is used every time a new Hub Request is submitted. If notifications stop arriving, check this setting first." },
     ],
   },
 

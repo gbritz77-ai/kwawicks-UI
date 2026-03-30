@@ -27,4 +27,6 @@ export const speciesApi = {
   create: (body: CreateSpeciesRequest) => api.post<SpeciesResponse>("/api/species", body),
   update: (speciesId: string, body: UpdateSpeciesRequest) =>
     api.put<SpeciesResponse>(`/api/species/${encodeURIComponent(speciesId)}`, body),
+  delete: (speciesId: string) =>
+    api.del<void>(`/api/species/${encodeURIComponent(speciesId)}`),
 };
