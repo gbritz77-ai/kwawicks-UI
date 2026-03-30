@@ -10,6 +10,20 @@ export type CollectionRequestLineDto = {
   discrepancyNotes: string;
 };
 
+export type CollectionAllocationLineDto = {
+  speciesId: string;
+  speciesName: string;
+  qty: number;
+  unitPrice: number;
+};
+
+export type CollectionDeliveryAllocationDto = {
+  deliveryOrderId: string;
+  clientId: string;
+  clientName: string;
+  lines: CollectionAllocationLineDto[];
+};
+
 export type CollectionRequestDto = {
   collectionRequestId: string;
   procurementOrderId: string;
@@ -24,8 +38,14 @@ export type CollectionRequestDto = {
   invoiceS3Key: string;
   deliveryNoteS3Key: string;
   lines: CollectionRequestLineDto[];
+  deliveryAllocations: CollectionDeliveryAllocationDto[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type AddDeliveryAllocationRequest = {
+  clientId: string;
+  lines: { speciesId: string; qty: number; unitPrice?: number }[];
 };
 
 export type CreateCollectionRequestRequest = {
@@ -58,4 +78,6 @@ export const collectionRequestsApi = {
   getInvoiceUploadUrl: (id: string) => api.get<{ uploadUrl: string; s3Key: string }>(`/api/collection-requests/${id}/invoice-upload-url`),
   getDeliveryNoteUploadUrl: (id: string) => api.get<{ uploadUrl: string; s3Key: string }>(`/api/collection-requests/${id}/delivery-note-upload-url`),
   getDeliveryNoteViewUrl:   (id: string) => api.get<{ viewUrl: string }>(`/api/collection-requests/${id}/delivery-note-view-url`),
+  addAllocation: (id: string, req: AddDeliveryAllocationRequest) =>
+    api.post<CollectionRequestDto>(`/api/collection-requests/${id}/allocations`, req),
 };

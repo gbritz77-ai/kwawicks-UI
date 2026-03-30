@@ -5,6 +5,8 @@ import { procurementOrdersApi } from "../api/procurementOrdersApi";
 import type { ProcurementOrderDto } from "../api/procurementOrdersApi";
 import { usersApi } from "../api/usersApi";
 import type { DriverDto } from "../api/usersApi";
+import { clientsApi } from "../api/clientsApi";
+import type { ClientDto } from "../api/clientsApi";
 import { hasAnyRole, getProfileFromIdToken } from "../api/auth";
 
 function getUsername(): string | undefined {
@@ -24,15 +26,23 @@ const isDriver = () => hasAnyRole("Driver") && !hasAnyRole("Owner", "Admin", "Hu
 const isAdmin = () => hasAnyRole("Owner", "Admin", "HubStaff");
 const isFinance = () => hasAnyRole("Owner", "Finance");
 const canCreate = () => hasAnyRole("Owner", "Admin", "HubStaff", "Procurement");
+const canAllocate = () => hasAnyRole("Owner", "Admin");
 
 export default function CollectionRequestsPage() {
   const [items, setItems] = useState<CollectionRequestDto[]>([]);
   const [pos, setPos] = useState<ProcurementOrderDto[]>([]);
   const [drivers, setDrivers] = useState<DriverDto[]>([]);
+  const [clients, setClients] = useState<ClientDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  // Allocation modal
+  const [allocItem, setAllocItem] = useState<CollectionRequestDto | null>(null);
+  const [allocClientId, setAllocClientId] = useState("");
+  const [allocLines, setAllocLines] = useState<{ speciesId: string; speciesName: string; qty: number; unitPrice: number; orderedQty: number; alreadyAllocated: number }[]>([]);
+  const [allocError, setAllocError] = useState("");
 
   // Create form
   const [showCreate, setShowCreate] = useState(false);
@@ -67,14 +77,16 @@ export default function CollectionRequestsPage() {
     try {
       setLoading(true);
       const driverId = isDriver() ? getUsername() : undefined;
-      const [crs, poList, driverList] = await Promise.all([
+      const [crs, poList, driverList, clientList] = await Promise.all([
         collectionRequestsApi.list(driverId ? { driverId } : undefined),
         procurementOrdersApi.list().catch(() => [] as ProcurementOrderDto[]),
         usersApi.listDrivers().catch(() => [] as DriverDto[]),
+        clientsApi.list().catch(() => [] as ClientDto[]),
       ]);
       setItems(crs);
       setPos(poList.filter(p => p.status === "Submitted"));
       setDrivers(driverList);
+      setClients(clientList);
     } catch { setError("Failed to load collection requests."); }
     finally { setLoading(false); }
   }
@@ -189,6 +201,51 @@ export default function CollectionRequestsPage() {
     finally { setBusy(false); setAckUploading(false); }
   }
 
+  function openAllocModal(cr: CollectionRequestDto) {
+    setAllocItem(cr);
+    setAllocClientId("");
+    setAllocError("");
+    // Pre-build lines from collection request lines, computing already-allocated qty per species
+    setAllocLines(cr.lines.map(l => {
+      const alreadyAllocated = (cr.deliveryAllocations ?? [])
+        .flatMap(a => a.lines)
+        .filter(al => al.speciesId === l.speciesId)
+        .reduce((sum, al) => sum + al.qty, 0);
+      return {
+        speciesId: l.speciesId,
+        speciesName: l.speciesName || l.speciesId,
+        qty: 0,
+        unitPrice: 0,
+        orderedQty: l.orderedQty,
+        alreadyAllocated,
+      };
+    }));
+  }
+
+  async function submitAllocation() {
+    if (!allocItem) return;
+    if (!allocClientId) { setAllocError("Please select a client."); return; }
+    const activeLines = allocLines.filter(l => l.qty > 0);
+    if (activeLines.length === 0) { setAllocError("Enter a quantity for at least one species."); return; }
+    for (const l of activeLines) {
+      const available = l.orderedQty - l.alreadyAllocated;
+      if (l.qty > available) {
+        setAllocError(`Quantity for ${l.speciesName} (${l.qty}) exceeds available (${available}).`);
+        return;
+      }
+    }
+    setBusy(true); setAllocError("");
+    try {
+      const updated = await collectionRequestsApi.addAllocation(allocItem.collectionRequestId, {
+        clientId: allocClientId,
+        lines: activeLines.map(l => ({ speciesId: l.speciesId, qty: l.qty, unitPrice: l.unitPrice || undefined })),
+      });
+      setItems(i => i.map(x => x.collectionRequestId === updated.collectionRequestId ? updated : x));
+      setAllocItem(null);
+    } catch (e: any) { setAllocError(e?.message ?? "Failed to add allocation."); }
+    finally { setBusy(false); }
+  }
+
   const shortId = (id: string) => id.split("-")[0].toUpperCase();
 
   function renderLine(line: CollectionRequestLineDto, cr: CollectionRequestDto) {
@@ -294,6 +351,29 @@ export default function CollectionRequestsPage() {
                   )}
                   <div style={s.linesGrid}>{cr.lines.map(l => renderLine(l, cr))}</div>
 
+                  {/* Delivery allocations */}
+                  {(cr.deliveryAllocations ?? []).length > 0 && (
+                    <div style={s.allocSection}>
+                      <div style={s.allocSectionTitle}>🚚 En-Route Delivery Allocations</div>
+                      {(cr.deliveryAllocations ?? []).map(a => (
+                        <div key={a.deliveryOrderId} style={s.allocCard}>
+                          <div style={s.allocClientRow}>
+                            <span style={s.allocClientName}>{a.clientName}</span>
+                            <span style={s.allocDoId}>DO-{a.deliveryOrderId.split("-")[0].toUpperCase()}</span>
+                          </div>
+                          <div style={s.allocLines}>
+                            {a.lines.map(l => (
+                              <span key={l.speciesId} style={s.allocLinePill}>
+                                {l.speciesName || l.speciesId}: <strong>{l.qty.toLocaleString()}</strong>
+                                {l.unitPrice > 0 && <span style={{ color: "#64748b" }}> @ R{l.unitPrice.toFixed(2)}</span>}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div style={s.cardActions}>
                     {/* Driver actions */}
                     {isDriver() && (cr.status === "Pending" || cr.status === "Loading") && (
@@ -303,6 +383,10 @@ export default function CollectionRequestsPage() {
                     )}
                     {isDriver() && cr.status === "InTransit" && (
                       <button style={s.primaryBtn} onClick={() => handleArrive(cr.collectionRequestId)} disabled={busy}>Mark Arrived at Hub</button>
+                    )}
+                    {/* Allocation action — admin/owner can allocate stock to a client for en-route delivery */}
+                    {canAllocate() && (cr.status === "Pending" || cr.status === "Loading") && (
+                      <button style={s.allocBtn} onClick={() => openAllocModal(cr)}>+ Allocate Delivery</button>
                     )}
                     {/* Hub admin actions */}
                     {isAdmin() && (cr.status === "ArrivedAtHub" || cr.status === "InTransit") && (
@@ -471,6 +555,66 @@ export default function CollectionRequestsPage() {
         </div>
       )}
 
+      {/* Delivery allocation modal */}
+      {allocItem && (
+        <div style={s.backdrop} onClick={() => !busy && setAllocItem(null)}>
+          <div style={{ ...s.modal, maxWidth: 600 }} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>Allocate En-Route Delivery</div>
+            <div style={s.modalSub}>
+              {allocItem.assignedDriverName} is collecting from {allocItem.supplierName}. Allocate some stock for direct delivery to a client on the way back.
+            </div>
+            {allocError && <div style={s.formError}>{allocError}</div>}
+
+            <label style={s.label}>Deliver To (Client) *
+              <select style={s.input} value={allocClientId} onChange={e => setAllocClientId(e.target.value)} disabled={busy}>
+                <option value="">— Select client —</option>
+                {clients.map(c => (
+                  <option key={c.clientId} value={c.clientId}>{c.clientName}{c.clientCity ? ` · ${c.clientCity}` : ""}</option>
+                ))}
+              </select>
+            </label>
+
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 8 }}>Species Quantities</div>
+            {allocLines.map((l, i) => {
+              const available = l.orderedQty - l.alreadyAllocated;
+              return (
+                <div key={l.speciesId} style={s.loadLineCard}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                    <div style={s.loadLineName}>{l.speciesName}</div>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>
+                      Ordered: {l.orderedQty.toLocaleString()}
+                      {l.alreadyAllocated > 0 && <span style={{ color: "#b45309" }}> · Already allocated: {l.alreadyAllocated.toLocaleString()}</span>}
+                      <span style={{ color: "#16a34a", fontWeight: 700 }}> · Available: {available.toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <div style={s.loadLineInputs}>
+                    <label style={s.label}>Qty to Deliver
+                      <input style={s.input} inputMode="numeric" value={l.qty || ""} placeholder="0"
+                        onChange={e => setAllocLines(ls => ls.map((x, j) => j === i ? { ...x, qty: parseInt(e.target.value) || 0 } : x))}
+                        disabled={busy} />
+                    </label>
+                    <label style={s.label}>Unit Price (R, excl VAT)
+                      <input style={s.input} inputMode="decimal" value={l.unitPrice || ""} placeholder="0.00"
+                        onChange={e => setAllocLines(ls => ls.map((x, j) => j === i ? { ...x, unitPrice: parseFloat(e.target.value) || 0 } : x))}
+                        disabled={busy} />
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
+
+            <div style={{ fontSize: 12, color: "#64748b", marginTop: -4, marginBottom: 12 }}>
+              ℹ️ Only enter quantities you want to allocate. Leave blank to return that species to hub.
+            </div>
+
+            <div style={s.modalBtns}>
+              <button style={s.secondaryBtn} onClick={() => setAllocItem(null)} disabled={busy}>Cancel</button>
+              <button style={s.primaryBtn} onClick={submitAllocation} disabled={busy}>{busy ? "Creating…" : "Create Delivery Order 🚚"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Finance acknowledge modal */}
       {ackItem && (
         <div style={s.backdrop} onClick={() => !busy && setAckItem(null)}>
@@ -596,5 +740,70 @@ const s: Record<string, React.CSSProperties> = {
     padding: "20px 0",
     color: "#94a3b8",
     fontSize: 13,
+  },
+  allocBtn: {
+    padding: "10px 18px",
+    borderRadius: 8,
+    background: "rgba(37,99,235,0.08)",
+    border: "1px solid rgba(37,99,235,0.4)",
+    color: "#1d4ed8",
+    fontWeight: 700,
+    fontSize: 13,
+    cursor: "pointer",
+  },
+  allocSection: {
+    marginTop: 14,
+    padding: "10px 12px",
+    background: "rgba(37,99,235,0.04)",
+    border: "1px solid rgba(37,99,235,0.15)",
+    borderRadius: 10,
+  },
+  allocSectionTitle: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#1e40af",
+    marginBottom: 8,
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.04em",
+  },
+  allocCard: {
+    background: "#fff",
+    borderRadius: 8,
+    padding: "8px 12px",
+    border: "1px solid rgba(37,99,235,0.15)",
+    marginBottom: 6,
+  },
+  allocClientRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  allocClientName: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#1e3a8a",
+  },
+  allocDoId: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#64748b",
+    background: "#f1f5f9",
+    border: "1px solid #e2e8f0",
+    borderRadius: 6,
+    padding: "1px 7px",
+  },
+  allocLines: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: 6,
+  },
+  allocLinePill: {
+    fontSize: 12,
+    color: "#374151",
+    background: "rgba(37,99,235,0.06)",
+    border: "1px solid rgba(37,99,235,0.2)",
+    borderRadius: 20,
+    padding: "2px 10px",
   },
 };
