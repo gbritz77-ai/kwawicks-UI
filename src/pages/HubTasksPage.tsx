@@ -106,6 +106,9 @@ export default function HubTasksPage() {
   const [hoveredClientId, setHoveredClientId] = useState<string | null>(null);
   const [hoveredSpeciesId, setHoveredSpeciesId] = useState<string | null>(null);
 
+  // Confirm-delete modal
+  const [confirmDelete, setConfirmDelete] = useState<{ type: "species" | "client"; id: string; label: string } | null>(null);
+
   // ---------- Loaders ----------
   async function loadSpecies() {
     try {
@@ -269,16 +272,21 @@ export default function HubTasksPage() {
     }
   }
 
-  async function deleteSpecies(speciesId: string, name: string) {
+  function deleteSpecies(speciesId: string, name: string) {
     if (!canManageSpecies) return;
-    if (!confirm(`Delete species "${name}"? This cannot be undone.`)) return;
+    setConfirmDelete({ type: "species", id: speciesId, label: name });
+  }
+
+  async function doDeleteSpecies(speciesId: string): Promise<boolean> {
     try {
       setError(null);
       setBusy(true);
       await speciesApi.delete(speciesId);
       setItems((prev) => prev.filter((x: any) => x.speciesId !== speciesId));
+      return true;
     } catch (e: any) {
       setError(e?.message || "Delete failed.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -347,17 +355,22 @@ export default function HubTasksPage() {
     }
   }
 
-  async function deleteClient(clientId: string) {
+  function deleteClient(clientId: string) {
     if (!canManageClients) return;
-    if (!confirm("Delete this client?")) return;
+    const client = clients.find((c) => c.clientId === clientId);
+    setConfirmDelete({ type: "client", id: clientId, label: client?.clientName ?? clientId });
+  }
 
+  async function doDeleteClient(clientId: string): Promise<boolean> {
     try {
       setError(null);
       setBusy(true);
       await clientsApi.remove(clientId);
       setClients((prev) => prev.filter((x) => x.clientId !== clientId));
+      return true;
     } catch (e: any) {
       setError(e?.message || "Delete failed.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -787,6 +800,43 @@ export default function HubTasksPage() {
       )}
 
       {tab === "clients" && !canManageClients && <div style={s.card}>Clients management is available to Owner, Finance, Admin, and Procurement users.</div>}
+
+      {/* ===== CONFIRM DELETE MODAL ===== */}
+      {confirmDelete && (
+        <div style={s.modalBackdrop} onClick={() => !busy && setConfirmDelete(null)}>
+          <div style={{ ...s.modal, maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+            <div style={s.deleteModalIcon}>🗑️</div>
+            <div style={s.deleteModalTitle}>Delete {confirmDelete.type === "species" ? "Species" : "Client"}?</div>
+            <div style={s.deleteModalBody}>
+              You are about to permanently delete{" "}
+              <strong>"{confirmDelete.label}"</strong>.{" "}
+              This action cannot be undone.
+            </div>
+            {error && <p style={{ color: "#ef4444", fontSize: 13, margin: "8px 0 0" }}>{error}</p>}
+            <div style={s.deleteModalActions}>
+              <button
+                style={s.secondaryBtn}
+                onClick={() => setConfirmDelete(null)}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+              <button
+                style={s.deleteConfirmBtn}
+                disabled={busy}
+                onClick={async () => {
+                  const ok = confirmDelete.type === "species"
+                    ? await doDeleteSpecies(confirmDelete.id)
+                    : await doDeleteClient(confirmDelete.id);
+                  if (ok) setConfirmDelete(null);
+                }}
+              >
+                {busy ? "Deleting…" : "Yes, delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1024,6 +1074,20 @@ const s: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(0,0,0,0.12)",
   },
   modalTitle: { fontSize: 18, fontWeight: 900, marginBottom: 10 },
+  deleteModalIcon: { fontSize: 40, textAlign: "center", marginBottom: 10 },
+  deleteModalTitle: { fontSize: 20, fontWeight: 900, textAlign: "center", marginBottom: 8, color: "#0f172a" },
+  deleteModalBody: { fontSize: 14, color: "#475569", textAlign: "center", lineHeight: 1.6, marginBottom: 24 },
+  deleteModalActions: { display: "flex", gap: 12, justifyContent: "center" },
+  deleteConfirmBtn: {
+    background: "#ef4444",
+    color: "#fff",
+    border: "none",
+    borderRadius: 10,
+    padding: "10px 24px",
+    fontSize: 15,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
   label: { display: "grid", gap: 6, fontWeight: 800, marginTop: 10 },
   input: {
     padding: "12px 12px",
