@@ -8,7 +8,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
 import { clientsApi, type ClientDto, type ClientType } from "../api/clientsApi";
-import { hasRole, hasAnyRole } from "../api/auth";
+import { hasAnyRole } from "../api/auth";
 
 type Tab = "species" | "clients";
 
