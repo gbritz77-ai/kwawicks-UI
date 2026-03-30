@@ -68,8 +68,8 @@ type SortDir = "asc" | "desc";
 
 export default function HubTasksPage() {
   const navigate = useNavigate();
-  const isAdmin = hasRole("Admin");
-  const canManageClients = hasAnyRole("Owner", "Finance", "Admin", "Procurement");
+  const canManageSpecies  = hasAnyRole("Owner", "Admin");
+  const canManageClients  = hasAnyRole("Owner", "Finance", "Admin", "Procurement");
 
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>((searchParams.get("tab") as Tab) ?? "species");
@@ -207,7 +207,7 @@ export default function HubTasksPage() {
   }
 
   async function saveSpecies() {
-    if (!isAdmin) return;
+    if (!canManageSpecies) return;
 
     const name = speciesForm.name.trim();
     if (!name) return setError("Name is required.");
@@ -374,7 +374,7 @@ export default function HubTasksPage() {
             Refresh
           </button>
 
-          {isAdmin && tab === "species" && (
+          {canManageSpecies && tab === "species" && (
             <button style={s.primaryBtn} onClick={openCreateSpecies} disabled={busy}>
               + Add Species
             </button>
@@ -458,7 +458,7 @@ export default function HubTasksPage() {
                 <div>Qty Booked</div>
                 <div>Available</div>
                 <div>Status</div>
-                {isAdmin && <div style={{ textAlign: "right" }}>Actions</div>}
+                {canManageSpecies && <div style={{ textAlign: "right" }}>Actions</div>}
               </div>
 
               {/* Data rows */}
@@ -480,7 +480,7 @@ export default function HubTasksPage() {
                     <div style={s.gridCell}>{x.qtyBookedOutForDelivery}</div>
                     <div style={s.gridCell}>{x.qtyAvailable ?? x.qtyOnHandHub - x.qtyBookedOutForDelivery}</div>
                     <div style={s.gridCell}>{x.isActive ? "Active" : "Inactive"}</div>
-                    {isAdmin && (
+                    {canManageSpecies && (
                       <div style={s.gridActions}>
                         <button style={s.gridEditBtn} onClick={() => openEditSpecies(x)} disabled={busy}>
                           Edit
@@ -579,7 +579,7 @@ export default function HubTasksPage() {
                   <button style={s.secondaryBtn} onClick={() => setShowSpeciesForm(false)} disabled={busy}>
                     Cancel
                   </button>
-                  <button style={s.primaryBtn} onClick={saveSpecies} disabled={busy || !isAdmin}>
+                  <button style={s.primaryBtn} onClick={saveSpecies} disabled={busy || !canManageSpecies}>
                     {busy ? "Saving…" : "Save"}
                   </button>
                 </div>
