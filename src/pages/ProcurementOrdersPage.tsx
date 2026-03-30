@@ -19,6 +19,7 @@ const STATUS_COLORS: Record<string, React.CSSProperties> = {
 };
 
 const canCreate = () => hasAnyRole("Owner", "Procurement");
+const canEditDelete = () => hasAnyRole("Owner");
 const canComplete = () => hasAnyRole("Owner", "Finance");
 
 export default function ProcurementOrdersPage() {
@@ -199,10 +200,10 @@ export default function ProcurementOrdersPage() {
                   </div>
 
                   <div style={s.cardActions}>
-                    {ord.status === "Draft" && canCreate() && (<>
-                      <button style={s.dangerBtn} onClick={() => setConfirmDeleteId(ord.procurementOrderId)} disabled={busy}>🗑 Delete</button>
-                      <button style={s.secondaryBtn} onClick={() => openEdit(ord)} disabled={busy}>✏️ Edit</button>
-                      <button style={s.primaryBtn} onClick={() => handleSubmit(ord.procurementOrderId)} disabled={busy}>Submit Order</button>
+                    {ord.status === "Draft" && (<>
+                      {canEditDelete() && <button style={s.dangerBtn} onClick={() => setConfirmDeleteId(ord.procurementOrderId)} disabled={busy}>🗑 Delete</button>}
+                      {canEditDelete() && <button style={s.secondaryBtn} onClick={() => openEdit(ord)} disabled={busy}>✏️ Edit</button>}
+                      {canCreate() && <button style={s.primaryBtn} onClick={() => handleSubmit(ord.procurementOrderId)} disabled={busy}>Submit Order</button>}
                     </>)}
                     {ord.status === "DeliveredToHub" && canComplete() && (
                       <button style={s.primaryBtn} onClick={() => handleComplete(ord.procurementOrderId)} disabled={busy}>Mark Completed</button>
