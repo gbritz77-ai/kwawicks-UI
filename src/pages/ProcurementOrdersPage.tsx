@@ -30,9 +30,11 @@ export default function ProcurementOrdersPage() {
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [form, setForm] = useState<CreateProcurementOrderRequest>({ supplierId: "", supplierOrderReference: "", notes: "", lines: [{ speciesId: "", orderedQty: 0, unitCost: 0 }] });
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -71,16 +73,52 @@ export default function ProcurementOrdersPage() {
     finally { setBusy(false); }
   }
 
-  async function createOrder() {
+  function openCreate() {
+    setEditingOrderId(null);
+    setForm({ supplierId: "", supplierOrderReference: "", notes: "", lines: [{ speciesId: "", orderedQty: 0, unitCost: 0 }] });
+    setFormError("");
+    setShowForm(true);
+  }
+
+  function openEdit(ord: ProcurementOrderDto) {
+    setEditingOrderId(ord.procurementOrderId);
+    setForm({
+      supplierId: ord.supplierId,
+      supplierOrderReference: ord.supplierOrderReference ?? "",
+      notes: ord.notes ?? "",
+      lines: ord.lines.map(l => ({ speciesId: l.speciesId, orderedQty: l.orderedQty, unitCost: l.unitCost })),
+    });
+    setFormError("");
+    setShowForm(true);
+  }
+
+  async function saveOrder() {
     if (!form.supplierId) { setFormError("Please select a supplier."); return; }
     if (form.lines.some(l => !l.speciesId || l.orderedQty <= 0 || !l.unitCost || l.unitCost <= 0)) { setFormError("All lines require a species, quantity and unit cost > 0."); return; }
     setBusy(true); setFormError("");
     try {
-      const created = await procurementOrdersApi.create(form);
-      setOrders(o => [created, ...o]);
+      if (editingOrderId) {
+        const updated = await procurementOrdersApi.update(editingOrderId, form);
+        setOrders(o => o.map(x => x.procurementOrderId === editingOrderId ? updated : x));
+      } else {
+        const created = await procurementOrdersApi.create(form);
+        setOrders(o => [created, ...o]);
+      }
       setShowForm(false);
+      setEditingOrderId(null);
       setForm({ supplierId: "", supplierOrderReference: "", notes: "", lines: [{ speciesId: "", orderedQty: 0, unitCost: 0 }] });
-    } catch (e: any) { setFormError(e?.message ?? "Failed to create."); }
+    } catch (e: any) { setFormError(e?.message ?? "Failed to save."); }
+    finally { setBusy(false); }
+  }
+
+  async function confirmDelete() {
+    if (!confirmDeleteId) return;
+    setBusy(true);
+    try {
+      await procurementOrdersApi.remove(confirmDeleteId);
+      setOrders(o => o.filter(x => x.procurementOrderId !== confirmDeleteId));
+      setConfirmDeleteId(null);
+    } catch (e: any) { setError(e?.message ?? "Failed to delete."); }
     finally { setBusy(false); }
   }
 
@@ -99,7 +137,7 @@ export default function ProcurementOrdersPage() {
           <div style={s.pageTitle}>Procurement Orders</div>
           <div style={s.pageSub}>Manage stock orders to suppliers</div>
         </div>
-        {canCreate() && <button style={s.primaryBtn} onClick={() => { setFormError(""); setShowForm(true); }}>+ New Order</button>}
+        {canCreate() && <button style={s.primaryBtn} onClick={openCreate}>+ New Order</button>}
       </div>
 
       {error && <div style={s.errorBanner}>{error}</div>}
@@ -161,9 +199,11 @@ export default function ProcurementOrdersPage() {
                   </div>
 
                   <div style={s.cardActions}>
-                    {ord.status === "Draft" && canCreate() && (
+                    {ord.status === "Draft" && canCreate() && (<>
+                      <button style={s.dangerBtn} onClick={() => setConfirmDeleteId(ord.procurementOrderId)} disabled={busy}>🗑 Delete</button>
+                      <button style={s.secondaryBtn} onClick={() => openEdit(ord)} disabled={busy}>✏️ Edit</button>
                       <button style={s.primaryBtn} onClick={() => handleSubmit(ord.procurementOrderId)} disabled={busy}>Submit Order</button>
-                    )}
+                    </>)}
                     {ord.status === "DeliveredToHub" && canComplete() && (
                       <button style={s.primaryBtn} onClick={() => handleComplete(ord.procurementOrderId)} disabled={busy}>Mark Completed</button>
                     )}
@@ -175,10 +215,28 @@ export default function ProcurementOrdersPage() {
         </div>
       )}
 
+      {confirmDeleteId && (
+        <div style={s.backdrop} onClick={() => !busy && setConfirmDeleteId(null)}>
+          <div style={{ ...s.modal, maxWidth: 420, textAlign: "center" as const }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>🗑️</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", marginBottom: 8 }}>Delete Procurement Order?</div>
+            <div style={{ fontSize: 14, color: "#475569", lineHeight: 1.6, marginBottom: 24 }}>
+              This draft order will be permanently removed. This cannot be undone.
+            </div>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+              <button style={s.secondaryBtn} onClick={() => setConfirmDeleteId(null)} disabled={busy}>Cancel</button>
+              <button style={{ ...s.dangerBtn, padding: "10px 24px", fontSize: 15 }} onClick={confirmDelete} disabled={busy}>
+                {busy ? "Deleting…" : "Yes, delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showForm && (
         <div style={s.backdrop} onClick={() => !busy && setShowForm(false)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
-            <div style={s.modalTitle}>New Procurement Order</div>
+            <div style={s.modalTitle}>{editingOrderId ? "Edit Procurement Order" : "New Procurement Order"}</div>
             {formError && <div style={s.formError}>{formError}</div>}
 
             <label style={s.label}>Supplier *
@@ -221,7 +279,9 @@ export default function ProcurementOrdersPage() {
 
             <div style={s.modalBtns}>
               <button style={s.secondaryBtn} onClick={() => setShowForm(false)} disabled={busy}>Cancel</button>
-              <button style={s.primaryBtn} onClick={createOrder} disabled={busy}>{busy ? "Creating…" : "Create Order"}</button>
+              <button style={s.primaryBtn} onClick={saveOrder} disabled={busy}>
+                {busy ? "Saving…" : editingOrderId ? "Save Changes" : "Create Order"}
+              </button>
             </div>
           </div>
         </div>
@@ -271,4 +331,5 @@ const s: Record<string, React.CSSProperties> = {
   modalBtns: { display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 },
   primaryBtn: { padding: "10px 20px", borderRadius: 8, background: "#16a34a", color: "#fff", border: "none", fontWeight: 700, fontSize: 14, cursor: "pointer" },
   secondaryBtn: { padding: "10px 18px", borderRadius: 8, background: "#fff", border: "1px solid #d1d5db", color: "#374151", fontWeight: 600, fontSize: 14, cursor: "pointer" },
+  dangerBtn: { padding: "10px 18px", borderRadius: 8, background: "#fef2f2", border: "1px solid #fca5a5", color: "#dc2626", fontWeight: 700, fontSize: 14, cursor: "pointer" },
 };

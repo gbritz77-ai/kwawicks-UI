@@ -38,6 +38,9 @@ export const procurementOrdersApi = {
   },
   get: (id: string) => api.get<ProcurementOrderDto>(`/api/procurement-orders/${id}`),
   create: (req: CreateProcurementOrderRequest) => api.post<ProcurementOrderDto>("/api/procurement-orders", req),
+  update: (id: string, req: CreateProcurementOrderRequest) =>
+    api.put<ProcurementOrderDto>(`/api/procurement-orders/${id}`, req),
+  remove: (id: string) => api.del<void>(`/api/procurement-orders/${id}`),
   submit: (id: string) => api.put<void>(`/api/procurement-orders/${id}/submit`, {}),
   complete: (id: string) => api.put<void>(`/api/procurement-orders/${id}/complete`, {}),
   getInvoiceUploadUrl: (id: string) => api.get<{ uploadUrl: string; s3Key: string }>(`/api/procurement-orders/${id}/invoice-upload-url`),
