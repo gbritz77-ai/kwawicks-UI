@@ -461,8 +461,10 @@ export default function DriverDashboardPage() {
                         {order.status === "OutForDelivery" ? "Out for Delivery" : order.status}
                       </span>
                     </div>
+                    <div style={s.cardAddress}>
+                      📍 {addressOneLine || <span style={{ color: "#94a3b8", fontStyle: "italic" }}>No address on file</span>}
+                    </div>
                     <div style={s.cardMeta}>
-                      {addressOneLine && <><span>📍 {addressOneLine}</span><span style={s.dot}>·</span></>}
                       <span>{order.lines.length} item{order.lines.length !== 1 ? "s" : ""}</span>
                       <span style={s.dot}>·</span>
                       <span style={s.mono}>{order.deliveryOrderId.slice(0, 8)}…</span>
@@ -482,26 +484,32 @@ export default function DriverDashboardPage() {
                       )}
                     </div>
 
-                    {/* Address block */}
-                    {addressOneLine && (
-                      <div style={s.addressBlock}>
-                        <div style={s.addressBlockTitle}>📍 Delivery Address</div>
-                        {addrLine1 && <div style={s.addressLine}>{addrLine1}</div>}
-                        {(addrCity || addrProvince || addrPostal) && (
-                          <div style={s.addressLine}>
-                            {[addrCity, addrProvince, addrPostal].filter(Boolean).join(", ")}
-                          </div>
-                        )}
-                        <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressOneLine)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={s.mapsLink}
-                        >
-                          🗺 Open in Google Maps
-                        </a>
-                      </div>
-                    )}
+                    {/* Address block — always shown */}
+                    <div style={s.addressBlock}>
+                      <div style={s.addressBlockTitle}>📍 Delivery Address</div>
+                      {addressOneLine ? (
+                        <>
+                          {addrLine1 && <div style={s.addressLine}>{addrLine1}</div>}
+                          {(addrCity || addrProvince || addrPostal) && (
+                            <div style={s.addressLine}>
+                              {[addrCity, addrProvince, addrPostal].filter(Boolean).join(", ")}
+                            </div>
+                          )}
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressOneLine)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={s.mapsLink}
+                          >
+                            🗺 Open in Google Maps
+                          </a>
+                        </>
+                      ) : (
+                        <div style={{ fontSize: 13, color: "#94a3b8", fontStyle: "italic" }}>
+                          No address on file — please update the client profile.
+                        </div>
+                      )}
+                    </div>
 
                     <div style={s.itemsHead}>Items</div>
                     {order.lines.map((l, i) => (
@@ -973,7 +981,8 @@ const s: Record<string, React.CSSProperties> = {
   cardHead: { display: "flex", alignItems: "center", gap: 10, padding: "16px", cursor: "pointer" },
   cardTitle: { fontWeight: 900, fontSize: 15, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
   badge:    { fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999 },
-  cardMeta: { marginTop: 4, fontSize: 13, color: "rgba(0,0,0,0.5)", fontWeight: 600, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" },
+  cardAddress: { marginTop: 4, fontSize: 13, color: "#374151", fontWeight: 600 },
+  cardMeta: { marginTop: 2, fontSize: 12, color: "rgba(0,0,0,0.45)", fontWeight: 600, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" },
   dot:      { opacity: 0.4 },
   mono:     { fontFamily: "ui-monospace, monospace", fontSize: 12 },
   chevron:  { fontSize: 12, opacity: 0.4, flexShrink: 0 },
