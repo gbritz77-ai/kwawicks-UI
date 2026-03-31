@@ -444,7 +444,12 @@ export default function DriverDashboardPage() {
             const client = clientMap[order.customerId];
             const clientName = client?.clientName || order.customerId || "Unknown Client";
             const phone = client?.clientPhone?.trim() || client?.clientContactDetails?.trim() || null;
-            const addressParts = [order.deliveryAddressLine1, order.city, order.province, order.postalCode].filter(Boolean);
+            // Use delivery order address if set, otherwise fall back to client's registered address
+            const addrLine1 = order.deliveryAddressLine1 || client?.clientAddress || "";
+            const addrCity = order.city || client?.clientCity || "";
+            const addrProvince = order.province || client?.clientProvince || "";
+            const addrPostal = order.postalCode || client?.clientPostalCode || "";
+            const addressParts = [addrLine1, addrCity, addrProvince, addrPostal].filter(Boolean);
             const addressOneLine = addressParts.join(", ");
             return (
               <div key={order.deliveryOrderId} style={s.card}>
@@ -481,10 +486,10 @@ export default function DriverDashboardPage() {
                     {addressOneLine && (
                       <div style={s.addressBlock}>
                         <div style={s.addressBlockTitle}>📍 Delivery Address</div>
-                        {order.deliveryAddressLine1 && <div style={s.addressLine}>{order.deliveryAddressLine1}</div>}
-                        {(order.city || order.province || order.postalCode) && (
+                        {addrLine1 && <div style={s.addressLine}>{addrLine1}</div>}
+                        {(addrCity || addrProvince || addrPostal) && (
                           <div style={s.addressLine}>
-                            {[order.city, order.province, order.postalCode].filter(Boolean).join(", ")}
+                            {[addrCity, addrProvince, addrPostal].filter(Boolean).join(", ")}
                           </div>
                         )}
                         <a
