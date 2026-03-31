@@ -29,7 +29,6 @@ export default function NavBar() {
   const canSeeHubSales     = hasAnyRole("Owner", "Finance", "Admin", "HubStaff");
   const canManageClients   = hasAnyRole("Owner", "Finance", "Admin", "Procurement");
   const canSeeStaff      = hasAnyRole("Owner", "Finance", "Admin");
-  const canSeePettyCash   = hasAnyRole("Owner", "Finance");
   const isOwner           = hasRole("Owner");
   const canSeeHubRequests = hasAnyRole("Owner", "Finance", "Admin", "HubStaff", "Procurement");
 
