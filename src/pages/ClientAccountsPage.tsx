@@ -20,6 +20,10 @@ export default function ClientAccountsPage() {
   const [depositError, setDepositError] = useState("");
   const [depositSuccess, setDepositSuccess] = useState("");
 
+  // Proof of payment file
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<"idle" | "uploading" | "done" | "error">("idle");
+
   useEffect(() => {
     clientsApi.list().then(setClients).catch(() => setError("Failed to load clients."));
   }, []);
@@ -39,18 +43,42 @@ export default function ClientAccountsPage() {
     if (!amount || amount <= 0) { setDepositError("Enter a valid amount greater than zero."); return; }
     if (!depositMethod) { setDepositError("Select a payment method."); return; }
     setBusy(true); setDepositError(""); setDepositSuccess("");
+
+    let proofS3Key: string | undefined;
+
     try {
+      // 1. Upload proof file if one was selected
+      if (proofFile) {
+        setUploadProgress("uploading");
+        const { uploadUrl, s3Key } = await clientCreditApi.getProofUploadUrl(
+          selectedClientId, proofFile.type || "application/octet-stream"
+        );
+        const uploadResp = await fetch(uploadUrl, {
+          method: "PUT",
+          body: proofFile,
+          headers: { "Content-Type": proofFile.type || "application/octet-stream" },
+        });
+        if (!uploadResp.ok) throw new Error("Proof upload failed — please try again.");
+        proofS3Key = s3Key;
+        setUploadProgress("done");
+      }
+
+      // 2. Create the deposit entry
       await clientCreditApi.addDeposit(selectedClientId, {
         amount,
         paymentMethod: depositMethod,
         notes: depositNotes,
+        proofS3Key,
       });
-      setDepositSuccess(`✅ R ${amount.toFixed(2)} credited successfully.`);
-      setDepositAmount(""); setDepositNotes("");
-      // Refresh ledger
+
+      setDepositSuccess(`✅ R ${amount.toFixed(2)} credited successfully.${proofS3Key ? " Proof of payment uploaded." : ""}`);
+      setDepositAmount(""); setDepositNotes(""); setProofFile(null); setUploadProgress("idle");
+
+      // 3. Refresh ledger
       const updated = await clientCreditApi.getLedger(selectedClientId);
       setLedger(updated);
     } catch (e: any) {
+      setUploadProgress("error");
       setDepositError(e?.message ?? "Failed to add credit.");
     } finally { setBusy(false); }
   }
@@ -58,6 +86,7 @@ export default function ClientAccountsPage() {
   function closeDeposit() {
     setShowDeposit(false);
     setDepositAmount(""); setDepositNotes(""); setDepositError(""); setDepositSuccess("");
+    setProofFile(null); setUploadProgress("idle");
   }
 
   const fmt = (n: number) =>
@@ -194,6 +223,9 @@ export default function ClientAccountsPage() {
                             <td style={{ ...s.td, maxWidth: 240, wordBreak: "break-word" as const }}>
                               {row.reference && <div style={{ fontSize: 12, color: "#2563eb", fontFamily: "monospace" }}>{row.reference.slice(0, 16)}</div>}
                               {row.notes && <div style={{ fontSize: 13, color: "#374151" }}>{row.notes}</div>}
+                              {row.proofS3Key && (
+                                <span style={s.proofBadge}>📎 Proof</span>
+                              )}
                             </td>
                             <td style={{ ...s.td, textAlign: "right" as const, fontWeight: 700, color: isDeposit ? "#15803d" : "#dc2626" }}>
                               {isDeposit ? "+" : "−"}{fmt(row.amount)}
@@ -268,6 +300,55 @@ export default function ClientAccountsPage() {
                     disabled={busy}
                   />
                 </label>
+
+                <label style={s.label}>Proof of Payment (optional)
+                  <div
+                    style={{
+                      ...s.fileDropZone,
+                      ...(proofFile ? s.fileDropZoneHasFile : {}),
+                    }}
+                    onClick={() => !busy && (document.getElementById("proof-file-input") as HTMLInputElement)?.click()}
+                  >
+                    {proofFile ? (
+                      <div style={s.fileInfo}>
+                        <span style={s.fileIcon}>{proofFile.type === "application/pdf" ? "📄" : "🖼️"}</span>
+                        <div style={s.fileDetails}>
+                          <div style={s.fileName}>{proofFile.name}</div>
+                          <div style={s.fileSize}>{(proofFile.size / 1024).toFixed(1)} KB</div>
+                        </div>
+                        <button
+                          style={s.removeFileBtn}
+                          type="button"
+                          disabled={busy}
+                          onClick={e => { e.stopPropagation(); setProofFile(null); setUploadProgress("idle"); }}
+                        >✕</button>
+                      </div>
+                    ) : (
+                      <div style={s.filePlaceholder}>
+                        <span style={{ fontSize: 22 }}>📎</span>
+                        <span>Click to attach photo or PDF</span>
+                        <span style={{ fontSize: 11, color: "#94a3b8" }}>JPG, PNG, HEIC, PDF</span>
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    id="proof-file-input"
+                    type="file"
+                    accept="image/jpeg,image/png,image/heic,application/pdf"
+                    style={{ display: "none" }}
+                    onChange={e => {
+                      const f = e.target.files?.[0] ?? null;
+                      setProofFile(f);
+                      setUploadProgress("idle");
+                      e.target.value = "";
+                    }}
+                    disabled={busy}
+                  />
+                </label>
+
+                {uploadProgress === "uploading" && (
+                  <div style={s.uploadingBanner}>⏳ Uploading proof of payment…</div>
+                )}
               </>
             )}
 
@@ -335,4 +416,20 @@ const s: Record<string, React.CSSProperties> = {
   modalBtns:    { display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 },
   cancelBtn:    { padding: "10px 18px", borderRadius: 8, background: "#fff", border: "1px solid #d1d5db", color: "#374151", fontWeight: 600, fontSize: 14, cursor: "pointer" },
   primaryBtn:   { padding: "10px 22px", borderRadius: 8, background: "#15803d", color: "#fff", border: "none", fontWeight: 700, fontSize: 14, cursor: "pointer" },
+
+  fileDropZone: {
+    border: "2px dashed #d1d5db", borderRadius: 8, padding: "14px 16px", cursor: "pointer",
+    background: "#f9fafb", display: "flex", alignItems: "center", justifyContent: "center",
+    minHeight: 72, transition: "border-color 0.15s",
+  },
+  fileDropZoneHasFile: { borderColor: "#15803d", background: "#f0fdf4" },
+  filePlaceholder: { display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 4, color: "#6b7280", fontSize: 13 },
+  fileInfo: { display: "flex", alignItems: "center", gap: 10, width: "100%" },
+  fileIcon: { fontSize: 24, flexShrink: 0 },
+  fileDetails: { flex: 1, minWidth: 0 },
+  fileName: { fontSize: 13, fontWeight: 600, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const },
+  fileSize: { fontSize: 11, color: "#6b7280" },
+  removeFileBtn: { background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 16, padding: "0 4px", flexShrink: 0 },
+  uploadingBanner: { background: "#fef9c3", border: "1px solid #fde047", borderRadius: 6, padding: "8px 12px", fontSize: 13, color: "#854d0e" },
+  proofBadge: { display: "inline-block", fontSize: 11, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "1px 7px", color: "#1d4ed8", marginTop: 3 },
 };

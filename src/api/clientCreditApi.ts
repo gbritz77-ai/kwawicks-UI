@@ -10,6 +10,7 @@ export type ClientCreditEntryDto = {
   notes: string;
   createdByUserId: string;
   createdAt: string;
+  proofS3Key: string;
 };
 
 export type ClientCreditLedgerDto = {
@@ -23,6 +24,12 @@ export type AddCreditDepositRequest = {
   amount: number;
   paymentMethod: "Cash" | "EFT" | "CardMachine";
   notes?: string;
+  proofS3Key?: string;
+};
+
+export type CreditProofUploadUrlResponse = {
+  uploadUrl: string;
+  s3Key: string;
 };
 
 export const clientCreditApi = {
@@ -34,4 +41,9 @@ export const clientCreditApi = {
 
   addDeposit: (clientId: string, req: AddCreditDepositRequest) =>
     api.post<ClientCreditEntryDto>(`/api/clients/${clientId}/credit`, req),
+
+  getProofUploadUrl: (clientId: string, contentType: string) =>
+    api.get<CreditProofUploadUrlResponse>(
+      `/api/clients/${clientId}/credit/proof-upload-url?contentType=${encodeURIComponent(contentType)}`
+    ),
 };
