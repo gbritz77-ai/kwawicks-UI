@@ -21,6 +21,7 @@ import StaffMembersPage from "./pages/StaffMembersPage";
 import PettyCashPage from "./pages/PettyCashPage";
 import HubRequestsPage from "./pages/HubRequestsPage";
 import SettingsPage from "./pages/SettingsPage";
+import ClientAccountsPage from "./pages/ClientAccountsPage";
 
 function AuthLayout({ children }: { children: React.ReactElement }) {
   return (
@@ -48,7 +49,8 @@ export default function App() {
       <Route path="/app/staff-members" element={<AuthLayout><StaffMembersPage /></AuthLayout>} />
       <Route path="/app/petty-cash"    element={<AuthLayout><PettyCashPage /></AuthLayout>} />
       <Route path="/app/hub-requests"  element={<AuthLayout><HubRequestsPage /></AuthLayout>} />
-      <Route path="/app/settings"      element={<AuthLayout><SettingsPage /></AuthLayout>} />
+      <Route path="/app/settings"         element={<AuthLayout><SettingsPage /></AuthLayout>} />
+      <Route path="/app/client-accounts"  element={<AuthLayout><ClientAccountsPage /></AuthLayout>} />
       <Route path="/driver"              element={<AuthLayout><DriverDashboardPage /></AuthLayout>} />
       <Route path="/driver/work"         element={<AuthLayout><DriverPage /></AuthLayout>} />
       <Route path="/driver/reports"      element={<AuthLayout><DriverReportsPage /></AuthLayout>} />

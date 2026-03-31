@@ -6,6 +6,7 @@ import type { SpeciesResponse } from "../api/speciesApi";
 import { staffMembersApi } from "../api/staffMembersApi";
 import type { StaffMemberDto } from "../api/staffMembersApi";
 import { hubSalesApi } from "../api/hubSalesApi";
+import { clientCreditApi } from "../api/clientCreditApi";
 
 const VAT_RATE = 0.15;
 
@@ -49,6 +50,10 @@ export default function HubSalesPage() {
   const [walkIn, setWalkIn] = useState<WalkInForm>(emptyWalkIn());
   const [clientSearch, setClientSearch] = useState("");
 
+  // Credit balance for selected existing client
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [creditLoading, setCreditLoading] = useState(false);
+
   // Lines
   const [lines, setLines] = useState<SaleLine[]>([]);
   const [addSpeciesId, setAddSpeciesId] = useState("");
@@ -61,7 +66,7 @@ export default function HubSalesPage() {
   // Submission
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState<{ invoiceId: string; invoiceNumber?: string; whatsAppSent: boolean } | null>(null);
+  const [success, setSuccess] = useState<{ invoiceId: string; invoiceNumber?: string; whatsAppSent: boolean; creditCharged?: boolean; newCreditBalance?: number } | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -74,6 +79,22 @@ export default function HubSalesPage() {
       setStaffMembers(st.filter((m: StaffMemberDto) => m.isActive));
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
+
+  // Fetch credit balance when an existing client is selected
+  useEffect(() => {
+    if (mode === "existing" && selectedClientId) {
+      setCreditBalance(null);
+      setCreditLoading(true);
+      clientCreditApi.getBalance(selectedClientId)
+        .then(r => setCreditBalance(r.balance))
+        .catch(() => setCreditBalance(null))
+        .finally(() => setCreditLoading(false));
+    } else {
+      setCreditBalance(null);
+    }
+    // If switching away from AccountCredit when client changes, reset to Cash
+    if (paymentType === "AccountCredit") setPaymentType("Cash");
+  }, [selectedClientId, mode]);
 
   function addLine() {
     const sp = species.find(s => s.speciesId === addSpeciesId);
@@ -121,6 +142,7 @@ export default function HubSalesPage() {
     setClientSearch("");
     setLines([]);
     setPaymentType("Cash");
+    setCreditBalance(null);
     setError("");
     setSuccess(null);
   }
@@ -149,7 +171,7 @@ export default function HubSalesPage() {
           vatRate: l.vatRate,
         })),
       });
-      setSuccess({ invoiceId: result.invoiceId, whatsAppSent: result.whatsAppSent });
+      setSuccess({ invoiceId: result.invoiceId, whatsAppSent: result.whatsAppSent, creditCharged: result.creditCharged, newCreditBalance: result.newCreditBalance });
     } catch (e: any) {
       setError(e?.message ?? "Failed to create sale.");
     } finally { setBusy(false); }
@@ -174,6 +196,11 @@ export default function HubSalesPage() {
             ? <div style={{ fontSize: 13, color: "#15803d", marginTop: 8 }}>📱 Invoice sent via WhatsApp</div>
             : <div style={{ fontSize: 13, color: "#64748b", marginTop: 8 }}>WhatsApp not sent (no phone number on file)</div>
           }
+          {success.creditCharged && success.newCreditBalance !== undefined && (
+            <div style={{ fontSize: 13, color: "#1d4ed8", marginTop: 8 }}>
+              💳 Account credit charged — new balance: {fmt(success.newCreditBalance)}
+            </div>
+          )}
           <button style={{ ...s.btnPrimary, marginTop: 24 }} onClick={reset}>New Sale</button>
         </div>
       </div>
@@ -228,6 +255,21 @@ export default function HubSalesPage() {
                     </option>
                   ))}
                 </select>
+                {selectedClientId && (
+                  <div style={s.creditBalanceBadge}>
+                    {creditLoading
+                      ? <span style={{ color: "#64748b" }}>Loading credit balance…</span>
+                      : creditBalance !== null
+                        ? <>
+                            💳 Account credit balance:{" "}
+                            <strong style={{ color: creditBalance >= 0 ? "#166534" : "#dc2626" }}>
+                              {fmt(creditBalance)}
+                            </strong>
+                          </>
+                        : <span style={{ color: "#94a3b8" }}>Credit balance unavailable</span>
+                    }
+                  </div>
+                )}
               </>
             )}
 
@@ -365,15 +407,35 @@ export default function HubSalesPage() {
             <div style={s.cardTitle}>Payment</div>
 
             {mode !== "staff" ? (
-              <div style={s.modeRow}>
-                {PAYMENT_TYPES.map(pt => (
-                  <button
-                    key={pt}
-                    style={paymentType === pt ? { ...s.modeBtn, ...s.modeBtnActive } : s.modeBtn}
-                    onClick={() => setPaymentType(pt)}
-                  >{pt}</button>
-                ))}
-              </div>
+              <>
+                <div style={s.modeRow}>
+                  {PAYMENT_TYPES.map(pt => (
+                    <button
+                      key={pt}
+                      style={paymentType === pt ? { ...s.modeBtn, ...s.modeBtnActive } : s.modeBtn}
+                      onClick={() => setPaymentType(pt)}
+                    >{pt}</button>
+                  ))}
+                  {mode === "existing" && selectedClientId && creditBalance !== null && (
+                    <button
+                      style={paymentType === "AccountCredit" ? { ...s.modeBtn, ...s.modeBtnCredit } : { ...s.modeBtn, ...s.modeBtnCreditOutline }}
+                      onClick={() => setPaymentType("AccountCredit")}
+                    >
+                      💳 Account Credit
+                    </button>
+                  )}
+                </div>
+                {paymentType === "AccountCredit" && creditBalance !== null && grandTotal > creditBalance && (
+                  <div style={s.creditWarning}>
+                    ⚠️ Balance ({fmt(creditBalance)}) is less than the total ({fmt(grandTotal)}). Sale will proceed but account will go negative.
+                  </div>
+                )}
+                {paymentType === "AccountCredit" && creditBalance !== null && grandTotal <= creditBalance && (
+                  <div style={s.creditOk}>
+                    ✓ Sufficient balance. {fmt(creditBalance - grandTotal)} will remain after this sale.
+                  </div>
+                )}
+              </>
             ) : (
               <div style={s.infoBanner}>On Account (salary deduction at month-end)</div>
             )}
@@ -428,4 +490,9 @@ const s: Record<string, React.CSSProperties> = {
   btnPrimary: { background: "#166534", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer" },
   errorText: { color: "#dc2626", fontSize: 13, marginTop: 8 },
   successBox: { textAlign: "center" as const, padding: "60px 24px", maxWidth: 400, margin: "0 auto" },
+  creditBalanceBadge: { marginTop: 8, padding: "6px 10px", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 6, fontSize: 13, color: "#0369a1" },
+  modeBtnCredit: { background: "#1d4ed8", color: "#fff", borderColor: "#1d4ed8", fontWeight: 600 },
+  modeBtnCreditOutline: { borderColor: "#93c5fd", color: "#1d4ed8", background: "#eff6ff" },
+  creditWarning: { background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 6, padding: "8px 10px", fontSize: 12, color: "#92400e", marginTop: 4 },
+  creditOk: { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 10px", fontSize: 12, color: "#166534", marginTop: 4 },
 };

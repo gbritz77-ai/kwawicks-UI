@@ -83,6 +83,9 @@ export default function NavBar() {
   if (canSeePettyCash) {
     items.push({ label: "Petty Cash", path: "/app/petty-cash" });
   }
+  if (isFinancial) {
+    items.push({ label: "Client Accounts", path: "/app/client-accounts" });
+  }
   if (canSeeHubRequests) {
     items.push({ label: "Hub Requests", path: "/app/hub-requests" });
   }
