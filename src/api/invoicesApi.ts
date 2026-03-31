@@ -96,4 +96,11 @@ export const invoicesApi = {
 
   getReceiptViewUrl: (invoiceId: string) =>
     api.get<{ url: string }>(`/api/invoices/${invoiceId}/receipt-view-url`),
+
+  /** Owner only: update prices on existing invoice lines. Resends WhatsApp automatically. */
+  updateLines: (invoiceId: string, lines: { speciesId: string; unitPriceIncl: number }[]) =>
+    api.patch<{ invoice: InvoiceResponse; whatsAppSent: boolean; whatsAppError?: string }>(
+      `/api/invoices/${invoiceId}/lines`,
+      { lines }
+    ),
 };

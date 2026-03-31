@@ -857,6 +857,7 @@ function InvoicesTab({
   fmt: (n: number) => string;
   onConfirmed: () => void;
 }) {
+  const isOwner = hasAnyRole("Owner");
   const [confirming, setConfirming] = useState<string | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
@@ -864,6 +865,48 @@ function InvoicesTab({
   const [waPhone, setWaPhone] = useState("");
   const [waSending, setWaSending] = useState(false);
   const [waResult, setWaResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Edit prices modal state
+  const [editModal, setEditModal] = useState<InvoiceItem | null>(null);
+  const [editPrices, setEditPrices] = useState<{ speciesId: string; speciesLabel: string; qty: number; vatRate: number; unitPriceIncl: number }[]>([]);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editResult, setEditResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  function openEditModal(inv: InvoiceItem) {
+    setEditModal(inv);
+    setEditResult(null);
+    setEditPrices(inv.lines.map(l => ({
+      speciesId: l.speciesId,
+      speciesLabel: l.speciesId,
+      qty: l.quantity,
+      vatRate: l.vatRate,
+      // Convert stored ex-VAT price to incl-VAT for display
+      unitPriceIncl: parseFloat((l.unitPrice * (1 + l.vatRate)).toFixed(4)),
+    })));
+  }
+
+  async function saveEditPrices() {
+    if (!editModal) return;
+    setEditSaving(true);
+    setEditResult(null);
+    try {
+      const result = await invoicesApi.updateLines(
+        editModal.invoiceId,
+        editPrices.map(p => ({ speciesId: p.speciesId, unitPriceIncl: p.unitPriceIncl }))
+      );
+      setEditResult({
+        success: true,
+        message: result.whatsAppSent
+          ? "✅ Invoice updated and resent via WhatsApp."
+          : `✅ Invoice updated.${result.whatsAppError ? ` (WhatsApp: ${result.whatsAppError})` : " No phone on file — WhatsApp not sent."}`,
+      });
+      onConfirmed(); // refresh the list
+    } catch (e: any) {
+      setEditResult({ success: false, message: e.message ?? "Failed to update invoice." });
+    } finally {
+      setEditSaving(false);
+    }
+  }
 
   const clientMap = Object.fromEntries(clients.map((c) => [c.clientId, c.clientName]));
   const clientPhoneMap = Object.fromEntries(clients.map((c) => [c.clientId, c.clientPhone || c.clientContactDetails || ""]));
@@ -957,6 +1000,7 @@ function InvoicesTab({
                 <Th>Receipt</Th>
                 <Th>Action</Th>
                 <Th>WhatsApp</Th>
+                {isOwner && <Th>Edit Prices</Th>}
               </tr>
             </thead>
             <tbody>
@@ -1015,6 +1059,13 @@ function InvoicesTab({
                         📱 WhatsApp
                       </button>
                     </Td>
+                    {isOwner && (
+                      <Td>
+                        <button onClick={() => openEditModal(inv)} style={s.editPriceBtn}>
+                          ✏️ Edit Prices
+                        </button>
+                      </Td>
+                    )}
                   </tr>
                 );
               })}
@@ -1038,6 +1089,83 @@ function InvoicesTab({
             <a href={receiptUrl} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 10, fontSize: 13, color: "#2563eb" }}>
               Open full size ↗
             </a>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Prices modal */}
+      {editModal && (
+        <div style={s.modalOverlay} onClick={() => !editSaving && setEditModal(null)}>
+          <div style={{ ...s.modalBox, maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <strong style={{ fontSize: 16 }}>✏️ Edit Invoice Prices</strong>
+              <button onClick={() => setEditModal(null)} style={s.modalClose} disabled={editSaving}>✕</button>
+            </div>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>
+              {editModal.invoiceNumber || editModal.invoiceId.slice(0, 8) + "…"} · {clientFullMap[editModal.customerId]?.clientName ?? "Unknown"}
+            </div>
+
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#15803d", background: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.3)", borderRadius: 6, padding: "6px 10px", marginBottom: 14 }}>
+              ✓ Enter prices inclusive of VAT — the updated invoice PDF will be sent to the client's WhatsApp immediately.
+            </div>
+
+            {editPrices.map((p, i) => (
+              <div key={p.speciesId} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", marginBottom: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{p.speciesLabel}</div>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>Qty: {p.qty} · VAT: {(p.vatRate * 100).toFixed(0)}%</div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 2 }}>
+                    <label style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>Unit Price (incl. VAT)</label>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontWeight: 700, color: "#374151" }}>R</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={p.unitPriceIncl}
+                        onChange={e => setEditPrices(ps => ps.map((x, j) => j === i ? { ...x, unitPriceIncl: parseFloat(e.target.value) || 0 } : x))}
+                        disabled={editSaving}
+                        style={{ width: 100, padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, textAlign: "right" as const }}
+                      />
+                    </div>
+                    <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                      Line total: R {(p.unitPriceIncl * p.qty).toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Updated totals preview */}
+            <div style={{ background: "#f1f5f9", borderRadius: 8, padding: "10px 14px", marginTop: 4, marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#475569", marginBottom: 4 }}>
+                <span>Grand Total (incl. VAT)</span>
+                <strong style={{ color: "#0f172a" }}>
+                  R {editPrices.reduce((s, p) => s + p.unitPriceIncl * p.qty, 0).toFixed(2)}
+                </strong>
+              </div>
+            </div>
+
+            {editResult && (
+              <p style={{ fontSize: 13, fontWeight: 600, color: editResult.success ? "#166534" : "#dc2626", marginBottom: 10 }}>
+                {editResult.message}
+              </p>
+            )}
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setEditModal(null)} disabled={editSaving}
+                style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid #cbd5e1", background: "#fff", cursor: "pointer", fontSize: 14 }}>
+                {editResult?.success ? "Close" : "Cancel"}
+              </button>
+              {!editResult?.success && (
+                <button onClick={saveEditPrices} disabled={editSaving}
+                  style={{ padding: "8px 20px", borderRadius: 6, border: "none", background: "#15803d", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700, opacity: editSaving ? 0.6 : 1 }}>
+                  {editSaving ? "Saving…" : "💾 Save & Resend"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1277,6 +1405,10 @@ const s: Record<string, CSSProperties> = {
   waBtn: {
     padding: "5px 12px", borderRadius: 6, border: "1px solid #15803d", cursor: "pointer",
     background: "#f0fdf4", color: "#15803d", fontSize: 13, fontWeight: 600,
+  },
+  editPriceBtn: {
+    padding: "5px 12px", borderRadius: 6, border: "1px solid rgba(37,99,235,0.4)", cursor: "pointer",
+    background: "rgba(37,99,235,0.06)", color: "#1d4ed8", fontSize: 13, fontWeight: 600,
   },
   modalOverlay: {
     position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)",
