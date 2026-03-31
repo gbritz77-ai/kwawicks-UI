@@ -253,8 +253,8 @@ export default function ProcurementOrdersPage() {
               <input style={s.input} value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} disabled={busy} />
             </label>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 8, padding: "8px 12px", marginBottom: 8, fontSize: 12, fontWeight: 700, color: "#92400e" }}>
-              ⚠ All prices must be entered excluding VAT
+            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.3)", borderRadius: 8, padding: "8px 12px", marginBottom: 8, fontSize: 12, fontWeight: 700, color: "#15803d" }}>
+              ✓ Enter all prices inclusive of VAT
             </div>
             <div style={s.sectionHeading}>
               Order Lines

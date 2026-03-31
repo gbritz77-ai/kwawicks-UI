@@ -437,8 +437,8 @@ export default function CollectionRequestsPage() {
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                       Stock &amp; Cost Allocation
                     </div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: "#b45309", background: "rgba(251,191,36,0.15)", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 6, padding: "2px 8px" }}>
-                      ⚠ All prices must be entered excluding VAT
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#15803d", background: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.3)", borderRadius: 6, padding: "2px 8px" }}>
+                      ✓ All prices inclusive of VAT
                     </div>
                   </div>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -593,7 +593,7 @@ export default function CollectionRequestsPage() {
                         onChange={e => setAllocLines(ls => ls.map((x, j) => j === i ? { ...x, qty: parseInt(e.target.value) || 0 } : x))}
                         disabled={busy} />
                     </label>
-                    <label style={s.label}>Unit Price (R, excl VAT)
+                    <label style={s.label}>Unit Price (R, incl. VAT)
                       <input style={s.input} inputMode="decimal" value={l.unitPrice || ""} placeholder="0.00"
                         onChange={e => setAllocLines(ls => ls.map((x, j) => j === i ? { ...x, unitPrice: parseFloat(e.target.value) || 0 } : x))}
                         disabled={busy} />

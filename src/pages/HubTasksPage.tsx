@@ -540,7 +540,7 @@ export default function HubTasksPage() {
                 </label>
 
                 <label style={s.label}>
-                  Unit Cost
+                  Unit Cost (incl. VAT)
                   <input
                     style={s.input}
                     inputMode="decimal"
@@ -551,7 +551,7 @@ export default function HubTasksPage() {
                 </label>
 
                 <label style={s.label}>
-                  Sell Price (optional)
+                  Sell Price (incl. VAT, optional)
                   <input
                     style={s.input}
                     inputMode="decimal"
@@ -562,7 +562,7 @@ export default function HubTasksPage() {
                 </label>
 
                 <label style={s.label}>
-                  Vat (e.g. 0.15)
+                  VAT Rate (e.g. 0.15 for 15%)
                   <input
                     style={s.input}
                     inputMode="decimal"
@@ -570,6 +570,7 @@ export default function HubTasksPage() {
                     onChange={(e) => setSpeciesForm((p) => ({ ...p, vat: e.target.value }))}
                     disabled={busy}
                   />
+                  <span style={{ fontSize: 11, color: "#64748b" }}>Used to extract the VAT portion during invoicing</span>
                 </label>
 
                 <label style={s.label}>

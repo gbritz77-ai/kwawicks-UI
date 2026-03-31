@@ -104,9 +104,10 @@ export default function HubSalesPage() {
     setLines(ls => ls.map(l => l.speciesId === speciesId ? { ...l, [field]: value } : l));
   }
 
-  const subTotal = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
-  const vatTotal = lines.reduce((s, l) => s + l.quantity * l.unitPrice * l.vatRate, 0);
-  const grandTotal = subTotal + vatTotal;
+  // Prices are entered inclusive of VAT; back-calculate ex-VAT components for display
+  const grandTotal = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
+  const subTotal   = lines.reduce((s, l) => s + (l.quantity * l.unitPrice) / (1 + l.vatRate), 0);
+  const vatTotal   = grandTotal - subTotal;
 
   function fmt(n: number) {
     return `R\u00A0${n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -143,7 +144,8 @@ export default function HubSalesPage() {
         lines: lines.map(l => ({
           speciesId: l.speciesId,
           quantity: l.quantity,
-          unitPrice: l.unitPrice,
+          // User enters incl. VAT; back-calc to ex-VAT for the backend invoice engine
+          unitPrice: l.unitPrice / (1 + l.vatRate),
           vatRate: l.vatRate,
         })),
       });
@@ -297,7 +299,7 @@ export default function HubSalesPage() {
                 <input style={{ ...s.input, width: 70 }} type="number" min={1} value={addQty} onChange={e => setAddQty(Number(e.target.value))} />
               </div>
               <div>
-                <label style={s.label}>Unit Price (excl. VAT)</label>
+                <label style={s.label}>Unit Price (incl. VAT)</label>
                 <input style={{ ...s.input, width: 100 }} type="number" min={0} step={0.01} value={addPrice} onChange={e => setAddPrice(Number(e.target.value))} />
               </div>
               <button
@@ -308,10 +310,10 @@ export default function HubSalesPage() {
             </div>
             {selectedSpeciesItem && (
               <div style={s.stockHint}>
-                Default price: {fmt(selectedSpeciesItem.sellPrice ?? 0)} excl. VAT
+                Default price: {fmt(selectedSpeciesItem.sellPrice ?? 0)} incl. VAT
               </div>
             )}
-            <div style={{ fontSize: 11, color: "#f59e0b", marginTop: 4 }}>⚠ All prices must be entered excluding VAT</div>
+            <div style={{ fontSize: 11, color: "#16a34a", marginTop: 4 }}>✓ Enter all prices inclusive of VAT — the VAT portion is calculated automatically</div>
           </div>
 
           {/* Lines table */}
@@ -345,7 +347,7 @@ export default function HubSalesPage() {
                         />
                       </td>
                       <td style={{ ...s.td, color: "#64748b" }}>{(l.vatRate * 100).toFixed(0)}%</td>
-                      <td style={{ ...s.td, fontWeight: 600 }}>{fmt(l.quantity * l.unitPrice * (1 + l.vatRate))}</td>
+                      <td style={{ ...s.td, fontWeight: 600 }}>{fmt(l.quantity * l.unitPrice)}</td>
                       <td style={s.td}>
                         <button style={s.removeBtn} onClick={() => removeLine(l.speciesId)}>✕</button>
                       </td>

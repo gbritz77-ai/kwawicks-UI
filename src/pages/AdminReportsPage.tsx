@@ -492,7 +492,7 @@ export default function AdminReportsPage() {
         return (
           <div>
             <div style={s.kpiRow}>
-              <KpiCard label="Total Spend (excl. VAT)" value={fmt(totalValue)} highlight />
+              <KpiCard label="Total Spend (incl. VAT)" value={fmt(totalValue)} highlight />
               <KpiCard label="Suppliers"               value={String(suppliers)} />
               <KpiCard label="Orders"                  value={String(totalOrders)} />
               <KpiCard label="Total Units"             value={totalUnits.toLocaleString()} />
@@ -507,7 +507,7 @@ export default function AdminReportsPage() {
                     <Th>Supplier</Th>
                     <Th>Orders</Th>
                     <Th>Units</Th>
-                    <Th>Total Value (excl. VAT)</Th>
+                    <Th>Total Value (incl. VAT)</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -558,14 +558,14 @@ export default function AdminReportsPage() {
               <KpiCard label="Lowest Margin"    value={rows[rows.length - 1]?.margin != null ? `${rows[rows.length - 1].margin!.toFixed(1)}%` : "—"} />
             </div>
             <p style={{ fontSize: 12, color: "#94a3b8", marginBottom: 12 }}>
-              ⚠ Unit cost and sell price are excl. VAT. Margin = (Sell − Cost) / Sell × 100.
+              Unit cost and sell price are incl. VAT. Margin = (Sell − Cost) / Sell × 100.
             </p>
             <ScrollTable>
               <thead>
                 <tr>
                   <Th>Species</Th>
-                  <Th>Unit Cost (excl. VAT)</Th>
-                  <Th>Sell Price (excl. VAT)</Th>
+                  <Th>Unit Cost (incl. VAT)</Th>
+                  <Th>Sell Price (incl. VAT)</Th>
                   <Th>Margin (R)</Th>
                   <Th>Margin (%)</Th>
                 </tr>

@@ -546,7 +546,7 @@ export default function DeliveryOrdersPage() {
                         onChange={(e) => setLine(idx, "unitPrice", e.target.value)}
                         disabled={busy}
                       />
-                      <div style={s.availHint}>Override price</div>
+                      <div style={s.availHint}>Override price (incl. VAT)</div>
                     </div>
                   )}
 
