@@ -49,54 +49,40 @@ export default function NavBar() {
   useEffect(() => { setMenuOpen(false); }, [pathname, search]);
 
   const items: NavItem[] = [];
-  if (isOperational) {
-    items.push({ label: "Dashboard",       path: "/app" });
-    items.push({ label: "Species",         path: "/app/hub-tasks", tabParam: "species" });
-    items.push({ label: "Delivery Orders", path: "/app/delivery-orders" });
-    items.push({ label: "Reports",         path: "/app/reports" });
-  }
-  if (canManageClients) {
-    items.push({ label: "Clients", path: "/app/hub-tasks", tabParam: "clients" });
-  }
-  if (isFinancial) {
-    items.push({ label: "Invoices",   path: "/app/reports", tabParam: "invoices" });
-    items.push({ label: "Statements", path: "/app/reports", tabParam: "statement" });
-  }
-  if (isUserManager) {
-    items.push({ label: "Users", path: "/app/users" });
-  }
-  if (hasAnyRole("Owner", "Admin", "Procurement")) {
-    items.push({ label: "Suppliers", path: "/app/suppliers" });
-  }
-  if (isProcurement) {
-    items.push({ label: "Procurement", path: "/app/procurement-orders" });
-  }
-  if (canSeeCollections) {
-    items.push({ label: "Collections", path: "/app/collection-requests" });
-  }
-  if (canSeeHubSales) {
-    items.push({ label: "Hub Sales", path: "/app/hub-sales" });
-  }
-  if (canSeeStaff) {
-    items.push({ label: "Staff", path: "/app/staff-members" });
-  }
-  if (canSeePettyCash) {
-    items.push({ label: "Petty Cash", path: "/app/petty-cash" });
-  }
-  if (isFinancial) {
-    items.push({ label: "Client Accounts", path: "/app/client-accounts" });
-  }
-  if (canSeeHubRequests) {
-    items.push({ label: "Hub Requests", path: "/app/hub-requests" });
-  }
-  if (isOwner) {
-    items.push({ label: "Settings", path: "/app/settings" });
-  }
+
   if (isDriverRole) {
     items.push({ label: "Dashboard",        path: "/driver" });
     items.push({ label: "Delivery History", path: "/driver/reports" });
     items.push({ label: "Help Me",          path: "/driver/help" });
   } else {
+    // ── Operations ──────────────────────────────────────────────────
+    if (isOperational)    items.push({ label: "Dashboard",    path: "/app" });
+    if (canSeeHubSales)   items.push({ label: "Hub Sales",    path: "/app/hub-sales" });
+    if (canSeeHubRequests)items.push({ label: "Hub Requests", path: "/app/hub-requests" });
+    if (isOperational)    items.push({ label: "Deliveries",   path: "/app/delivery-orders" });
+    if (canSeeCollections)items.push({ label: "Collections",  path: "/app/collection-requests" });
+
+    // ── Stock & Clients ──────────────────────────────────────────────
+    if (isOperational)    items.push({ label: "Species",  path: "/app/hub-tasks", tabParam: "species" });
+    if (canManageClients) items.push({ label: "Clients",  path: "/app/hub-tasks", tabParam: "clients" });
+
+    // ── Finance ─────────────────────────────────────────────────────
+    if (isOperational)    items.push({ label: "Reports",         path: "/app/reports" });
+    if (isFinancial) {
+      items.push({ label: "Invoices",        path: "/app/reports",         tabParam: "invoices" });
+      items.push({ label: "Statements",      path: "/app/reports",         tabParam: "statement" });
+      items.push({ label: "Petty Cash",      path: "/app/petty-cash" });
+      items.push({ label: "Client Accounts", path: "/app/client-accounts" });
+    }
+
+    // ── Procurement ──────────────────────────────────────────────────
+    if (isProcurement)                      items.push({ label: "Procurement", path: "/app/procurement-orders" });
+    if (hasAnyRole("Owner","Admin","Procurement")) items.push({ label: "Suppliers", path: "/app/suppliers" });
+
+    // ── People & Admin ───────────────────────────────────────────────
+    if (canSeeStaff)   items.push({ label: "Staff",    path: "/app/staff-members" });
+    if (isUserManager) items.push({ label: "Users",    path: "/app/users" });
+    if (isOwner)       items.push({ label: "Settings", path: "/app/settings" });
     items.push({ label: "Help Me", path: "/app/help" });
   }
 

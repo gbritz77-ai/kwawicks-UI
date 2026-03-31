@@ -133,30 +133,65 @@ export default function PettyCashPage() {
 
       {/* KPI cards */}
       {summary && (
-        <div style={s.kpiRow}>
-          <div style={s.kpiCard}>
-            <div style={s.kpiLabel}>Current Balance</div>
-            <div style={{ ...s.kpiValue, color: summary.currentBalance >= 0 ? "#22c55e" : "#ef4444" }}>
-              {fmt(summary.currentBalance)}
+        <>
+          {/* Total Cash In Custody — hero card */}
+          <div style={s.custodyCard}>
+            <div style={s.custodyLeft}>
+              <div style={s.custodyLabel}>💵 Total Cash In Custody</div>
+              <div style={s.custodySub}>All physical cash on hand since last cashup</div>
+              <div style={s.custodyBreakdown}>
+                <div style={s.breakdownRow}>
+                  <span style={s.breakdownLabel}>Petty Cash Float</span>
+                  <span style={{ color: summary.currentBalance >= 0 ? "#4ade80" : "#f87171" }}>
+                    {fmt(summary.currentBalance)}
+                  </span>
+                </div>
+                <div style={s.breakdownRow}>
+                  <span style={s.breakdownLabel}>Hub Sales (Cash)</span>
+                  <span style={{ color: "#4ade80" }}>{fmt(summary.cashFromHubSales)}</span>
+                </div>
+                <div style={s.breakdownRow}>
+                  <span style={s.breakdownLabel}>Client Deposits (Cash)</span>
+                  <span style={{ color: "#4ade80" }}>{fmt(summary.cashFromCreditDeposits)}</span>
+                </div>
+              </div>
+            </div>
+            <div style={s.custodyRight}>
+              <div style={{ ...s.custodyTotal, color: summary.totalCashInCustody >= 0 ? "#22c55e" : "#ef4444" }}>
+                {fmt(summary.totalCashInCustody)}
+              </div>
+              {summary.totalCashInCustody < 0 && (
+                <div style={{ fontSize: 12, color: "#ef4444", marginTop: 4 }}>⚠ Negative — check entries</div>
+              )}
             </div>
           </div>
-          <div style={s.kpiCard}>
-            <div style={s.kpiLabel}>Cash In (since cashup)</div>
-            <div style={{ ...s.kpiValue, color: "#22c55e" }}>{fmt(summary.totalInSinceLastCashup)}</div>
+
+          {/* Secondary KPI row */}
+          <div style={s.kpiRow}>
+            <div style={s.kpiCard}>
+              <div style={s.kpiLabel}>Petty Cash Float</div>
+              <div style={{ ...s.kpiValue, color: summary.currentBalance >= 0 ? "#22c55e" : "#ef4444" }}>
+                {fmt(summary.currentBalance)}
+              </div>
+            </div>
+            <div style={s.kpiCard}>
+              <div style={s.kpiLabel}>Cash In (since cashup)</div>
+              <div style={{ ...s.kpiValue, color: "#22c55e" }}>{fmt(summary.totalInSinceLastCashup)}</div>
+            </div>
+            <div style={s.kpiCard}>
+              <div style={s.kpiLabel}>Cash Out (since cashup)</div>
+              <div style={{ ...s.kpiValue, color: "#ef4444" }}>{fmt(summary.totalOutSinceLastCashup)}</div>
+            </div>
+            <div style={s.kpiCard}>
+              <div style={s.kpiLabel}>Open Entries</div>
+              <div style={s.kpiValue}>{summary.openEntryCount}</div>
+            </div>
+            <div style={s.kpiCard}>
+              <div style={s.kpiLabel}>Last Cashup</div>
+              <div style={{ ...s.kpiValue, fontSize: 16 }}>{summary.lastCashupDate ?? "Never"}</div>
+            </div>
           </div>
-          <div style={s.kpiCard}>
-            <div style={s.kpiLabel}>Cash Out (since cashup)</div>
-            <div style={{ ...s.kpiValue, color: "#ef4444" }}>{fmt(summary.totalOutSinceLastCashup)}</div>
-          </div>
-          <div style={s.kpiCard}>
-            <div style={s.kpiLabel}>Open Entries</div>
-            <div style={s.kpiValue}>{summary.openEntryCount}</div>
-          </div>
-          <div style={s.kpiCard}>
-            <div style={s.kpiLabel}>Last Cashup</div>
-            <div style={{ ...s.kpiValue, fontSize: 16 }}>{summary.lastCashupDate ?? "Never"}</div>
-          </div>
-        </div>
+        </>
       )}
 
       {/* Tabs */}
@@ -560,6 +595,26 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     color: "#f1f5f9",
   },
+  custodyCard: {
+    background: "#1e293b",
+    border: "1px solid #22c55e",
+    borderRadius: 14,
+    padding: "20px 24px",
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 24,
+    marginBottom: 16,
+    flexWrap: "wrap" as const,
+  },
+  custodyLeft: { flex: 1 },
+  custodyLabel: { fontSize: 15, fontWeight: 700, color: "#22c55e", marginBottom: 4 },
+  custodySub: { fontSize: 12, color: "#64748b", marginBottom: 14 },
+  custodyBreakdown: { display: "flex", flexDirection: "column" as const, gap: 6 },
+  breakdownRow: { display: "flex", justifyContent: "space-between", fontSize: 13, color: "#94a3b8", gap: 32 },
+  breakdownLabel: { color: "#64748b" },
+  custodyRight: { textAlign: "right" as const },
+  custodyTotal: { fontSize: 38, fontWeight: 900, lineHeight: 1 },
   kpiRow: {
     display: "flex",
     gap: 12,

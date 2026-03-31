@@ -23,6 +23,9 @@ export type PettyCashSummaryDto = {
   openEntryCount: number;
   lastCashupDate: string | null;
   openEntries: PettyCashEntryDto[];
+  cashFromHubSales: number;
+  cashFromCreditDeposits: number;
+  totalCashInCustody: number;
 };
 
 export type PettyCashupDto = {
