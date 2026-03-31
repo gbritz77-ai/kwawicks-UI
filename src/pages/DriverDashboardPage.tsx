@@ -85,6 +85,7 @@ export default function DriverDashboardPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [speciesList, setSpeciesList] = useState<SpeciesResponse[]>([]);
+  const [clientMap, setClientMap] = useState<Record<string, import("../api/clientsApi").ClientDto>>({});
 
   // Completion flow
   const [completing, setCompleting] = useState<DeliveryOrderResponse | null>(null);
@@ -133,8 +134,14 @@ export default function DriverDashboardPage() {
     setOrdersError(null);
     setLoadingOrders(true);
     try {
-      const data = await deliveryOrdersApi.list({ driverId });
+      const [data, allClients] = await Promise.all([
+        deliveryOrdersApi.list({ driverId }),
+        clientsApi.list().catch(() => []),
+      ]);
       setOrders(data.filter(o => o.status !== "Delivered"));
+      const map: Record<string, import("../api/clientsApi").ClientDto> = {};
+      for (const c of allClients) map[c.clientId] = c;
+      setClientMap(map);
     } catch (e: any) {
       setOrdersError(e?.message || "Could not load deliveries.");
     } finally {
@@ -434,18 +441,23 @@ export default function DriverDashboardPage() {
             const expanded = expandedId === order.deliveryOrderId;
             const isOFD = order.status === "OutForDelivery";
             const busy = updatingId === order.deliveryOrderId;
+            const client = clientMap[order.customerId];
+            const clientName = client?.clientName || order.customerId || "Unknown Client";
+            const phone = client?.clientPhone?.trim() || client?.clientContactDetails?.trim() || null;
+            const addressParts = [order.deliveryAddressLine1, order.city, order.province, order.postalCode].filter(Boolean);
+            const addressOneLine = addressParts.join(", ");
             return (
               <div key={order.deliveryOrderId} style={s.card}>
                 <div style={s.cardHead} onClick={() => setExpandedId(expanded ? null : order.deliveryOrderId)}>
                   <div style={{ flex: 1 }}>
                     <div style={s.cardTitle}>
-                      {order.deliveryAddressLine1 || order.city || "Delivery"}
+                      {clientName}
                       <span style={{ ...s.badge, ...DELIVERY_COLORS[order.status] }}>
                         {order.status === "OutForDelivery" ? "Out for Delivery" : order.status}
                       </span>
                     </div>
                     <div style={s.cardMeta}>
-                      {order.city && <><span>{order.city}</span><span style={s.dot}>·</span></>}
+                      {addressOneLine && <><span>📍 {addressOneLine}</span><span style={s.dot}>·</span></>}
                       <span>{order.lines.length} item{order.lines.length !== 1 ? "s" : ""}</span>
                       <span style={s.dot}>·</span>
                       <span style={s.mono}>{order.deliveryOrderId.slice(0, 8)}…</span>
@@ -456,12 +468,36 @@ export default function DriverDashboardPage() {
 
                 {expanded && (
                   <div style={s.cardBody}>
-                    {order.deliveryAddressLine1 && (
-                      <div style={s.detailRow}><span style={s.dk}>Address</span><span>{order.deliveryAddressLine1}</span></div>
+                    {/* Client info block */}
+                    <div style={s.clientBlock}>
+                      <div style={s.clientBlockTitle}>📋 Client</div>
+                      <div style={s.clientName}>{clientName}</div>
+                      {phone && (
+                        <a href={`tel:${phone}`} style={s.clientPhone}>📞 {phone}</a>
+                      )}
+                    </div>
+
+                    {/* Address block */}
+                    {addressOneLine && (
+                      <div style={s.addressBlock}>
+                        <div style={s.addressBlockTitle}>📍 Delivery Address</div>
+                        {order.deliveryAddressLine1 && <div style={s.addressLine}>{order.deliveryAddressLine1}</div>}
+                        {(order.city || order.province || order.postalCode) && (
+                          <div style={s.addressLine}>
+                            {[order.city, order.province, order.postalCode].filter(Boolean).join(", ")}
+                          </div>
+                        )}
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressOneLine)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={s.mapsLink}
+                        >
+                          🗺 Open in Google Maps
+                        </a>
+                      </div>
                     )}
-                    {order.city && (
-                      <div style={s.detailRow}><span style={s.dk}>City</span><span>{order.city}</span></div>
-                    )}
+
                     <div style={s.itemsHead}>Items</div>
                     {order.lines.map((l, i) => (
                       <div key={i} style={s.lineRow}>
@@ -941,6 +977,16 @@ const s: Record<string, React.CSSProperties> = {
   detailRow: { display: "flex", gap: 8, marginBottom: 4, fontSize: 14 },
   dk:        { fontWeight: 800, minWidth: 80 },
   itemsHead: { fontWeight: 900, fontSize: 11, textTransform: "uppercase" as const, letterSpacing: 0.6, color: "rgba(0,0,0,0.45)", marginTop: 10, marginBottom: 8 },
+
+  // Client + address info blocks
+  clientBlock: { background: "rgba(37,99,235,0.05)", border: "1px solid rgba(37,99,235,0.15)", borderRadius: 10, padding: "10px 14px", marginBottom: 10 },
+  clientBlockTitle: { fontSize: 10, fontWeight: 800, textTransform: "uppercase" as const, letterSpacing: "0.07em", color: "#64748b", marginBottom: 4 },
+  clientName: { fontSize: 16, fontWeight: 900, color: "#0f172a", marginBottom: 2 },
+  clientPhone: { display: "inline-block", fontSize: 13, fontWeight: 700, color: "#2563eb", textDecoration: "none" as const, marginTop: 2 },
+  addressBlock: { background: "rgba(20,184,166,0.05)", border: "1px solid rgba(20,184,166,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 10 },
+  addressBlockTitle: { fontSize: 10, fontWeight: 800, textTransform: "uppercase" as const, letterSpacing: "0.07em", color: "#64748b", marginBottom: 4 },
+  addressLine: { fontSize: 14, color: "#0f172a", fontWeight: 600, lineHeight: 1.5 },
+  mapsLink: { display: "inline-block", marginTop: 6, fontSize: 12, fontWeight: 700, color: "#0891b2", textDecoration: "none" as const },
   lineRow:   { display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid rgba(0,0,0,0.06)", fontSize: 14 },
   lineQty:   { fontWeight: 900, fontSize: 16, color: "#2563eb" },
   actions:   { marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" },
