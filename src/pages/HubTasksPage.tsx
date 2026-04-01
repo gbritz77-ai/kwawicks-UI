@@ -216,12 +216,12 @@ export default function HubTasksPage() {
     if (!name) return setError("Name is required.");
 
     const unitCost = Number(speciesForm.unitCost);
-    if (!Number.isFinite(unitCost) || unitCost < 0)
-      return setError("Unit Cost must be 0 or more.");
+    if (!Number.isFinite(unitCost) || unitCost <= 0)
+      return setError("Unit Cost must be greater than R 0.");
 
     const sellPrice = speciesForm.sellPrice.trim() === "" ? null : Number(speciesForm.sellPrice);
-    if (sellPrice !== null && (!Number.isFinite(sellPrice) || sellPrice < 0))
-      return setError("Sell Price must be 0 or more.");
+    if (sellPrice !== null && (!Number.isFinite(sellPrice) || sellPrice <= 0))
+      return setError("Sell Price must be greater than R 0.");
 
     const vat = Number(speciesForm.vat);
     if (!Number.isFinite(vat) || vat < 0)

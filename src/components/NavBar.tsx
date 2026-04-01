@@ -78,11 +78,11 @@ export default function NavBar() {
     if (canSeeCollections) salesItems.push(leaf("Collections",  "/app/collection-requests"));
     if (salesItems.length) entries.push(group("Sales", salesItems));
 
-    // Stock group
-    const stockItems: Leaf[] = [];
-    if (isOperational)    stockItems.push(leaf("Species", "/app/hub-tasks", "species"));
-    if (canManageClients) stockItems.push(leaf("Clients", "/app/hub-tasks", "clients"));
-    if (stockItems.length) entries.push(group("Stock", stockItems));
+    // Stock — Species as a top-level leaf (no longer a group)
+    if (isOperational)    entries.push(leaf("Species", "/app/hub-tasks", "species"));
+
+    // Clients as a top-level leaf
+    if (canManageClients) entries.push(leaf("Clients", "/app/hub-tasks", "clients"));
 
     // Finance group
     const financeItems: Leaf[] = [];

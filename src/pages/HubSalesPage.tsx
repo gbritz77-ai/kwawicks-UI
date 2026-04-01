@@ -20,20 +20,6 @@ type SaleLine = {
   vatRate: number;
 };
 
-type WalkInForm = {
-  clientName: string;
-  clientPhone: string;
-  clientContactDetails: string;
-  clientAddress: string;
-  clientCity: string;
-  clientProvince: string;
-  clientPostalCode: string;
-};
-
-const emptyWalkIn = (): WalkInForm => ({
-  clientName: "", clientPhone: "", clientContactDetails: "",
-  clientAddress: "", clientCity: "", clientProvince: "", clientPostalCode: "",
-});
 
 const PAYMENT_TYPES = ["Cash", "EFT", "Card"] as const;
 
@@ -47,7 +33,6 @@ export default function HubSalesPage() {
   const [mode, setMode] = useState<CustomerMode>("existing");
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedStaffId, setSelectedStaffId] = useState("");
-  const [walkIn, setWalkIn] = useState<WalkInForm>(emptyWalkIn());
   const [clientSearch, setClientSearch] = useState("");
 
   // Credit balance for selected existing client
@@ -98,7 +83,7 @@ export default function HubSalesPage() {
 
   function addLine() {
     const sp = species.find(s => s.speciesId === addSpeciesId);
-    if (!sp || addQty <= 0 || addPrice < 0) return;
+    if (!sp || addQty <= 0 || addPrice <= 0) return;
     if (lines.find(l => l.speciesId === addSpeciesId)) {
       setLines(ls => ls.map(l => l.speciesId === addSpeciesId
         ? { ...l, quantity: l.quantity + addQty, unitPrice: addPrice }
@@ -138,7 +123,6 @@ export default function HubSalesPage() {
     setMode("existing");
     setSelectedClientId("");
     setSelectedStaffId("");
-    setWalkIn(emptyWalkIn());
     setClientSearch("");
     setLines([]);
     setPaymentType("Cash");
@@ -151,15 +135,17 @@ export default function HubSalesPage() {
     setError("");
     if (lines.length === 0) { setError("Add at least one item."); return; }
 
+    const zeroPrice = lines.find(l => l.unitPrice <= 0);
+    if (zeroPrice) { setError(`Unit price for "${zeroPrice.speciesName}" cannot be R 0.`); return; }
+
     if (mode === "existing" && !selectedClientId) { setError("Select a customer."); return; }
-    if (mode === "walkin" && !walkIn.clientName.trim()) { setError("Customer name is required."); return; }
     if (mode === "staff" && !selectedStaffId) { setError("Select a staff member."); return; }
 
     setBusy(true);
     try {
       const result = await hubSalesApi.create({
         customerId: mode === "existing" ? selectedClientId : undefined,
-        newClient: mode === "walkin" ? { ...walkIn, clientType: 0, isWalkIn: true } : undefined,
+        newClient: mode === "walkin" ? { clientName: "Walk-in", clientType: 0, isWalkIn: true } : undefined,
         staffMemberId: mode === "staff" ? selectedStaffId : undefined,
         hubId: "main",
         paymentType: mode === "staff" ? "OnAccount" : paymentType,
@@ -274,24 +260,7 @@ export default function HubSalesPage() {
             )}
 
             {mode === "walkin" && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={s.label}>Name *</label>
-                  <input style={s.input} value={walkIn.clientName} onChange={e => setWalkIn(w => ({ ...w, clientName: e.target.value }))} placeholder="Full name" />
-                </div>
-                <div>
-                  <label style={s.label}>WhatsApp / Phone</label>
-                  <input style={s.input} value={walkIn.clientPhone} onChange={e => setWalkIn(w => ({ ...w, clientPhone: e.target.value }))} placeholder="27821234567" />
-                </div>
-                <div>
-                  <label style={s.label}>City</label>
-                  <input style={s.input} value={walkIn.clientCity} onChange={e => setWalkIn(w => ({ ...w, clientCity: e.target.value }))} />
-                </div>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={s.label}>Address</label>
-                  <input style={s.input} value={walkIn.clientAddress} onChange={e => setWalkIn(w => ({ ...w, clientAddress: e.target.value }))} />
-                </div>
-              </div>
+              <div style={s.infoBanner}>🛒 Walk-in sale — no customer details required. Sale will be recorded as "Walk-in".</div>
             )}
 
             {mode === "staff" && (
@@ -349,7 +318,7 @@ export default function HubSalesPage() {
               <button
                 style={{ ...s.btnPrimary, alignSelf: "flex-end" }}
                 onClick={addLine}
-                disabled={!addSpeciesId || addQty <= 0}
+                disabled={!addSpeciesId || addQty <= 0 || addPrice <= 0}
               >Add</button>
             </div>
             {selectedSpeciesItem && (
