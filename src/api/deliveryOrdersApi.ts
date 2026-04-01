@@ -1,6 +1,6 @@
 import { api } from "./apiClient";
 
-export type DeliveryOrderStatus = "Open" | "OutForDelivery" | "Delivered";
+export type DeliveryOrderStatus = "Open" | "OutForDelivery" | "Delivered" | "AwaitingCollection";
 
 export type DeliveryOrderLineDto = {
   speciesId: string;
