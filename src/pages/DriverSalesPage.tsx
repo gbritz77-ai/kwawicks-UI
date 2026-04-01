@@ -358,6 +358,7 @@ export default function DriverSalesPage() {
             <input
               style={s.input} type="number" min={1} value={addQty}
               onChange={e => setAddQty(Number(e.target.value))}
+              onFocus={e => e.target.select()}
             />
           </div>
           <div>
@@ -366,6 +367,7 @@ export default function DriverSalesPage() {
               style={s.input} type="number" min={0} step={0.01}
               placeholder="0.00" value={addPrice}
               onChange={e => setAddPrice(e.target.value)}
+              onFocus={e => e.target.select()}
             />
           </div>
         </div>
@@ -415,6 +417,7 @@ export default function DriverSalesPage() {
                   <input
                     style={{ ...s.input, width: 70 }} type="number" min={1} value={l.quantity}
                     onChange={e => updateLine(l.speciesId, "quantity", Number(e.target.value))}
+                    onFocus={e => e.target.select()}
                   />
                 </div>
                 <div>
@@ -422,6 +425,7 @@ export default function DriverSalesPage() {
                   <input
                     style={{ ...s.input, width: 100 }} type="number" min={0} step={0.01} value={l.unitPrice}
                     onChange={e => updateLine(l.speciesId, "unitPrice", Number(e.target.value))}
+                    onFocus={e => e.target.select()}
                   />
                 </div>
                 <div style={s.lineTotal}>{fmt(l.quantity * l.unitPrice)}</div>

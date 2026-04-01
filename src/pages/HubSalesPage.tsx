@@ -310,11 +310,11 @@ export default function HubSalesPage() {
               </div>
               <div>
                 <label style={s.label}>Qty</label>
-                <input style={{ ...s.input, width: 70 }} type="number" min={1} value={addQty} onChange={e => setAddQty(Number(e.target.value))} />
+                <input style={{ ...s.input, width: 70 }} type="number" min={1} value={addQty} onChange={e => setAddQty(Number(e.target.value))} onFocus={e => e.target.select()} />
               </div>
               <div>
                 <label style={s.label}>Unit Price (incl. VAT)</label>
-                <input style={{ ...s.input, width: 100 }} type="number" min={0} step={0.01} placeholder="0.00" value={addPrice} onChange={e => setAddPrice(e.target.value)} />
+                <input style={{ ...s.input, width: 100 }} type="number" min={0} step={0.01} placeholder="0.00" value={addPrice} onChange={e => setAddPrice(e.target.value)} onFocus={e => e.target.select()} />
               </div>
               <button
                 style={{ ...s.btnPrimary, alignSelf: "flex-end" }}
@@ -381,6 +381,7 @@ export default function HubSalesPage() {
                           style={{ ...s.input, width: 60, padding: "4px 6px" }}
                           type="number" min={1} value={l.quantity}
                           onChange={e => updateLine(l.speciesId, "quantity", Number(e.target.value))}
+                          onFocus={e => e.target.select()}
                         />
                       </td>
                       <td style={s.td}>
@@ -388,6 +389,7 @@ export default function HubSalesPage() {
                           style={{ ...s.input, width: 90, padding: "4px 6px" }}
                           type="number" min={0} step={0.01} value={l.unitPrice}
                           onChange={e => updateLine(l.speciesId, "unitPrice", Number(e.target.value))}
+                          onFocus={e => e.target.select()}
                         />
                       </td>
                       <td style={{ ...s.td, color: "#64748b" }}>{(l.vatRate * 100).toFixed(0)}%</td>

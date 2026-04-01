@@ -523,7 +523,7 @@ export default function CollectionRequestsPage() {
                   <div style={s.loadLineInputs}>
                     <label style={s.label}>Loaded Qty
                       <input style={s.input} inputMode="numeric" value={ll.loadedQty}
-                        onChange={e => setLoadLines(ls => ls.map((x, j) => j === i ? { ...x, loadedQty: parseInt(e.target.value) || 0 } : x))} disabled={busy} />
+                        onChange={e => setLoadLines(ls => ls.map((x, j) => j === i ? { ...x, loadedQty: parseInt(e.target.value) || 0 } : x))} disabled={busy} onFocus={e => e.target.select()} />
                     </label>
                     <label style={s.label}>Notes (if short)
                       <input style={s.input} value={ll.loadingNotes} placeholder="Reason if not full quantity"
@@ -558,7 +558,7 @@ export default function CollectionRequestsPage() {
                   <div style={s.loadLineInputs}>
                     <label style={s.label}>Received Qty
                       <input style={s.input} inputMode="numeric" value={cl.receivedQty}
-                        onChange={e => setConfirmLines(ls => ls.map((x, j) => j === i ? { ...x, receivedQty: parseInt(e.target.value) || 0 } : x))} disabled={busy} />
+                        onChange={e => setConfirmLines(ls => ls.map((x, j) => j === i ? { ...x, receivedQty: parseInt(e.target.value) || 0 } : x))} disabled={busy} onFocus={e => e.target.select()} />
                     </label>
                     <label style={s.label}>Discrepancy Notes
                       <input style={s.input} value={cl.discrepancyNotes} placeholder="If different from loaded"
@@ -636,14 +636,14 @@ export default function CollectionRequestsPage() {
                               value={l.qty || ""} placeholder="0"
                               onChange={e => setAllocSlots(ss => ss.map((x, j) => j !== si ? x : {
                                 ...x, lines: x.lines.map((ll, k) => k !== li ? ll : { ...ll, qty: parseInt(e.target.value) || 0 })
-                              }))} disabled={busy} />
+                              }))} disabled={busy} onFocus={e => e.target.select()} />
                           </label>
                           <label style={s.label}>Unit Price (R, incl. VAT)
                             <input style={s.input} inputMode="decimal"
                               value={l.unitPrice || ""} placeholder="0.00"
                               onChange={e => setAllocSlots(ss => ss.map((x, j) => j !== si ? x : {
                                 ...x, lines: x.lines.map((ll, k) => k !== li ? ll : { ...ll, unitPrice: parseFloat(e.target.value) || 0 })
-                              }))} disabled={busy} />
+                              }))} disabled={busy} onFocus={e => e.target.select()} />
                           </label>
                         </div>
                       </div>
