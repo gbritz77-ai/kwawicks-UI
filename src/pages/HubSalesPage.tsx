@@ -43,7 +43,7 @@ export default function HubSalesPage() {
   const [lines, setLines] = useState<SaleLine[]>([]);
   const [addSpeciesId, setAddSpeciesId] = useState("");
   const [addQty, setAddQty] = useState(1);
-  const [addPrice, setAddPrice] = useState(0);
+  const [addPrice, setAddPrice] = useState("");
 
   // Payment
   const [paymentType, setPaymentType] = useState("Cash");
@@ -83,23 +83,24 @@ export default function HubSalesPage() {
 
   function addLine() {
     const sp = species.find(s => s.speciesId === addSpeciesId);
-    if (!sp || addQty <= 0 || addPrice <= 0) return;
+    const parsedPrice = Number(addPrice);
+    if (!sp || addQty <= 0 || !addPrice || parsedPrice <= 0) return;
     if (lines.find(l => l.speciesId === addSpeciesId)) {
       setLines(ls => ls.map(l => l.speciesId === addSpeciesId
-        ? { ...l, quantity: l.quantity + addQty, unitPrice: addPrice }
+        ? { ...l, quantity: l.quantity + addQty, unitPrice: parsedPrice }
         : l));
     } else {
       setLines(ls => [...ls, {
         speciesId: addSpeciesId,
         speciesName: sp.name,
         quantity: addQty,
-        unitPrice: addPrice,
+        unitPrice: parsedPrice,
         vatRate: VAT_RATE,
       }]);
     }
     setAddSpeciesId("");
     setAddQty(1);
-    setAddPrice(0);
+    setAddPrice("");
   }
 
   function removeLine(speciesId: string) {
@@ -294,7 +295,7 @@ export default function HubSalesPage() {
                   onChange={e => {
                     const sp = species.find(x => x.speciesId === e.target.value);
                     setAddSpeciesId(e.target.value);
-                    if (sp) setAddPrice(sp.sellPrice ?? 0);
+                    if (sp) setAddPrice(sp.sellPrice != null ? String(sp.sellPrice) : "");
                   }}
                 >
                   <option value="">— Select —</option>
@@ -313,12 +314,12 @@ export default function HubSalesPage() {
               </div>
               <div>
                 <label style={s.label}>Unit Price (incl. VAT)</label>
-                <input style={{ ...s.input, width: 100 }} type="number" min={0} step={0.01} value={addPrice} onChange={e => setAddPrice(Number(e.target.value))} />
+                <input style={{ ...s.input, width: 100 }} type="number" min={0} step={0.01} placeholder="0.00" value={addPrice} onChange={e => setAddPrice(e.target.value)} />
               </div>
               <button
                 style={{ ...s.btnPrimary, alignSelf: "flex-end" }}
                 onClick={addLine}
-                disabled={!addSpeciesId || addQty <= 0 || addPrice <= 0}
+                disabled={!addSpeciesId || addQty <= 0 || !addPrice || Number(addPrice) <= 0}
               >Add</button>
             </div>
             {selectedSpeciesItem && (
