@@ -39,12 +39,14 @@ const emptyForm: CreateForm = {
 };
 
 const STATUS_LABELS: Record<DeliveryOrderStatus, string> = {
+  AwaitingCollection: "Awaiting Collection",
   Open: "Open",
   OutForDelivery: "Out for Delivery",
   Delivered: "Delivered",
 };
 
 const STATUS_COLORS: Record<DeliveryOrderStatus, React.CSSProperties> = {
+  AwaitingCollection: { background: "rgba(124,58,237,0.08)", color: "#4c1d95", border: "1px solid rgba(124,58,237,0.3)" },
   Open: { background: "rgba(234,179,8,0.12)", color: "#713f12", border: "1px solid rgba(234,179,8,0.4)" },
   OutForDelivery: { background: "rgba(37,99,235,0.1)", color: "#1e3a8a", border: "1px solid rgba(37,99,235,0.3)" },
   Delivered: { background: "rgba(34,197,94,0.1)", color: "#14532d", border: "1px solid rgba(34,197,94,0.3)" },
@@ -266,6 +268,7 @@ export default function DeliveryOrdersPage() {
           onChange={(e) => setStatusFilter(e.target.value)}
         >
           <option value="">All statuses</option>
+          <option value="AwaitingCollection">Awaiting Collection</option>
           <option value="Open">Open</option>
           <option value="OutForDelivery">Out for Delivery</option>
           <option value="Delivered">Delivered</option>
