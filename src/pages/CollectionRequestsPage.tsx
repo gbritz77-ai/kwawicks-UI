@@ -38,10 +38,13 @@ export default function CollectionRequestsPage() {
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  // Allocation modal
+  // Allocation modal — supports multiple client slots in one session
+  type AllocSlot = {
+    clientId: string;
+    lines: { speciesId: string; speciesName: string; qty: number; unitPrice: number; orderedQty: number }[];
+  };
   const [allocItem, setAllocItem] = useState<CollectionRequestDto | null>(null);
-  const [allocClientId, setAllocClientId] = useState("");
-  const [allocLines, setAllocLines] = useState<{ speciesId: string; speciesName: string; qty: number; unitPrice: number; orderedQty: number; alreadyAllocated: number }[]>([]);
+  const [allocSlots, setAllocSlots] = useState<AllocSlot[]>([]);
   const [allocError, setAllocError] = useState("");
 
   // Create form
@@ -201,45 +204,63 @@ export default function CollectionRequestsPage() {
     finally { setBusy(false); setAckUploading(false); }
   }
 
-  function openAllocModal(cr: CollectionRequestDto) {
-    setAllocItem(cr);
-    setAllocClientId("");
-    setAllocError("");
-    // Pre-build lines from collection request lines, computing already-allocated qty per species
-    setAllocLines(cr.lines.map(l => {
-      const alreadyAllocated = (cr.deliveryAllocations ?? [])
-        .flatMap(a => a.lines)
-        .filter(al => al.speciesId === l.speciesId)
-        .reduce((sum, al) => sum + al.qty, 0);
-      return {
+  function blankSlot(cr: CollectionRequestDto): AllocSlot {
+    return {
+      clientId: "",
+      lines: cr.lines.map(l => ({
         speciesId: l.speciesId,
         speciesName: l.speciesName || l.speciesId,
         qty: 0,
         unitPrice: 0,
         orderedQty: l.orderedQty,
-        alreadyAllocated,
-      };
-    }));
+      })),
+    };
+  }
+
+  function openAllocModal(cr: CollectionRequestDto) {
+    setAllocItem(cr);
+    setAllocSlots([blankSlot(cr)]);
+    setAllocError("");
+  }
+
+  // How many units of a species are still unallocated, excluding the current slot
+  function allocAvailable(cr: CollectionRequestDto, speciesId: string, excludeSlotIdx: number): number {
+    const orderedQty = cr.lines.find(l => l.speciesId === speciesId)?.orderedQty ?? 0;
+    const existingAlloc = (cr.deliveryAllocations ?? [])
+      .flatMap(a => a.lines)
+      .filter(l => l.speciesId === speciesId)
+      .reduce((sum, l) => sum + l.qty, 0);
+    const otherSlots = allocSlots
+      .filter((_, j) => j !== excludeSlotIdx)
+      .reduce((sum, slot) => sum + (slot.lines.find(l => l.speciesId === speciesId)?.qty ?? 0), 0);
+    return orderedQty - existingAlloc - otherSlots;
   }
 
   async function submitAllocation() {
     if (!allocItem) return;
-    if (!allocClientId) { setAllocError("Please select a client."); return; }
-    const activeLines = allocLines.filter(l => l.qty > 0);
-    if (activeLines.length === 0) { setAllocError("Enter a quantity for at least one species."); return; }
-    for (const l of activeLines) {
-      const available = l.orderedQty - l.alreadyAllocated;
-      if (l.qty > available) {
-        setAllocError(`Quantity for ${l.speciesName} (${l.qty}) exceeds available (${available}).`);
-        return;
+    const activeSlots = allocSlots.filter(s => s.clientId && s.lines.some(l => l.qty > 0));
+    if (activeSlots.length === 0) { setAllocError("Add at least one client with a quantity."); return; }
+    for (const [i, slot] of activeSlots.entries()) {
+      if (!slot.clientId) { setAllocError(`Slot ${i + 1}: please select a client.`); return; }
+      for (const l of slot.lines.filter(sl => sl.qty > 0)) {
+        const available = allocAvailable(allocItem, l.speciesId, allocSlots.indexOf(slot));
+        if (l.qty > available) {
+          setAllocError(`${l.speciesName}: ${l.qty} allocated but only ${available} available.`);
+          return;
+        }
       }
     }
     setBusy(true); setAllocError("");
     try {
-      const updated = await collectionRequestsApi.addAllocation(allocItem.collectionRequestId, {
-        clientId: allocClientId,
-        lines: activeLines.map(l => ({ speciesId: l.speciesId, qty: l.qty, unitPrice: l.unitPrice || undefined })),
-      });
+      let updated = allocItem;
+      for (const slot of activeSlots) {
+        updated = await collectionRequestsApi.addAllocation(allocItem.collectionRequestId, {
+          clientId: slot.clientId,
+          lines: slot.lines
+            .filter(l => l.qty > 0)
+            .map(l => ({ speciesId: l.speciesId, qty: l.qty, unitPrice: l.unitPrice || undefined })),
+        });
+      }
       setItems(i => i.map(x => x.collectionRequestId === updated.collectionRequestId ? updated : x));
       setAllocItem(null);
     } catch (e: any) { setAllocError(e?.message ?? "Failed to add allocation."); }
@@ -384,8 +405,8 @@ export default function CollectionRequestsPage() {
                     {isDriver() && cr.status === "InTransit" && (
                       <button style={s.primaryBtn} onClick={() => handleArrive(cr.collectionRequestId)} disabled={busy}>Mark Arrived at Hub</button>
                     )}
-                    {/* Allocation action — admin/owner can allocate stock to a client for en-route delivery */}
-                    {canAllocate() && (cr.status === "Pending" || cr.status === "Loading") && (
+                    {/* Allocation action */}
+                    {canAllocate() && (cr.status === "Pending" || cr.status === "Loading" || cr.status === "InTransit" || cr.status === "ArrivedAtHub" || cr.status === "HubConfirmed") && (
                       <button style={s.allocBtn} onClick={() => openAllocModal(cr)}>+ Allocate Delivery</button>
                     )}
                     {/* Hub admin actions */}
@@ -555,61 +576,98 @@ export default function CollectionRequestsPage() {
         </div>
       )}
 
-      {/* Delivery allocation modal */}
+      {/* Delivery allocation modal — multi-client */}
       {allocItem && (
         <div style={s.backdrop} onClick={() => !busy && setAllocItem(null)}>
-          <div style={{ ...s.modal, maxWidth: 600 }} onClick={e => e.stopPropagation()}>
-            <div style={s.modalTitle}>Allocate En-Route Delivery</div>
+          <div style={{ ...s.modal, maxWidth: 640 }} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>Allocate Deliveries</div>
             <div style={s.modalSub}>
-              {allocItem.assignedDriverName} is collecting from {allocItem.supplierName}. Allocate some stock for direct delivery to a client on the way back.
+              {allocItem.assignedDriverName} · {allocItem.supplierName}. Add one row per client — each becomes a separate delivery order.
             </div>
             {allocError && <div style={s.formError}>{allocError}</div>}
 
-            <label style={s.label}>Deliver To (Client) *
-              <select style={s.input} value={allocClientId} onChange={e => setAllocClientId(e.target.value)} disabled={busy}>
-                <option value="">— Select client —</option>
-                {clients.map(c => (
-                  <option key={c.clientId} value={c.clientId}>{c.clientName}{c.clientCity ? ` · ${c.clientCity}` : ""}</option>
-                ))}
-              </select>
-            </label>
-
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 8 }}>Species Quantities</div>
-            {allocLines.map((l, i) => {
-              const available = l.orderedQty - l.alreadyAllocated;
+            {allocSlots.map((slot, si) => {
+              const clientName = clients.find(c => c.clientId === slot.clientId)?.clientName;
               return (
-                <div key={l.speciesId} style={s.loadLineCard}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
-                    <div style={s.loadLineName}>{l.speciesName}</div>
-                    <div style={{ fontSize: 12, color: "#64748b" }}>
-                      Ordered: {l.orderedQty.toLocaleString()}
-                      {l.alreadyAllocated > 0 && <span style={{ color: "#b45309" }}> · Already allocated: {l.alreadyAllocated.toLocaleString()}</span>}
-                      <span style={{ color: "#16a34a", fontWeight: 700 }}> · Available: {available.toLocaleString()}</span>
+                <div key={si} style={s.allocSlotCard}>
+                  {/* Slot header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a" }}>
+                      Client {si + 1}{clientName ? ` — ${clientName}` : ""}
                     </div>
+                    {allocSlots.length > 1 && (
+                      <button
+                        style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 13, fontWeight: 700, padding: "2px 6px" }}
+                        onClick={() => setAllocSlots(ss => ss.filter((_, j) => j !== si))}
+                        disabled={busy}
+                      >✕ Remove</button>
+                    )}
                   </div>
-                  <div style={s.loadLineInputs}>
-                    <label style={s.label}>Qty to Deliver
-                      <input style={s.input} inputMode="numeric" value={l.qty || ""} placeholder="0"
-                        onChange={e => setAllocLines(ls => ls.map((x, j) => j === i ? { ...x, qty: parseInt(e.target.value) || 0 } : x))}
-                        disabled={busy} />
-                    </label>
-                    <label style={s.label}>Unit Price (R, incl. VAT)
-                      <input style={s.input} inputMode="decimal" value={l.unitPrice || ""} placeholder="0.00"
-                        onChange={e => setAllocLines(ls => ls.map((x, j) => j === i ? { ...x, unitPrice: parseFloat(e.target.value) || 0 } : x))}
-                        disabled={busy} />
-                    </label>
-                  </div>
+
+                  <label style={s.label}>Deliver To (Client) *
+                    <select style={s.input} value={slot.clientId}
+                      onChange={e => setAllocSlots(ss => ss.map((x, j) => j === si ? { ...x, clientId: e.target.value } : x))}
+                      disabled={busy}>
+                      <option value="">— Select client —</option>
+                      {clients.map(c => (
+                        <option key={c.clientId} value={c.clientId}>{c.clientName}{c.clientCity ? ` · ${c.clientCity}` : ""}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {slot.lines.map((l, li) => {
+                    const available = allocAvailable(allocItem, l.speciesId, si);
+                    const existingAlloc = (allocItem.deliveryAllocations ?? [])
+                      .flatMap(a => a.lines).filter(x => x.speciesId === l.speciesId)
+                      .reduce((s, x) => s + x.qty, 0);
+                    return (
+                      <div key={l.speciesId} style={{ ...s.loadLineCard, marginBottom: 8 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
+                          <div style={s.loadLineName}>{l.speciesName}</div>
+                          <div style={{ fontSize: 11, color: "#64748b" }}>
+                            Ordered: {l.orderedQty.toLocaleString()}
+                            {existingAlloc > 0 && <span style={{ color: "#b45309" }}> · Prev.allocated: {existingAlloc.toLocaleString()}</span>}
+                            <span style={{ color: available > 0 ? "#16a34a" : "#dc2626", fontWeight: 700 }}> · Available: {available.toLocaleString()}</span>
+                          </div>
+                        </div>
+                        <div style={s.loadLineInputs}>
+                          <label style={s.label}>Qty to Deliver
+                            <input style={s.input} inputMode="numeric"
+                              value={l.qty || ""} placeholder="0"
+                              onChange={e => setAllocSlots(ss => ss.map((x, j) => j !== si ? x : {
+                                ...x, lines: x.lines.map((ll, k) => k !== li ? ll : { ...ll, qty: parseInt(e.target.value) || 0 })
+                              }))} disabled={busy} />
+                          </label>
+                          <label style={s.label}>Unit Price (R, incl. VAT)
+                            <input style={s.input} inputMode="decimal"
+                              value={l.unitPrice || ""} placeholder="0.00"
+                              onChange={e => setAllocSlots(ss => ss.map((x, j) => j !== si ? x : {
+                                ...x, lines: x.lines.map((ll, k) => k !== li ? ll : { ...ll, unitPrice: parseFloat(e.target.value) || 0 })
+                              }))} disabled={busy} />
+                          </label>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
 
-            <div style={{ fontSize: 12, color: "#64748b", marginTop: -4, marginBottom: 12 }}>
-              ℹ️ Only enter quantities you want to allocate. Leave blank to return that species to hub.
+            <button
+              style={{ ...s.secondaryBtn, width: "100%", marginBottom: 16, color: "#0891b2", borderColor: "#0891b2", borderStyle: "dashed" }}
+              onClick={() => setAllocSlots(ss => [...ss, blankSlot(allocItem)])}
+              disabled={busy}
+            >+ Add Another Client</button>
+
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
+              ℹ️ Only enter quantities you want to allocate. Unallocated stock returns to hub.
             </div>
 
             <div style={s.modalBtns}>
               <button style={s.secondaryBtn} onClick={() => setAllocItem(null)} disabled={busy}>Cancel</button>
-              <button style={s.primaryBtn} onClick={submitAllocation} disabled={busy}>{busy ? "Creating…" : "Create Delivery Order 🚚"}</button>
+              <button style={s.primaryBtn} onClick={submitAllocation} disabled={busy}>
+                {busy ? "Creating…" : `Create ${allocSlots.filter(s => s.clientId && s.lines.some(l => l.qty > 0)).length || ""} Delivery Order${allocSlots.filter(s => s.clientId && s.lines.some(l => l.qty > 0)).length === 1 ? "" : "s"} 🚚`}
+              </button>
             </div>
           </div>
         </div>
@@ -751,6 +809,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 13,
     cursor: "pointer",
   },
+  allocSlotCard: { background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: 14, marginBottom: 14 },
   allocSection: {
     marginTop: 14,
     padding: "10px 12px",
