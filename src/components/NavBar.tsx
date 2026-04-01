@@ -1,92 +1,141 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { clearAuth, getProfileFromIdToken, hasRole, hasAnyRole } from "../api/auth";
 
-type NavItem = { label: string; path: string; tabParam?: string };
+// ── Types ──────────────────────────────────────────────────────────────────
 
-function isActive(item: NavItem, pathname: string, search: string): boolean {
-  if (item.tabParam !== undefined) {
-    return pathname === item.path && new URLSearchParams(search).get("tab") === item.tabParam;
-  }
-  if (item.path === "/app/reports") {
-    const tab = new URLSearchParams(search).get("tab");
-    return pathname === item.path && tab !== "invoices" && tab !== "statement";
-  }
-  return pathname === item.path || (item.path !== "/app" && pathname.startsWith(item.path));
+type Leaf = { kind: "leaf"; label: string; path: string; tabParam?: string };
+type Group = { kind: "group"; label: string; items: Leaf[] };
+type Entry = Leaf | Group;
+
+function leaf(label: string, path: string, tabParam?: string): Leaf {
+  return { kind: "leaf", label, path, tabParam };
+}
+function group(label: string, items: Leaf[]): Group {
+  return { kind: "group", label, items };
 }
 
+// ── Active helpers ─────────────────────────────────────────────────────────
+
+function leafHref(l: Leaf) {
+  return l.tabParam !== undefined ? `${l.path}?tab=${l.tabParam}` : l.path;
+}
+
+function isLeafActive(l: Leaf, pathname: string, search: string): boolean {
+  if (l.tabParam !== undefined)
+    return pathname === l.path && new URLSearchParams(search).get("tab") === l.tabParam;
+  if (l.path === "/app/reports") {
+    const tab = new URLSearchParams(search).get("tab");
+    return pathname === l.path && tab !== "invoices" && tab !== "statement";
+  }
+  return pathname === l.path || (l.path !== "/app" && l.path !== "/driver" && pathname.startsWith(l.path));
+}
+
+function isGroupActive(g: Group, pathname: string, search: string): boolean {
+  return g.items.some(i => isLeafActive(i, pathname, search));
+}
+
+// ── Component ──────────────────────────────────────────────────────────────
+
 export default function NavBar() {
-  const nav = useNavigate();
+  const nav          = useNavigate();
   const { pathname, search } = useLocation();
-  const profile = getProfileFromIdToken();
+  const profile      = getProfileFromIdToken();
+  const navRef       = useRef<HTMLDivElement>(null);
 
   const isOperational  = hasAnyRole("Owner", "Finance", "Admin", "HubStaff", "Procurement");
   const isFinancial    = hasAnyRole("Owner", "Finance");
   const isUserManager  = hasAnyRole("Owner", "Admin");
   const isDriverRole   = hasRole("Driver");
   const isProcurement  = hasAnyRole("Owner", "Admin", "Procurement", "Finance");
-  const canSeeCollections = hasAnyRole("Owner", "Admin", "HubStaff", "Procurement", "Finance");
+  const canSeeCollections  = hasAnyRole("Owner", "Admin", "HubStaff", "Procurement", "Finance");
   const canSeeHubSales     = hasAnyRole("Owner", "Finance", "Admin", "HubStaff");
   const canManageClients   = hasAnyRole("Owner", "Finance", "Admin", "Procurement");
-  const canSeeStaff      = hasAnyRole("Owner", "Finance", "Admin");
-  const isOwner           = hasRole("Owner");
-  const canSeeHubRequests = hasAnyRole("Owner", "Finance", "Admin", "HubStaff", "Procurement");
+  const canSeeStaff        = hasAnyRole("Owner", "Finance", "Admin");
+  const isOwner            = hasRole("Owner");
+  const canSeeHubRequests  = hasAnyRole("Owner", "Finance", "Admin", "HubStaff", "Procurement");
 
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [menuOpen,     setMenuOpen]     = useState(false);
+  const [openGroup,    setOpenGroup]    = useState<string | null>(null);
+  const [expandedMob,  setExpandedMob]  = useState<string[]>([]);
+  const [isMobile,     setIsMobile]     = useState(window.innerWidth < 1100);
+
+  // Build entry list ─────────────────────────────────────────────────────
+  const entries: Entry[] = [];
+
+  if (isDriverRole) {
+    entries.push(leaf("Dashboard",        "/driver"));
+    entries.push(leaf("Delivery History", "/driver/reports"));
+    entries.push(leaf("Help",             "/driver/help"));
+  } else {
+    entries.push(leaf("Dashboard", "/app"));
+
+    // Sales group
+    const salesItems: Leaf[] = [];
+    if (canSeeHubSales)    salesItems.push(leaf("Hub Sales",    "/app/hub-sales"));
+    if (canSeeHubRequests) salesItems.push(leaf("Hub Requests", "/app/hub-requests"));
+    if (isOperational)     salesItems.push(leaf("Deliveries",   "/app/delivery-orders"));
+    if (canSeeCollections) salesItems.push(leaf("Collections",  "/app/collection-requests"));
+    if (salesItems.length) entries.push(group("Sales", salesItems));
+
+    // Stock group
+    const stockItems: Leaf[] = [];
+    if (isOperational)    stockItems.push(leaf("Species", "/app/hub-tasks", "species"));
+    if (canManageClients) stockItems.push(leaf("Clients", "/app/hub-tasks", "clients"));
+    if (stockItems.length) entries.push(group("Stock", stockItems));
+
+    // Finance group
+    const financeItems: Leaf[] = [];
+    if (isOperational) financeItems.push(leaf("Reports",         "/app/reports"));
+    if (isFinancial) {
+      financeItems.push(leaf("Invoices",        "/app/reports",         "invoices"));
+      financeItems.push(leaf("Statements",      "/app/reports",         "statement"));
+      financeItems.push(leaf("Petty Cash",      "/app/petty-cash"));
+      financeItems.push(leaf("Client Accounts", "/app/client-accounts"));
+    }
+    if (financeItems.length) entries.push(group("Finance", financeItems));
+
+    // Procurement group
+    const procItems: Leaf[] = [];
+    if (isProcurement)                            procItems.push(leaf("Orders",    "/app/procurement-orders"));
+    if (hasAnyRole("Owner", "Admin", "Procurement")) procItems.push(leaf("Suppliers", "/app/suppliers"));
+    if (procItems.length) entries.push(group("Procurement", procItems));
+
+    // Admin group
+    const adminItems: Leaf[] = [];
+    if (canSeeStaff)   adminItems.push(leaf("Staff",    "/app/staff-members"));
+    if (isUserManager) adminItems.push(leaf("Users",    "/app/users"));
+    if (isOwner)       adminItems.push(leaf("Settings", "/app/settings"));
+    if (adminItems.length) entries.push(group("Admin", adminItems));
+
+    entries.push(leaf("Help", "/app/help"));
+  }
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (navRef.current && !navRef.current.contains(e.target as Node))
+        setOpenGroup(null);
+    }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, []);
+
+  // Close everything on route change
+  useEffect(() => { setMenuOpen(false); setOpenGroup(null); }, [pathname, search]);
 
   useEffect(() => {
     const handler = () => {
-      setIsMobile(window.innerWidth < 768);
-      if (window.innerWidth >= 768) setMenuOpen(false);
+      setIsMobile(window.innerWidth < 1100);
+      if (window.innerWidth >= 1100) setMenuOpen(false);
     };
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
   }, []);
 
-  // Close drawer on route change
-  useEffect(() => { setMenuOpen(false); }, [pathname, search]);
-
-  const items: NavItem[] = [];
-
-  if (isDriverRole) {
-    items.push({ label: "Dashboard",        path: "/driver" });
-    items.push({ label: "Delivery History", path: "/driver/reports" });
-    items.push({ label: "Help Me",          path: "/driver/help" });
-  } else {
-    // ── Operations ──────────────────────────────────────────────────
-    if (isOperational)    items.push({ label: "Dashboard",    path: "/app" });
-    if (canSeeHubSales)   items.push({ label: "Hub Sales",    path: "/app/hub-sales" });
-    if (canSeeHubRequests)items.push({ label: "Hub Requests", path: "/app/hub-requests" });
-    if (isOperational)    items.push({ label: "Deliveries",   path: "/app/delivery-orders" });
-    if (canSeeCollections)items.push({ label: "Collections",  path: "/app/collection-requests" });
-
-    // ── Stock & Clients ──────────────────────────────────────────────
-    if (isOperational)    items.push({ label: "Species",  path: "/app/hub-tasks", tabParam: "species" });
-    if (canManageClients) items.push({ label: "Clients",  path: "/app/hub-tasks", tabParam: "clients" });
-
-    // ── Finance ─────────────────────────────────────────────────────
-    if (isOperational)    items.push({ label: "Reports",         path: "/app/reports" });
-    if (isFinancial) {
-      items.push({ label: "Invoices",        path: "/app/reports",         tabParam: "invoices" });
-      items.push({ label: "Statements",      path: "/app/reports",         tabParam: "statement" });
-      items.push({ label: "Petty Cash",      path: "/app/petty-cash" });
-      items.push({ label: "Client Accounts", path: "/app/client-accounts" });
-    }
-
-    // ── Procurement ──────────────────────────────────────────────────
-    if (isProcurement)                      items.push({ label: "Procurement", path: "/app/procurement-orders" });
-    if (hasAnyRole("Owner","Admin","Procurement")) items.push({ label: "Suppliers", path: "/app/suppliers" });
-
-    // ── People & Admin ───────────────────────────────────────────────
-    if (canSeeStaff)   items.push({ label: "Staff",    path: "/app/staff-members" });
-    if (isUserManager) items.push({ label: "Users",    path: "/app/users" });
-    if (isOwner)       items.push({ label: "Settings", path: "/app/settings" });
-    items.push({ label: "Help Me", path: "/app/help" });
-  }
-
   function navigate(path: string) {
     setMenuOpen(false);
+    setOpenGroup(null);
     nav(path);
   }
 
@@ -95,33 +144,79 @@ export default function NavBar() {
     nav("/login", { replace: true });
   }
 
+  function toggleGroup(label: string) {
+    setOpenGroup(g => g === label ? null : label);
+  }
+
+  function toggleMobGroup(label: string) {
+    setExpandedMob(prev =>
+      prev.includes(label) ? prev.filter(l => l !== label) : [...prev, label]
+    );
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────
+
   return (
-    <>
+    <div ref={navRef} style={{ position: "sticky", top: 0, zIndex: 200 }}>
       <nav style={s.bar}>
+        {/* Brand */}
         <button style={s.brand} onClick={() => navigate(isDriverRole ? "/driver" : "/app")}>
           <img src="/logo.jpeg" alt="KwaWicks" style={s.brandLogo} />
           KwaWicks
         </button>
 
-        {/* Desktop links */}
+        {/* Desktop entries */}
         {!isMobile && (
           <div style={s.links}>
-            {items.map((item) => {
-              const active = isActive(item, pathname, search);
-              const href = item.tabParam !== undefined ? `${item.path}?tab=${item.tabParam}` : item.path;
+            {entries.map(entry => {
+              if (entry.kind === "leaf") {
+                const active = isLeafActive(entry, pathname, search);
+                return (
+                  <button
+                    key={leafHref(entry)}
+                    style={active ? { ...s.link, ...s.linkActive } : s.link}
+                    onClick={() => navigate(leafHref(entry))}
+                  >
+                    {entry.label}
+                  </button>
+                );
+              }
+
+              // Group
+              const active  = isGroupActive(entry, pathname, search);
+              const open    = openGroup === entry.label;
               return (
-                <button
-                  key={item.tabParam !== undefined ? `${item.path}?tab=${item.tabParam}` : item.path}
-                  style={active ? { ...s.link, ...s.linkActive } : s.link}
-                  onClick={() => navigate(href)}
-                >
-                  {item.label}
-                </button>
+                <div key={entry.label} style={s.groupWrap}>
+                  <button
+                    style={active ? { ...s.link, ...s.linkActive } : open ? { ...s.link, ...s.linkOpen } : s.link}
+                    onClick={() => toggleGroup(entry.label)}
+                  >
+                    {entry.label} <span style={s.chevron}>{open ? "▲" : "▾"}</span>
+                  </button>
+
+                  {open && (
+                    <div style={s.dropdown}>
+                      {entry.items.map(item => {
+                        const ia = isLeafActive(item, pathname, search);
+                        return (
+                          <button
+                            key={leafHref(item)}
+                            style={ia ? { ...s.dropItem, ...s.dropItemActive } : s.dropItem}
+                            onClick={() => navigate(leafHref(item))}
+                          >
+                            {item.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
         )}
 
+        {/* Right side */}
         <div style={s.right}>
           {!isMobile && profile?.username && (
             <span style={s.username}>{profile.username}</span>
@@ -130,7 +225,7 @@ export default function NavBar() {
             <button style={s.logoutBtn} onClick={logout}>Log out</button>
           )}
           {isMobile && (
-            <button style={s.hamburger} onClick={() => setMenuOpen((o) => !o)} aria-label="Toggle menu">
+            <button style={s.hamburger} onClick={() => setMenuOpen(o => !o)} aria-label="Toggle menu">
               {menuOpen ? "✕" : "☰"}
             </button>
           )}
@@ -143,32 +238,61 @@ export default function NavBar() {
           {profile?.username && (
             <div style={s.drawerUser}>Signed in as <strong>{profile.username}</strong></div>
           )}
-          {items.map((item) => {
-            const active = isActive(item, pathname, search);
-            const href = item.tabParam !== undefined ? `${item.path}?tab=${item.tabParam}` : item.path;
+
+          {entries.map(entry => {
+            if (entry.kind === "leaf") {
+              const active = isLeafActive(entry, pathname, search);
+              return (
+                <button
+                  key={leafHref(entry)}
+                  style={active ? { ...s.drawerLink, ...s.drawerLinkActive } : s.drawerLink}
+                  onClick={() => navigate(leafHref(entry))}
+                >
+                  {entry.label}
+                </button>
+              );
+            }
+
+            // Group accordion
+            const expanded = expandedMob.includes(entry.label);
+            const groupActive = isGroupActive(entry, pathname, search);
             return (
-              <button
-                key={item.tabParam !== undefined ? `${item.path}?tab=${item.tabParam}` : item.path}
-                style={active ? { ...s.drawerLink, ...s.drawerLinkActive } : s.drawerLink}
-                onClick={() => navigate(href)}
-              >
-                {item.label}
-              </button>
+              <div key={entry.label}>
+                <button
+                  style={groupActive ? { ...s.drawerGroup, ...s.drawerGroupActive } : s.drawerGroup}
+                  onClick={() => toggleMobGroup(entry.label)}
+                >
+                  <span>{entry.label}</span>
+                  <span style={s.mobChevron}>{expanded ? "▲" : "▾"}</span>
+                </button>
+                {expanded && entry.items.map(item => {
+                  const ia = isLeafActive(item, pathname, search);
+                  return (
+                    <button
+                      key={leafHref(item)}
+                      style={ia ? { ...s.drawerSubLink, ...s.drawerSubLinkActive } : s.drawerSubLink}
+                      onClick={() => navigate(leafHref(item))}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
+
           <div style={s.drawerDivider} />
           <button style={s.drawerLogout} onClick={logout}>Log out</button>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
+// ── Styles ─────────────────────────────────────────────────────────────────
+
 const s: Record<string, React.CSSProperties> = {
   bar: {
-    position: "sticky",
-    top: 0,
-    zIndex: 200,
     display: "flex",
     alignItems: "center",
     background: "#1e293b",
@@ -191,6 +315,7 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 8,
+    flexShrink: 0,
   },
   brandLogo: {
     width: 32,
@@ -203,38 +328,92 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "stretch",
     flex: 1,
-    gap: 2,
-    height: "100%",
-    overflowX: "auto",
+    height: 52,
   },
   link: {
     background: "none",
     border: "none",
-    color: "rgba(255,255,255,0.7)",
+    color: "rgba(255,255,255,0.72)",
     fontSize: 14,
     fontWeight: 500,
     cursor: "pointer",
-    padding: "0 14px",
+    padding: "0 16px",
     height: "100%",
     whiteSpace: "nowrap",
     borderBottom: "3px solid transparent",
-    transition: "color 0.15s",
+    transition: "color 0.15s, background 0.15s",
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
   },
   linkActive: {
     color: "#fff",
     borderBottom: "3px solid #22c55e",
     fontWeight: 600,
   },
+  linkOpen: {
+    color: "#fff",
+    background: "rgba(255,255,255,0.07)",
+  },
+  chevron: {
+    fontSize: 10,
+    opacity: 0.7,
+    marginTop: 1,
+  },
+
+  // Dropdown group wrapper
+  groupWrap: {
+    position: "relative",
+    height: "100%",
+    display: "flex",
+    alignItems: "stretch",
+  },
+  dropdown: {
+    position: "absolute",
+    top: 52,
+    left: 0,
+    background: "#1e293b",
+    border: "1px solid #334155",
+    borderRadius: "0 0 10px 10px",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+    minWidth: 170,
+    zIndex: 300,
+    padding: "4px 0",
+    display: "flex",
+    flexDirection: "column",
+  },
+  dropItem: {
+    background: "none",
+    border: "none",
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: "pointer",
+    padding: "10px 18px",
+    textAlign: "left",
+    whiteSpace: "nowrap",
+    transition: "background 0.1s, color 0.1s",
+  },
+  dropItemActive: {
+    color: "#22c55e",
+    fontWeight: 700,
+    background: "rgba(34,197,94,0.08)",
+    borderLeft: "3px solid #22c55e",
+    paddingLeft: 15,
+  },
+
+  // Right side
   right: {
     display: "flex",
     alignItems: "center",
     gap: 12,
     marginLeft: "auto",
     paddingLeft: 16,
+    flexShrink: 0,
   },
   username: {
     fontSize: 13,
-    color: "rgba(255,255,255,0.6)",
+    color: "rgba(255,255,255,0.55)",
     whiteSpace: "nowrap",
   },
   logoutBtn: {
@@ -263,29 +442,29 @@ const s: Record<string, React.CSSProperties> = {
 
   // Mobile drawer
   drawer: {
-    position: "sticky",
-    top: 52,
-    zIndex: 199,
     background: "#1e293b",
     display: "flex",
     flexDirection: "column",
     padding: "8px 0 16px",
     boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
     fontFamily: "system-ui, -apple-system, sans-serif",
+    maxHeight: "calc(100vh - 52px)",
+    overflowY: "auto",
   },
   drawerUser: {
-    color: "rgba(255,255,255,0.5)",
+    color: "rgba(255,255,255,0.45)",
     fontSize: 13,
     padding: "8px 20px 12px",
   },
+  // Standalone leaf in drawer
   drawerLink: {
     background: "none",
     border: "none",
     color: "rgba(255,255,255,0.8)",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 500,
     cursor: "pointer",
-    padding: "14px 20px",
+    padding: "13px 20px",
     textAlign: "left",
     borderLeft: "3px solid transparent",
   },
@@ -294,6 +473,49 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     borderLeft: "3px solid #22c55e",
     background: "rgba(255,255,255,0.05)",
+  },
+  // Group header in drawer
+  drawerGroup: {
+    background: "none",
+    border: "none",
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+    cursor: "pointer",
+    padding: "14px 20px 6px",
+    textAlign: "left",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+  },
+  drawerGroupActive: {
+    color: "#22c55e",
+  },
+  mobChevron: {
+    fontSize: 10,
+    marginRight: 4,
+  },
+  // Sub-item in drawer
+  drawerSubLink: {
+    background: "none",
+    border: "none",
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 15,
+    fontWeight: 400,
+    cursor: "pointer",
+    padding: "11px 20px 11px 32px",
+    textAlign: "left",
+    borderLeft: "3px solid transparent",
+    width: "100%",
+  },
+  drawerSubLinkActive: {
+    color: "#22c55e",
+    fontWeight: 600,
+    borderLeft: "3px solid #22c55e",
+    background: "rgba(34,197,94,0.06)",
   },
   drawerDivider: {
     height: 1,
