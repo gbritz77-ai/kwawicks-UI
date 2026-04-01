@@ -7,6 +7,10 @@ export type SpeciesResponse = {
   sellPrice: number | null;
   isActive: boolean;
   createdAtUtc: string;
+  vat: number;
+  qtyOnHandHub: number;
+  qtyBookedOutForDelivery: number;
+  qtyAvailable: number;   // qtyOnHandHub - qtyBookedOutForDelivery (computed by backend)
 };
 
 export type CreateSpeciesRequest = {

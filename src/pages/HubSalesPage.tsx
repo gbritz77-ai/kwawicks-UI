@@ -331,7 +331,9 @@ export default function HubSalesPage() {
                   <option value="">— Select —</option>
                   {species.map(sp => (
                     <option key={sp.speciesId} value={sp.speciesId}>
-                      {sp.name}
+                      {sp.name}{sp.qtyAvailable > 0
+                        ? ` — ${sp.qtyAvailable} available`
+                        : " — Out of stock"}
                     </option>
                   ))}
                 </select>
@@ -351,8 +353,38 @@ export default function HubSalesPage() {
               >Add</button>
             </div>
             {selectedSpeciesItem && (
-              <div style={s.stockHint}>
-                Default price: {fmt(selectedSpeciesItem.sellPrice ?? 0)} incl. VAT
+              <div style={s.stockInfoRow}>
+                {/* Stock badges */}
+                <div style={s.stockBadges}>
+                  <span style={{
+                    ...s.stockBadge,
+                    background: selectedSpeciesItem.qtyAvailable > 0 ? "#f0fdf4" : "#fef2f2",
+                    border: `1px solid ${selectedSpeciesItem.qtyAvailable > 0 ? "#bbf7d0" : "#fca5a5"}`,
+                    color: selectedSpeciesItem.qtyAvailable > 0 ? "#166534" : "#dc2626",
+                  }}>
+                    {selectedSpeciesItem.qtyAvailable > 0
+                      ? `✓ ${selectedSpeciesItem.qtyAvailable} available`
+                      : "✗ Out of stock"}
+                  </span>
+                  <span style={{ ...s.stockBadge, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#64748b" }}>
+                    {selectedSpeciesItem.qtyOnHandHub} on hand
+                  </span>
+                  {selectedSpeciesItem.qtyBookedOutForDelivery > 0 && (
+                    <span style={{ ...s.stockBadge, background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e" }}>
+                      {selectedSpeciesItem.qtyBookedOutForDelivery} on delivery
+                    </span>
+                  )}
+                </div>
+                {/* Price hint */}
+                <span style={s.stockHint}>
+                  Default price: {fmt(selectedSpeciesItem.sellPrice ?? 0)} incl. VAT
+                </span>
+              </div>
+            )}
+            {/* Over-stock warning */}
+            {selectedSpeciesItem && addQty > selectedSpeciesItem.qtyAvailable && selectedSpeciesItem.qtyAvailable >= 0 && (
+              <div style={s.stockWarning}>
+                ⚠️ Qty ({addQty}) exceeds available stock ({selectedSpeciesItem.qtyAvailable})
               </div>
             )}
             <div style={{ fontSize: 11, color: "#16a34a", marginTop: 4 }}>✓ Enter all prices inclusive of VAT — the VAT portion is calculated automatically</div>
@@ -484,7 +516,11 @@ const s: Record<string, React.CSSProperties> = {
   input: { width: "100%", padding: "7px 9px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 13, boxSizing: "border-box" as const },
   select: { width: "100%", padding: "7px 9px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 13, background: "#fff" },
   infoBanner: { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 10px", fontSize: 12, color: "#166534", marginTop: 8 },
-  stockHint: { fontSize: 11, color: "#64748b", marginTop: 4 },
+  stockInfoRow:  { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" as const, gap: 8, marginTop: 8 },
+  stockBadges:   { display: "flex", gap: 6, flexWrap: "wrap" as const },
+  stockBadge:    { fontSize: 12, fontWeight: 600, padding: "3px 9px", borderRadius: 20 },
+  stockHint:     { fontSize: 11, color: "#64748b" },
+  stockWarning:  { fontSize: 12, color: "#92400e", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 6, padding: "5px 10px", marginTop: 4 },
   table: { width: "100%", borderCollapse: "collapse" as const, fontSize: 13 },
   th: { textAlign: "left" as const, fontSize: 11, fontWeight: 600, color: "#64748b", borderBottom: "2px solid #e2e8f0", padding: "6px 8px", textTransform: "uppercase" as const },
   td: { padding: "8px 8px", borderBottom: "1px solid #f1f5f9", verticalAlign: "middle" as const },
