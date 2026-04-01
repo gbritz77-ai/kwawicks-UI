@@ -42,7 +42,7 @@ export default function HubSalesPage() {
   // Lines
   const [lines, setLines] = useState<SaleLine[]>([]);
   const [addSpeciesId, setAddSpeciesId] = useState("");
-  const [addQty, setAddQty] = useState(1);
+  const [addQty, setAddQty] = useState("");
   const [addPrice, setAddPrice] = useState("");
 
   // Payment
@@ -83,23 +83,24 @@ export default function HubSalesPage() {
 
   function addLine() {
     const sp = species.find(s => s.speciesId === addSpeciesId);
+    const parsedQty = parseInt(addQty);
     const parsedPrice = Number(addPrice);
-    if (!sp || addQty <= 0 || !addPrice || parsedPrice <= 0) return;
+    if (!sp || !addQty || parsedQty <= 0 || !addPrice || parsedPrice <= 0) return;
     if (lines.find(l => l.speciesId === addSpeciesId)) {
       setLines(ls => ls.map(l => l.speciesId === addSpeciesId
-        ? { ...l, quantity: l.quantity + addQty, unitPrice: parsedPrice }
+        ? { ...l, quantity: l.quantity + parsedQty, unitPrice: parsedPrice }
         : l));
     } else {
       setLines(ls => [...ls, {
         speciesId: addSpeciesId,
         speciesName: sp.name,
-        quantity: addQty,
+        quantity: parsedQty,
         unitPrice: parsedPrice,
         vatRate: VAT_RATE,
       }]);
     }
     setAddSpeciesId("");
-    setAddQty(1);
+    setAddQty("");
     setAddPrice("");
   }
 
@@ -310,7 +311,7 @@ export default function HubSalesPage() {
               </div>
               <div>
                 <label style={s.label}>Qty</label>
-                <input style={{ ...s.input, width: 70 }} type="number" min={1} value={addQty} onChange={e => setAddQty(Number(e.target.value))} onFocus={e => e.target.select()} />
+                <input style={{ ...s.input, width: 70 }} type="number" min={1} placeholder="1" value={addQty} onChange={e => setAddQty(e.target.value)} />
               </div>
               <div>
                 <label style={s.label}>Unit Price (incl. VAT)</label>
@@ -319,7 +320,7 @@ export default function HubSalesPage() {
               <button
                 style={{ ...s.btnPrimary, alignSelf: "flex-end" }}
                 onClick={addLine}
-                disabled={!addSpeciesId || addQty <= 0 || !addPrice || Number(addPrice) <= 0}
+                disabled={!addSpeciesId || !addQty || parseInt(addQty) <= 0 || !addPrice || Number(addPrice) <= 0}
               >Add</button>
             </div>
             {selectedSpeciesItem && (
@@ -352,7 +353,7 @@ export default function HubSalesPage() {
               </div>
             )}
             {/* Over-stock warning */}
-            {selectedSpeciesItem && addQty > selectedSpeciesItem.qtyAvailable && selectedSpeciesItem.qtyAvailable >= 0 && (
+            {selectedSpeciesItem && parseInt(addQty) > selectedSpeciesItem.qtyAvailable && selectedSpeciesItem.qtyAvailable >= 0 && (
               <div style={s.stockWarning}>
                 ⚠️ Qty ({addQty}) exceeds available stock ({selectedSpeciesItem.qtyAvailable})
               </div>

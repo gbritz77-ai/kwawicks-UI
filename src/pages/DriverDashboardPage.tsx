@@ -657,6 +657,7 @@ export default function DriverDashboardPage() {
                             <input style={s.returnInput} inputMode="numeric"
                               value={(rl as any)[field]}
                               onChange={e => updateReturnLine(idx, field, e.target.value)}
+                              onFocus={e => e.target.select()}
                               disabled={completionBusy}
                             />
                           </label>
@@ -866,6 +867,7 @@ export default function DriverDashboardPage() {
                       Loaded Qty
                       <input style={s.returnInput} inputMode="numeric" value={ll.loadedQty}
                         onChange={e => setLoadLines(ls => ls.map((x, j) => j === i ? { ...x, loadedQty: parseInt(e.target.value) || 0 } : x))}
+                        onFocus={e => e.target.select()}
                         disabled={crBusy}
                       />
                     </label>
