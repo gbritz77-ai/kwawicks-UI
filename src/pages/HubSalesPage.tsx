@@ -35,7 +35,7 @@ const emptyWalkIn = (): WalkInForm => ({
   clientAddress: "", clientCity: "", clientProvince: "", clientPostalCode: "",
 });
 
-const PAYMENT_TYPES = ["Cash", "EFT", "Card"];
+const PAYMENT_TYPES = ["Cash", "EFT", "Card"] as const;
 
 export default function HubSalesPage() {
   const [clients, setClients] = useState<ClientDto[]>([]);
@@ -416,24 +416,29 @@ export default function HubSalesPage() {
                       onClick={() => setPaymentType(pt)}
                     >{pt}</button>
                   ))}
-                  {mode === "existing" && selectedClientId && creditBalance !== null && (
+                  {mode === "existing" && selectedClientId && (
                     <button
-                      style={paymentType === "AccountCredit" ? { ...s.modeBtn, ...s.modeBtnCredit } : { ...s.modeBtn, ...s.modeBtnCreditOutline }}
+                      style={paymentType === "AccountCredit" ? { ...s.modeBtn, ...s.modeBtnActive } : s.modeBtn}
                       onClick={() => setPaymentType("AccountCredit")}
                     >
-                      💳 Account Credit
+                      💳 Client Credit
                     </button>
                   )}
                 </div>
-                {paymentType === "AccountCredit" && creditBalance !== null && grandTotal > creditBalance && (
-                  <div style={s.creditWarning}>
-                    ⚠️ Balance ({fmt(creditBalance)}) is less than the total ({fmt(grandTotal)}). Sale will proceed but account will go negative.
-                  </div>
-                )}
-                {paymentType === "AccountCredit" && creditBalance !== null && grandTotal <= creditBalance && (
-                  <div style={s.creditOk}>
-                    ✓ Sufficient balance. {fmt(creditBalance - grandTotal)} will remain after this sale.
-                  </div>
+
+                {/* Client Credit balance feedback */}
+                {paymentType === "AccountCredit" && (
+                  creditLoading
+                    ? <div style={s.creditInfo}>Loading balance…</div>
+                    : creditBalance === null
+                      ? <div style={s.creditInfo}>Could not load balance.</div>
+                      : grandTotal > creditBalance
+                        ? <div style={s.creditWarning}>
+                            ⚠️ Balance ({fmt(creditBalance)}) is less than the total ({fmt(grandTotal)}). Account will go negative.
+                          </div>
+                        : <div style={s.creditOk}>
+                            ✓ Balance: {fmt(creditBalance)} — {fmt(creditBalance - grandTotal)} remaining after this sale.
+                          </div>
                 )}
               </>
             ) : (
@@ -491,8 +496,7 @@ const s: Record<string, React.CSSProperties> = {
   errorText: { color: "#dc2626", fontSize: 13, marginTop: 8 },
   successBox: { textAlign: "center" as const, padding: "60px 24px", maxWidth: 400, margin: "0 auto" },
   creditBalanceBadge: { marginTop: 8, padding: "6px 10px", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 6, fontSize: 13, color: "#0369a1" },
-  modeBtnCredit: { background: "#1d4ed8", color: "#fff", borderColor: "#1d4ed8", fontWeight: 600 },
-  modeBtnCreditOutline: { borderColor: "#93c5fd", color: "#1d4ed8", background: "#eff6ff" },
+  creditInfo:    { fontSize: 12, color: "#64748b", marginTop: 4, padding: "7px 10px", background: "#f8fafc", borderRadius: 6, border: "1px solid #e2e8f0" },
   creditWarning: { background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 6, padding: "8px 10px", fontSize: 12, color: "#92400e", marginTop: 4 },
-  creditOk: { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 10px", fontSize: 12, color: "#166534", marginTop: 4 },
+  creditOk:      { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 10px", fontSize: 12, color: "#166534", marginTop: 4 },
 };
