@@ -11,12 +11,12 @@ export type CreateHubSaleRequest = {
   customerId?: string;
   newClient?: {
     clientName: string;
-    clientAddress: string;
-    clientCity: string;
-    clientProvince: string;
-    clientPostalCode: string;
-    clientContactDetails: string;
-    clientPhone: string;
+    clientAddress?: string;
+    clientCity?: string;
+    clientProvince?: string;
+    clientPostalCode?: string;
+    clientContactDetails?: string;
+    clientPhone?: string;
     clientType: number;
     isWalkIn: boolean;
   };
