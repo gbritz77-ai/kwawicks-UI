@@ -91,7 +91,7 @@ export default function DriverPage() {
       setQueueError(null);
       setLoading(true);
       const data = await deliveryOrdersApi.list({ driverId });
-      setOrders(data.filter((o) => o.status !== "Delivered"));
+      setOrders(data.filter((o) => o.status !== "Delivered" && o.status !== "AwaitingCollection"));
     } catch (e: any) {
       setQueueError(e?.message || "Could not load your deliveries.");
     } finally {

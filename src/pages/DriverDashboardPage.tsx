@@ -138,7 +138,7 @@ export default function DriverDashboardPage() {
         deliveryOrdersApi.list({ driverId }),
         clientsApi.list().catch(() => []),
       ]);
-      setOrders(data.filter(o => o.status !== "Delivered"));
+      setOrders(data.filter(o => o.status !== "Delivered" && o.status !== "AwaitingCollection"));
       const map: Record<string, import("../api/clientsApi").ClientDto> = {};
       for (const c of allClients) map[c.clientId] = c;
       setClientMap(map);
