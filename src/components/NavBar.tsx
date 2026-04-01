@@ -65,6 +65,7 @@ export default function NavBar() {
 
   if (isDriverRole) {
     entries.push(leaf("Dashboard",        "/driver"));
+    entries.push(leaf("Sales",            "/driver/sales"));
     entries.push(leaf("Delivery History", "/driver/reports"));
     entries.push(leaf("Help",             "/driver/help"));
   } else {
