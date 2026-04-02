@@ -159,6 +159,7 @@ export default function DriverSalesPage() {
     if (err) { setError(err); return; }
     setError("");
     setShowPreview(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function handleSubmit() {
