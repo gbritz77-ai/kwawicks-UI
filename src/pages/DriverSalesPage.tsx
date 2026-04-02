@@ -49,8 +49,9 @@ export default function DriverSalesPage() {
   const [paymentType, setPaymentType]     = useState("Cash");
 
   // Submission
-  const [busy, setBusy]   = useState(false);
-  const [error, setError] = useState("");
+  const [busy, setBusy]       = useState(false);
+  const [error, setError]     = useState("");
+  const [showPreview, setShowPreview] = useState(false);
 
   // Success + receipt upload
   type SuccessState = {
@@ -136,6 +137,7 @@ export default function DriverSalesPage() {
     setCreditBalance(null);
     setError("");
     setSuccess(null);
+    setShowPreview(false);
     setReceiptFile(null);
     setUploadDone(false);
     setUploadError("");
@@ -144,12 +146,25 @@ export default function DriverSalesPage() {
     setAddPrice("");
   }
 
+  function validate(): string | null {
+    if (lines.length === 0) return "Add at least one item.";
+    const zeroPrice = lines.find(l => l.unitPrice <= 0);
+    if (zeroPrice) return `Price for "${zeroPrice.speciesName}" cannot be R 0.`;
+    if (mode === "existing" && !selectedClientId) return "Select a customer.";
+    return null;
+  }
+
+  function reviewInvoice() {
+    const err = validate();
+    if (err) { setError(err); return; }
+    setError("");
+    setShowPreview(true);
+  }
+
   async function handleSubmit() {
     setError("");
-    if (lines.length === 0) { setError("Add at least one item."); return; }
-    const zeroPrice = lines.find(l => l.unitPrice <= 0);
-    if (zeroPrice) { setError(`Price for "${zeroPrice.speciesName}" cannot be R 0.`); return; }
-    if (mode === "existing" && !selectedClientId) { setError("Select a customer."); return; }
+    const err = validate();
+    if (err) { setError(err); return; }
 
     setBusy(true);
     try {
@@ -200,6 +215,87 @@ export default function DriverSalesPage() {
   const selectedSpeciesItem = species.find(s => s.speciesId === addSpeciesId);
 
   if (loading) return <div style={{ padding: 32, color: "#94a3b8" }}>Loading...</div>;
+
+  // ── Invoice preview screen ───────────────────────────────────────────────────
+  if (showPreview) {
+    const customerName = mode === "walkin"
+      ? "Walk-in Customer"
+      : clients.find(c => c.clientId === selectedClientId)?.clientName ?? "—";
+    const today = new Date().toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" });
+
+    return (
+      <div style={s.page}>
+        <div style={s.previewDoc}>
+          {/* Header */}
+          <div style={s.previewHeader}>
+            <div>
+              <div style={s.previewBrand}>KwaWicks</div>
+              <div style={s.previewLabel}>INVOICE PREVIEW</div>
+            </div>
+            <div style={{ textAlign: "right" as const }}>
+              <div style={s.previewMeta}>Date: {today}</div>
+              <div style={s.previewMeta}>Payment: {paymentType}</div>
+            </div>
+          </div>
+
+          {/* Customer */}
+          <div style={s.previewTo}>
+            <div style={s.previewToLabel}>Bill To</div>
+            <div style={s.previewToName}>{customerName}</div>
+          </div>
+
+          {/* Lines table */}
+          <div style={s.previewTableWrap}>
+            <div style={{ ...s.previewRow, ...s.previewRowHead }}>
+              <div style={{ flex: 3 }}>Item</div>
+              <div style={{ flex: 1, textAlign: "right" as const }}>Qty</div>
+              <div style={{ flex: 2, textAlign: "right" as const }}>Unit (incl. VAT)</div>
+              <div style={{ flex: 2, textAlign: "right" as const }}>Line Total</div>
+            </div>
+            {lines.map(l => (
+              <div key={l.speciesId} style={s.previewRow}>
+                <div style={{ flex: 3, fontWeight: 600 }}>{l.speciesName}</div>
+                <div style={{ flex: 1, textAlign: "right" as const }}>{l.quantity}</div>
+                <div style={{ flex: 2, textAlign: "right" as const }}>{fmt(l.unitPrice)}</div>
+                <div style={{ flex: 2, textAlign: "right" as const, fontWeight: 700 }}>{fmt(l.quantity * l.unitPrice)}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Totals */}
+          <div style={s.previewTotals}>
+            <div style={s.previewTotalRow}>
+              <span>Subtotal (excl. VAT)</span>
+              <span>{fmt(subTotal)}</span>
+            </div>
+            <div style={s.previewTotalRow}>
+              <span>VAT (15%)</span>
+              <span>{fmt(vatTotal)}</span>
+            </div>
+            <div style={{ ...s.previewTotalRow, ...s.previewGrand }}>
+              <span>Total</span>
+              <span>{fmt(grandTotal)}</span>
+            </div>
+          </div>
+
+          {/* Actions */}
+          {error && <div style={s.errorText}>{error}</div>}
+          <div style={s.previewActions}>
+            <button style={{ ...s.btnSecondary, flex: 1 }} onClick={() => setShowPreview(false)} disabled={busy}>
+              ← Back to Edit
+            </button>
+            <button
+              style={{ ...s.btnPrimary, flex: 2, padding: 14, fontSize: 15 }}
+              onClick={handleSubmit}
+              disabled={busy}
+            >
+              {busy ? "Processing…" : "✓ Confirm & Send"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Success screen ──────────────────────────────────────────────────────────
   if (success) {
@@ -484,10 +580,10 @@ export default function DriverSalesPage() {
 
         <button
           style={{ ...s.btnPrimary, width: "100%", marginTop: 16, padding: 14, fontSize: 16 }}
-          onClick={handleSubmit}
-          disabled={busy || lines.length === 0}
+          onClick={reviewInvoice}
+          disabled={lines.length === 0}
         >
-          {busy ? "Processing…" : "Complete Sale"}
+          Review Invoice
         </button>
       </div>
     </div>
@@ -533,4 +629,21 @@ const s: Record<string, React.CSSProperties> = {
   attachBtn:     { display: "block", width: "100%", padding: 14, background: "#f0f9ff", border: "2px dashed #7dd3fc", borderRadius: 8, color: "#0369a1", fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 16 },
   fileChosen:    { display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "10px 14px", marginTop: 12, fontSize: 13, color: "#166534" },
   removeFile:    { background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700 },
+
+  // Invoice preview
+  previewDoc:      { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "24px 20px", maxWidth: 560, margin: "0 auto", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" },
+  previewHeader:   { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, paddingBottom: 16, borderBottom: "2px solid #e2e8f0" },
+  previewBrand:    { fontSize: 22, fontWeight: 800, color: "#166534" },
+  previewLabel:    { fontSize: 11, fontWeight: 700, color: "#64748b", letterSpacing: 1, marginTop: 2, textTransform: "uppercase" as const },
+  previewMeta:     { fontSize: 13, color: "#374151", marginBottom: 2 },
+  previewTo:       { marginBottom: 18 },
+  previewToLabel:  { fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: 0.8, marginBottom: 2 },
+  previewToName:   { fontSize: 16, fontWeight: 700, color: "#0f172a" },
+  previewTableWrap:{ marginBottom: 16 },
+  previewRow:      { display: "flex", gap: 8, padding: "8px 0", borderBottom: "1px solid #f1f5f9", fontSize: 14, color: "#374151" },
+  previewRowHead:  { fontWeight: 700, fontSize: 12, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: 0.5, borderBottom: "2px solid #e2e8f0" },
+  previewTotals:   { background: "#f8fafc", borderRadius: 8, padding: "12px 14px", display: "flex", flexDirection: "column" as const, gap: 6, marginBottom: 20 },
+  previewTotalRow: { display: "flex", justifyContent: "space-between", fontSize: 14, color: "#374151" },
+  previewGrand:    { fontSize: 18, fontWeight: 800, color: "#166534", borderTop: "1px solid #e2e8f0", paddingTop: 8, marginTop: 4 },
+  previewActions:  { display: "flex", gap: 10, marginTop: 4 },
 };
