@@ -43,6 +43,7 @@ const STATUS_LABELS: Record<DeliveryOrderStatus, string> = {
   Open: "Open",
   OutForDelivery: "Out for Delivery",
   Delivered: "Delivered",
+  MarkedAtHub: "Marked at Hub",
 };
 
 const STATUS_COLORS: Record<DeliveryOrderStatus, React.CSSProperties> = {
@@ -50,6 +51,7 @@ const STATUS_COLORS: Record<DeliveryOrderStatus, React.CSSProperties> = {
   Open: { background: "rgba(234,179,8,0.12)", color: "#713f12", border: "1px solid rgba(234,179,8,0.4)" },
   OutForDelivery: { background: "rgba(37,99,235,0.1)", color: "#1e3a8a", border: "1px solid rgba(37,99,235,0.3)" },
   Delivered: { background: "rgba(34,197,94,0.1)", color: "#14532d", border: "1px solid rgba(34,197,94,0.3)" },
+  MarkedAtHub: { background: "rgba(8,145,178,0.1)", color: "#164e63", border: "1px solid rgba(8,145,178,0.3)" },
 };
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -77,7 +79,11 @@ export default function DeliveryOrdersPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Mark at hub
+  const [markingAtHubId, setMarkingAtHubId] = useState<string | null>(null);
+
   const canOverridePrice = hasAnyRole("Owner", "Finance");
+  const canMarkAtHub = hasAnyRole("Owner", "Admin", "HubStaff");
 
   // ── Loaders ──────────────────────────────────────────────────────────────
 
@@ -114,7 +120,21 @@ export default function DeliveryOrdersPage() {
 
   useEffect(() => {
     loadOrders();
+    const interval = setInterval(() => { loadOrders(); }, 30_000);
+    return () => clearInterval(interval);
   }, [statusFilter]);
+
+  async function markAtHub(orderId: string) {
+    setMarkingAtHubId(orderId);
+    try {
+      await deliveryOrdersApi.updateStatus(orderId, "MarkedAtHub");
+      setOrders(prev => prev.map(o => o.deliveryOrderId === orderId ? { ...o, status: "MarkedAtHub" } : o));
+    } catch (e: any) {
+      setError(e?.message || "Could not mark order at hub.");
+    } finally {
+      setMarkingAtHubId(null);
+    }
+  }
 
   // ── Filtered list ─────────────────────────────────────────────────────────
 
@@ -272,6 +292,7 @@ export default function DeliveryOrdersPage() {
           <option value="Open">Open</option>
           <option value="OutForDelivery">Out for Delivery</option>
           <option value="Delivered">Delivered</option>
+          <option value="MarkedAtHub">Marked at Hub</option>
         </select>
       </div>
 
@@ -346,7 +367,7 @@ export default function DeliveryOrdersPage() {
                         <div>Species</div>
                         <div style={{ textAlign: "right" }}>Ordered</div>
                         {canOverridePrice && <div style={{ textAlign: "right" }}>Unit Price</div>}
-                        {order.status === "Delivered" && (
+                        {(order.status === "Delivered" || order.status === "MarkedAtHub") && (
                           <>
                             <div style={{ textAlign: "right" }}>Delivered</div>
                             <div style={{ textAlign: "right" }}>Dead</div>
@@ -364,7 +385,7 @@ export default function DeliveryOrdersPage() {
                               {line.unitPrice ? `R\u00A0${Number(line.unitPrice).toFixed(2)}` : "—"}
                             </div>
                           )}
-                          {order.status === "Delivered" && (
+                          {(order.status === "Delivered" || order.status === "MarkedAtHub") && (
                             <>
                               <div style={{ textAlign: "right", color: "#14532d", fontWeight: 700 }}>{line.deliveredQty}</div>
                               <div style={{ textAlign: "right", color: "#7f1d1d" }}>{line.returnedDeadQty}</div>
@@ -375,6 +396,18 @@ export default function DeliveryOrdersPage() {
                         </div>
                       ))}
                     </div>
+
+                    {canMarkAtHub && order.status === "Delivered" && (
+                      <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
+                        <button
+                          style={s.markAtHubBtn}
+                          disabled={markingAtHubId === order.deliveryOrderId}
+                          onClick={() => markAtHub(order.deliveryOrderId)}
+                        >
+                          {markingAtHubId === order.deliveryOrderId ? "Marking…" : "✅ Mark at Hub"}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -746,6 +779,16 @@ const s: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontWeight: 900,
     background: "white",
+  },
+  markAtHubBtn: {
+    padding: "10px 18px",
+    borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
+    fontWeight: 700,
+    fontSize: 14,
+    background: "#0891b2",
+    color: "white",
   },
 
   // Modal
