@@ -257,13 +257,14 @@ export default function DriverDashboardPage() {
     try {
       const lines = returnLines.map(rl => {
         const sp = (speciesList as any[]).find((s: any) => s.speciesId === rl.speciesId);
+        const doLine = completing.lines.find(l => l.speciesId === rl.speciesId);
         return {
           speciesId: rl.speciesId,
           deliveredQty: parseInt(rl.deliveredQty) || 0,
           returnedDeadQty: parseInt(rl.returnedDeadQty) || 0,
           returnedMutilatedQty: parseInt(rl.returnedMutilatedQty) || 0,
           returnedNotWantedQty: parseInt(rl.returnedNotWantedQty) || 0,
-          unitPrice: sp?.sellPrice ?? 0,
+          unitPrice: doLine?.unitPrice ?? sp?.sellPrice ?? 0,
           vatRate: sp?.vat ?? 0,
         };
       });
