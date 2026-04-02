@@ -702,75 +702,12 @@ export default function DriverDashboardPage() {
                 </div>
                 <div style={s.modalBtns}>
                   <button style={s.secondaryBtn} onClick={closeCompletion} disabled={completionBusy}>Cancel</button>
-                  <button style={s.completeBtn} onClick={reviewDelivery} disabled={completionBusy}>
-                    Review Invoice
+                  <button style={s.completeBtn} onClick={submitCompletion} disabled={completionBusy}>
+                    {completionBusy ? "Processing…" : "Confirm Delivery"}
                   </button>
                 </div>
               </>
             )}
-
-            {step === "preview" && completing && (() => {
-              const previewLines = returnLines.map(rl => {
-                const sp = (speciesList as any[]).find((s: any) => s.speciesId === rl.speciesId);
-                const doLine = completing.lines.find(l => l.speciesId === rl.speciesId);
-                const unitPriceIncl = doLine?.unitPrice ?? sp?.sellPrice ?? 0;
-                const deliveredQty = parseInt(rl.deliveredQty) || 0;
-                return { name: speciesName(rl.speciesId), deliveredQty, unitPriceIncl, vatRate: sp?.vat ?? 0 };
-              }).filter(l => l.deliveredQty > 0);
-              const grandTotal = previewLines.reduce((t, l) => t + l.deliveredQty * l.unitPriceIncl, 0);
-              const subTotal   = previewLines.reduce((t, l) => t + (l.deliveredQty * l.unitPriceIncl) / (1 + l.vatRate), 0);
-              const vatTotal   = grandTotal - subTotal;
-              const fmt = (n: number) => `R\u00A0${n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-              return (
-                <>
-                  <div style={s.modalTitle}>Invoice Preview</div>
-                  <div style={s.modalSub}>{completing.clientName ?? completing.deliveryAddressLine1}</div>
-                  {completionError && <div style={s.modalError}>{completionError}</div>}
-
-                  {/* Line items */}
-                  <div style={{ marginTop: 12, borderTop: "1px solid #e2e8f0" }}>
-                    <div style={{ display: "flex", gap: 6, padding: "6px 0", fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                      <div style={{ flex: 3 }}>Item</div>
-                      <div style={{ flex: 1, textAlign: "right" as const }}>Qty</div>
-                      <div style={{ flex: 2, textAlign: "right" as const }}>Unit (incl.VAT)</div>
-                      <div style={{ flex: 2, textAlign: "right" as const }}>Total</div>
-                    </div>
-                    {previewLines.map((l, i) => (
-                      <div key={i} style={{ display: "flex", gap: 6, padding: "7px 0", borderTop: "1px solid #f1f5f9", fontSize: 13, color: "#374151" }}>
-                        <div style={{ flex: 3, fontWeight: 600 }}>{l.name}</div>
-                        <div style={{ flex: 1, textAlign: "right" as const }}>{l.deliveredQty}</div>
-                        <div style={{ flex: 2, textAlign: "right" as const }}>{fmt(l.unitPriceIncl)}</div>
-                        <div style={{ flex: 2, textAlign: "right" as const, fontWeight: 700 }}>{fmt(l.deliveredQty * l.unitPriceIncl)}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Totals */}
-                  <div style={{ background: "#f8fafc", borderRadius: 8, padding: "10px 12px", marginTop: 12, display: "flex", flexDirection: "column" as const, gap: 5 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#374151" }}>
-                      <span>Subtotal (excl. VAT)</span><span>{fmt(subTotal)}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#374151" }}>
-                      <span>VAT (15%)</span><span>{fmt(vatTotal)}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 800, color: "#166534", borderTop: "1px solid #e2e8f0", paddingTop: 6, marginTop: 2 }}>
-                      <span>Total</span><span>{fmt(grandTotal)}</span>
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 10, fontSize: 13, color: "#374151" }}>
-                    <strong>Payment:</strong> {paymentType}
-                  </div>
-
-                  <div style={s.modalBtns}>
-                    <button style={s.secondaryBtn} onClick={() => setStep("returns")} disabled={completionBusy}>← Back</button>
-                    <button style={s.completeBtn} onClick={submitCompletion} disabled={completionBusy}>
-                      {completionBusy ? "Processing…" : "Confirm Delivery"}
-                    </button>
-                  </div>
-                </>
-              );
-            })()}
 
             {step === "receipt" && (
               <>
