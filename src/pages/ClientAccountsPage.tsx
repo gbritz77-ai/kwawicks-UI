@@ -25,7 +25,7 @@ export default function ClientAccountsPage() {
   const [uploadProgress, setUploadProgress] = useState<"idle" | "uploading" | "done" | "error">("idle");
 
   useEffect(() => {
-    clientsApi.list().then(setClients).catch(() => setError("Failed to load clients."));
+    clientsApi.list().then(data => setClients(data.filter((c: ClientDto) => !c.isWalkIn))).catch(() => setError("Failed to load clients."));
   }, []);
 
   useEffect(() => {

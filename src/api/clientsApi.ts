@@ -32,7 +32,7 @@ export type CreateClientRequest = {
 export type UpdateClientRequest = CreateClientRequest;
 
 export const clientsApi = {
-  list: (limit = 100) => api.get<ClientDto[]>(`/api/Clients?limit=${limit}`),
+  list: (limit = 500) => api.get<ClientDto[]>(`/api/Clients?limit=${limit}`),
   getById: (clientId: string) => api.get<ClientDto>(`/api/Clients/${clientId}`),
   create: (body: CreateClientRequest) => api.post<ClientDto>("/api/Clients", body),
   update: (clientId: string, body: UpdateClientRequest) => api.put<ClientDto>(`/api/Clients/${clientId}`, body),

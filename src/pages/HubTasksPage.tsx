@@ -128,8 +128,8 @@ export default function HubTasksPage() {
     try {
       setError(null);
       setLoadingClients(true);
-      const data = await clientsApi.list(200);
-      setClients(data);
+      const data = await clientsApi.list(1000);
+      setClients(data.filter((c: ClientDto) => !c.isWalkIn));
     } catch (e: any) {
       setError(e?.message || "Could not load Clients.");
     } finally {
