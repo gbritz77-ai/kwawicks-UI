@@ -166,7 +166,7 @@ export default function HubSalesPage() {
   }
 
   const filteredClients = clients.filter(c =>
-    !clientSearch || c.clientName.toLowerCase().includes(clientSearch.toLowerCase())
+    !c.isWalkIn && (!clientSearch || c.clientName.toLowerCase().includes(clientSearch.toLowerCase()))
   );
 
   const selectedSpeciesItem = species.find(s => s.speciesId === addSpeciesId);
