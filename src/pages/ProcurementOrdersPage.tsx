@@ -18,7 +18,7 @@ const STATUS_COLORS: Record<string, React.CSSProperties> = {
   Completed: { background: "rgba(34,197,94,0.1)", color: "#14532d", border: "1px solid rgba(34,197,94,0.3)" },
 };
 
-const canCreate = () => hasAnyRole("Owner", "Procurement");
+const canCreate = () => hasAnyRole("Owner", "Admin", "Procurement");
 const canEditDelete = () => hasAnyRole("Owner");
 const canComplete = () => hasAnyRole("Owner", "Finance");
 
@@ -263,7 +263,14 @@ export default function ProcurementOrdersPage() {
 
             {form.lines.map((line, idx) => (
               <div key={idx} style={s.lineRow}>
-                <select style={{ ...s.input, flex: 2 }} value={line.speciesId} onChange={e => setLine(idx, "speciesId", e.target.value)} disabled={busy}>
+                <select style={{ ...s.input, flex: 2 }} value={line.speciesId} onChange={e => {
+                  const sp = species.find((x: any) => x.speciesId === e.target.value);
+                  setForm(p => {
+                    const ls = [...p.lines];
+                    ls[idx] = { ...ls[idx], speciesId: e.target.value, ...(sp?.unitCost != null && ls[idx].unitCost === 0 ? { unitCost: sp.unitCost } : {}) };
+                    return { ...p, lines: ls };
+                  });
+                }} disabled={busy}>
                   <option value="">— Species —</option>
                   {species.map((sp: any) => <option key={sp.speciesId} value={sp.speciesId}>{sp.name}</option>)}
                 </select>
