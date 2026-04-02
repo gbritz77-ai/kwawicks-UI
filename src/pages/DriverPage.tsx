@@ -223,7 +223,7 @@ export default function DriverPage() {
           returnedDeadQty: parseInt(rl.returnedDeadQty) || 0,
           returnedMutilatedQty: parseInt(rl.returnedMutilatedQty) || 0,
           returnedNotWantedQty: parseInt(rl.returnedNotWantedQty) || 0,
-          unitPrice: doLine?.unitPrice ?? sp?.sellPrice ?? 0,
+          unitPrice: (doLine?.unitPrice ?? sp?.sellPrice ?? 0) / (1 + (sp?.vat ?? 0)),
           vatRate: sp?.vat ?? 0,
         };
       });
