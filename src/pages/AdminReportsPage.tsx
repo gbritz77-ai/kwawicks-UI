@@ -200,6 +200,7 @@ export default function AdminReportsPage() {
         <InvoicesTab
           invoices={invoices}
           clients={clients}
+          species={allSpecies}
           payFilter={invoicePayFilter}
           setPayFilter={setInvoicePayFilter}
           customer={invoiceCustomer}
@@ -841,11 +842,12 @@ export default function AdminReportsPage() {
 }
 
 function InvoicesTab({
-  invoices, clients, payFilter, setPayFilter, customer, setCustomer,
+  invoices, clients, species, payFilter, setPayFilter, customer, setCustomer,
   from, setFrom, to, setTo, loading, onApply, fmt, onConfirmed,
 }: {
   invoices: InvoiceItem[] | null;
   clients: ClientDto[];
+  species: SpeciesResponse[];
   payFilter: "" | "Pending" | "Paid";
   setPayFilter: (v: "" | "Pending" | "Paid") => void;
   customer: string;
@@ -877,7 +879,7 @@ function InvoicesTab({
     setEditResult(null);
     setEditPrices(inv.lines.map(l => ({
       speciesId: l.speciesId,
-      speciesLabel: l.speciesId,
+      speciesLabel: species.find(s => s.speciesId === l.speciesId)?.name ?? l.speciesId,
       qty: l.quantity,
       vatRate: l.vatRate,
       // Convert stored ex-VAT price to incl-VAT for display
@@ -1126,6 +1128,7 @@ function InvoicesTab({
                         step={0.01}
                         value={p.unitPriceIncl}
                         onChange={e => setEditPrices(ps => ps.map((x, j) => j === i ? { ...x, unitPriceIncl: parseFloat(e.target.value) || 0 } : x))}
+                        onFocus={e => e.target.select()}
                         disabled={editSaving}
                         style={{ width: 100, padding: "6px 8px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, textAlign: "right" as const }}
                       />
