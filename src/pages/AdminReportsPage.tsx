@@ -13,7 +13,6 @@ import { collectionRequestsApi } from "../api/collectionRequestsApi";
 import type { CollectionRequestDto } from "../api/collectionRequestsApi";
 import { deliveryOrdersApi } from "../api/deliveryOrdersApi";
 import type { DeliveryOrderResponse } from "../api/deliveryOrdersApi";
-import type { InvoiceItem } from "../api/reportsApi";
 import type {
   RevenueSummaryResponse,
   OutstandingPaymentsResponse,
