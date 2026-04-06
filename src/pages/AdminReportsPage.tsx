@@ -1405,8 +1405,9 @@ function ClientOrdersTab({ clients, species, fmt }: {
   const [clientId, setClientId]       = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [orders, setOrders]           = useState<DeliveryOrderResponse[]>([]);
-  const [invoiceMap, setInvoiceMap]   = useState<Record<string, string>>({}); // deliveryOrderId → invoiceNumber
-  const [invoiceIdMap, setInvoiceIdMap] = useState<Record<string, string>>({}); // deliveryOrderId → invoiceId
+  const [invoiceMap, setInvoiceMap]       = useState<Record<string, string>>({}); // deliveryOrderId → invoiceNumber
+  const [invoiceIdMap, setInvoiceIdMap]   = useState<Record<string, string>>({}); // deliveryOrderId → invoiceId
+  const [invNumById, setInvNumById]       = useState<Record<string, string>>({}); // invoiceId → invoiceNumber (fallback for legacy)
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState("");
   const [expandedId, setExpandedId]   = useState<string | null>(null);
@@ -1421,14 +1422,19 @@ function ClientOrdersTab({ clients, species, fmt }: {
         setOrders(ordersData);
         const map: Record<string, string> = {};
         const idMap: Record<string, string> = {};
+        const byId: Record<string, string> = {};
         for (const inv of invoicesData) {
+          // Primary key: deliveryOrderId (set on all invoices going forward)
           if (inv.deliveryOrderId) {
             map[inv.deliveryOrderId]  = inv.invoiceNumber;
             idMap[inv.deliveryOrderId] = inv.invoiceId;
           }
+          // Fallback key: invoiceId (for legacy orders where deliveryOrderId wasn't back-linked)
+          if (inv.invoiceId) byId[inv.invoiceId] = inv.invoiceNumber;
         }
         setInvoiceMap(map);
         setInvoiceIdMap(idMap);
+        setInvNumById(byId);
       })
       .catch(() => setOrdersError("Failed to load delivery orders."))
       .finally(() => setOrdersLoading(false));
@@ -1449,7 +1455,7 @@ function ClientOrdersTab({ clients, species, fmt }: {
       ["Invoice #", "Client", "Address", "City", "Date", "Driver", "Status", "Species", "Ordered", "Delivered", "Dead", "Mutilated", "Not Wanted"],
     ];
     for (const o of visible) {
-      const invNum = invoiceMap[o.deliveryOrderId] ?? "";
+      const invNum = invoiceMap[o.deliveryOrderId] ?? (o.invoiceId ? invNumById[o.invoiceId] : "") ?? "";
       const client = clName(o.customerId);
       const addr   = o.deliveryAddressLine1 ?? "";
       const city   = o.city ?? "";
@@ -1478,7 +1484,7 @@ function ClientOrdersTab({ clients, species, fmt }: {
     const win = window.open("", "_blank", "width=900,height=700");
     if (!win) return;
     const rows = visible.map(o => {
-      const invNum = invoiceMap[o.deliveryOrderId] ?? "";
+      const invNum = invoiceMap[o.deliveryOrderId] ?? (o.invoiceId ? invNumById[o.invoiceId] : "") ?? "";
       const hasRet = o.status === "Delivered" || o.status === "MarkedAtHub";
       const linesHtml = o.lines.map(l => `
         <tr>
@@ -1664,8 +1670,10 @@ function ClientOrdersTab({ clients, species, fmt }: {
         const totNW        = order.lines.reduce((t, l) => t + (l.returnedNotWantedQty || 0), 0);
         const badge        = STATUS_COLORS_CO[order.status] ?? {};
         const date         = new Date(order.createdAt).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" });
-        const invoiceNumber = invoiceMap[order.deliveryOrderId];
-        const linkedInvoiceId = invoiceIdMap[order.deliveryOrderId];
+        // Try deliveryOrderId map first (driver flow + new hub-direct), fall back to invoiceId on the order (legacy hub-direct)
+        const invoiceNumber = invoiceMap[order.deliveryOrderId]
+          ?? (order.invoiceId ? invNumById[order.invoiceId] : undefined);
+        const linkedInvoiceId = invoiceIdMap[order.deliveryOrderId] ?? order.invoiceId ?? "";
 
         return (
           <div key={order.deliveryOrderId} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, marginBottom: 10, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
