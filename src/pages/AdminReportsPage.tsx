@@ -1684,9 +1684,13 @@ function ClientOrdersTab({ clients, species, fmt }: {
                 {!clientId && <span style={{ color: "#2563eb" }}>{clName(order.customerId)} · </span>}
                 {order.deliveryAddressLine1}{order.city ? `, ${order.city}` : ""}
               </span>
-              {invoiceNumber && (
+              {invoiceNumber ? (
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "2px 8px", fontFamily: "monospace" }}>
                   {invoiceNumber}
+                </span>
+              ) : (
+                <span style={{ fontSize: 11, color: "#94a3b8", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "2px 8px", fontFamily: "monospace" }}>
+                  #{order.deliveryOrderId.slice(-8).toUpperCase()}
                 </span>
               )}
               <span style={{ fontSize: 12, color: "#64748b" }}>{date}</span>
@@ -1713,6 +1717,9 @@ function ClientOrdersTab({ clients, species, fmt }: {
             {isExpanded && (
               <div style={{ borderTop: "1px solid #f1f5f9", padding: "12px 16px", overflowX: "auto" as const }}>
                 <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" as const }}>
+                  <span style={{ fontSize: 13, color: "#64748b" }}>
+                    Order Ref: <span style={{ fontFamily: "monospace", color: "#374151" }}>#{order.deliveryOrderId.slice(-8).toUpperCase()}</span>
+                  </span>
                   {invoiceNumber && (
                     <span style={{ fontSize: 13, color: "#15803d", fontWeight: 600 }}>
                       Invoice: <span style={{ fontFamily: "monospace" }}>{invoiceNumber}</span>
