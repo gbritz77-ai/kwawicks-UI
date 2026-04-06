@@ -11,6 +11,8 @@ import { procurementOrdersApi } from "../api/procurementOrdersApi";
 import type { ProcurementOrderDto } from "../api/procurementOrdersApi";
 import { collectionRequestsApi } from "../api/collectionRequestsApi";
 import type { CollectionRequestDto } from "../api/collectionRequestsApi";
+import { deliveryOrdersApi } from "../api/deliveryOrdersApi";
+import type { DeliveryOrderResponse } from "../api/deliveryOrdersApi";
 import type {
   RevenueSummaryResponse,
   OutstandingPaymentsResponse,
@@ -22,7 +24,7 @@ import type {
 } from "../api/reportsApi";
 import type { ClientDto } from "../api/clientsApi";
 
-type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability";
+type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability" | "client-orders";
 
 export default function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -88,6 +90,10 @@ export default function AdminReportsPage() {
       if (tab === "supplier-spend") setPoData(await procurementOrdersApi.list());
       if (tab === "margin" && !allSpecies.length) setAllSpecies(await speciesApi.list());
       if (["load-discrepancy","transit-discrepancy","supplier-reliability"].includes(tab)) setCrData(await collectionRequestsApi.list());
+      if (tab === "client-orders") {
+        if (!clients.length) setClients((await clientsApi.list()).filter((c: ClientDto) => !c.isWalkIn));
+        if (!allSpecies.length) setAllSpecies(await speciesApi.list());
+      }
     } catch {
       setError("Failed to load report.");
     } finally {
@@ -106,7 +112,7 @@ export default function AdminReportsPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["revenue", "outstanding", "invoices", "drivers", "returns", "deliveries", "species", "statement", "supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability"] as Tab[])
+        {(["revenue", "outstanding", "invoices", "client-orders", "drivers", "returns", "deliveries", "species", "statement", "supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability"] as Tab[])
           .filter(t => {
             const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "statement"];
             const procurementTabs: Tab[] = ["supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability"];
@@ -128,12 +134,13 @@ export default function AdminReportsPage() {
             {t === "load-discrepancy"      && "⚠ Load Discrepancy"}
             {t === "transit-discrepancy"    && "🚛 Transit Loss"}
             {t === "supplier-reliability"   && "⭐ Supplier Reliability"}
+            {t === "client-orders"          && "📦 Client Orders"}
           </button>
         ))}
       </div>
 
-      {/* Date filter (not shown for outstanding or statement) */}
-      {tab !== "outstanding" && tab !== "statement" && (
+      {/* Date filter (not shown for outstanding, statement, or client-orders) */}
+      {tab !== "outstanding" && tab !== "statement" && tab !== "client-orders" && (
         <div style={s.filterRow}>
           <label style={s.label}>From</label>
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={s.dateInput} />
@@ -837,6 +844,11 @@ export default function AdminReportsPage() {
         );
       })()}
 
+      {/* Client Orders */}
+      {tab === "client-orders" && !loading && (
+        <ClientOrdersTab clients={clients} species={allSpecies} fmt={fmt} />
+      )}
+
     </div>
   );
 }
@@ -1369,6 +1381,182 @@ function Th({ children }: { children: React.ReactNode }) {
 }
 function Td({ children, style }: { children: React.ReactNode; style?: CSSProperties }) {
   return <td style={{ ...s.td, ...style }}>{children}</td>;
+}
+
+// ── Client Orders Tab ────────────────────────────────────────────────────────
+
+const STATUS_LABELS_CO: Record<string, string> = {
+  Open: "Open", OutForDelivery: "Out for Delivery", Delivered: "Delivered",
+  MarkedAtHub: "Marked at Hub", AwaitingCollection: "Awaiting Collection",
+};
+const STATUS_COLORS_CO: Record<string, CSSProperties> = {
+  Open:               { background: "#fef9c3", color: "#713f12", border: "1px solid #fcd34d" },
+  OutForDelivery:     { background: "#dbeafe", color: "#1e3a8a", border: "1px solid #93c5fd" },
+  Delivered:          { background: "#dcfce7", color: "#14532d", border: "1px solid #86efac" },
+  MarkedAtHub:        { background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0" },
+  AwaitingCollection: { background: "#fef3c7", color: "#92400e", border: "1px solid #fcd34d" },
+};
+
+function ClientOrdersTab({ clients, species, fmt }: {
+  clients: ClientDto[];
+  species: SpeciesResponse[];
+  fmt: (n: number) => string;
+}) {
+  const [clientId, setClientId]       = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [orders, setOrders]           = useState<DeliveryOrderResponse[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState("");
+  const [expandedId, setExpandedId]   = useState<string | null>(null);
+
+  useEffect(() => {
+    setOrdersLoading(true);
+    deliveryOrdersApi.list()
+      .then(setOrders)
+      .catch(() => setOrdersError("Failed to load delivery orders."))
+      .finally(() => setOrdersLoading(false));
+  }, []);
+
+  const visible = orders
+    .filter(o => !clientId || o.customerId === clientId)
+    .filter(o => statusFilter === "All" || o.status === statusFilter)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const spName = (id: string) => species.find(sp => sp.speciesId === id)?.name ?? id.slice(0, 10) + "…";
+  const clName = (id: string) => clients.find(c => c.clientId === id)?.clientName ?? "Unknown";
+
+  return (
+    <div>
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" as const, marginBottom: 20, alignItems: "flex-end" }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Client</div>
+          <select style={{ ...s.select, minWidth: 240 }} value={clientId}
+            onChange={e => { setClientId(e.target.value); setExpandedId(null); }}>
+            <option value="">— All Clients —</option>
+            {clients.map(c => <option key={c.clientId} value={c.clientId}>{c.clientName}</option>)}
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Status</div>
+          <select style={s.select} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <option value="All">All Statuses</option>
+            <option value="Open">Open</option>
+            <option value="OutForDelivery">Out for Delivery</option>
+            <option value="Delivered">Delivered</option>
+            <option value="MarkedAtHub">Marked at Hub</option>
+          </select>
+        </div>
+        {!ordersLoading && (
+          <div style={{ fontSize: 13, color: "#64748b", alignSelf: "flex-end", paddingBottom: 4 }}>
+            {visible.length} order{visible.length !== 1 ? "s" : ""}
+          </div>
+        )}
+      </div>
+
+      {ordersLoading && <p style={s.muted}>Loading orders…</p>}
+      {ordersError  && <p style={s.error}>{ordersError}</p>}
+
+      {!ordersLoading && !ordersError && visible.length === 0 && (
+        <p style={s.muted}>{clientId ? "No orders found for this client." : "Select a client or browse all orders."}</p>
+      )}
+
+      {visible.map(order => {
+        const isExpanded   = expandedId === order.deliveryOrderId;
+        const hasReturns   = order.status === "Delivered" || order.status === "MarkedAtHub";
+        const totOrdered   = order.lines.reduce((t, l) => t + l.quantity, 0);
+        const totDelivered = order.lines.reduce((t, l) => t + (l.deliveredQty   || 0), 0);
+        const totDead      = order.lines.reduce((t, l) => t + (l.returnedDeadQty      || 0), 0);
+        const totMut       = order.lines.reduce((t, l) => t + (l.returnedMutilatedQty || 0), 0);
+        const totNW        = order.lines.reduce((t, l) => t + (l.returnedNotWantedQty || 0), 0);
+        const badge        = STATUS_COLORS_CO[order.status] ?? {};
+        const date         = new Date(order.createdAt).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" });
+
+        return (
+          <div key={order.deliveryOrderId} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, marginBottom: 10, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+            {/* Summary row — clickable to expand */}
+            <button onClick={() => setExpandedId(isExpanded ? null : order.deliveryOrderId)}
+              style={{ width: "100%", background: "none", border: "none", cursor: "pointer", padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" as const, textAlign: "left" as const }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", flex: "1 1 180px" }}>
+                {!clientId && <span style={{ color: "#2563eb" }}>{clName(order.customerId)} · </span>}
+                {order.deliveryAddressLine1}{order.city ? `, ${order.city}` : ""}
+              </span>
+              <span style={{ fontSize: 12, color: "#64748b" }}>{date}</span>
+              {order.assignedDriverName && (
+                <span style={{ fontSize: 12, color: "#64748b" }}>🚛 {order.assignedDriverName}</span>
+              )}
+              <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 10px", borderRadius: 20, ...badge }}>
+                {STATUS_LABELS_CO[order.status] ?? order.status}
+              </span>
+              {hasReturns ? (
+                <span style={{ fontSize: 12, color: "#374151" }}>
+                  <strong style={{ color: "#166534" }}>{totDelivered}</strong>/{totOrdered} delivered
+                  {totDead > 0 && <span style={{ color: "#dc2626" }}> · {totDead} dead</span>}
+                  {totMut  > 0 && <span style={{ color: "#d97706" }}> · {totMut} mutilated</span>}
+                  {totNW   > 0 && <span style={{ color: "#0891b2" }}> · {totNW} not wanted</span>}
+                </span>
+              ) : (
+                <span style={{ fontSize: 12, color: "#64748b" }}>{totOrdered} ordered</span>
+              )}
+              <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: "auto" }}>{isExpanded ? "▲ Hide" : "▼ Details"}</span>
+            </button>
+
+            {/* Expanded line breakdown */}
+            {isExpanded && (
+              <div style={{ borderTop: "1px solid #f1f5f9", padding: "12px 16px", overflowX: "auto" as const }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" as const, fontSize: 13, minWidth: 420 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left"  as const, padding: "4px 10px 8px 0", fontWeight: 700, fontSize: 11, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: 0.5 }}>Species</th>
+                      <th style={{ textAlign: "right" as const, padding: "4px 10px 8px",   fontWeight: 700, fontSize: 11, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: 0.5 }}>Ordered</th>
+                      {hasReturns && <>
+                        <th style={{ textAlign: "right" as const, padding: "4px 10px 8px", fontWeight: 700, fontSize: 11, color: "#166534",  textTransform: "uppercase" as const, letterSpacing: 0.5 }}>Delivered</th>
+                        <th style={{ textAlign: "right" as const, padding: "4px 10px 8px", fontWeight: 700, fontSize: 11, color: "#dc2626",  textTransform: "uppercase" as const, letterSpacing: 0.5 }}>Dead</th>
+                        <th style={{ textAlign: "right" as const, padding: "4px 10px 8px", fontWeight: 700, fontSize: 11, color: "#d97706",  textTransform: "uppercase" as const, letterSpacing: 0.5 }}>Mutilated</th>
+                        <th style={{ textAlign: "right" as const, padding: "4px 10px 8px", fontWeight: 700, fontSize: 11, color: "#0891b2",  textTransform: "uppercase" as const, letterSpacing: 0.5 }}>Not Wanted</th>
+                        <th style={{ textAlign: "right" as const, padding: "4px 0 8px 10px", fontWeight: 700, fontSize: 11, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: 0.5 }}>Unit Price</th>
+                      </>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {order.lines.map(l => {
+                      const vatRate = species.find(sp => sp.speciesId === l.speciesId)?.vat ?? 0.15;
+                      return (
+                        <tr key={l.speciesId} style={{ borderTop: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "7px 10px 7px 0", fontWeight: 600, color: "#0f172a" }}>{spName(l.speciesId)}</td>
+                          <td style={{ textAlign: "right" as const, padding: "7px 10px", color: "#374151" }}>{l.quantity}</td>
+                          {hasReturns && <>
+                            <td style={{ textAlign: "right" as const, padding: "7px 10px", fontWeight: 700, color: "#166534" }}>{l.deliveredQty}</td>
+                            <td style={{ textAlign: "right" as const, padding: "7px 10px", color: l.returnedDeadQty      > 0 ? "#dc2626" : "#cbd5e1" }}>{l.returnedDeadQty}</td>
+                            <td style={{ textAlign: "right" as const, padding: "7px 10px", color: l.returnedMutilatedQty > 0 ? "#d97706" : "#cbd5e1" }}>{l.returnedMutilatedQty}</td>
+                            <td style={{ textAlign: "right" as const, padding: "7px 10px", color: l.returnedNotWantedQty > 0 ? "#0891b2" : "#cbd5e1" }}>{l.returnedNotWantedQty}</td>
+                            <td style={{ textAlign: "right" as const, padding: "7px 0 7px 10px", color: "#374151" }}>{fmt(l.unitPrice * (1 + vatRate))}</td>
+                          </>}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  {hasReturns && order.lines.length > 1 && (
+                    <tfoot>
+                      <tr style={{ borderTop: "2px solid #e2e8f0" }}>
+                        <td style={{ padding: "8px 10px 4px 0", fontWeight: 800, color: "#0f172a" }}>Total</td>
+                        <td style={{ textAlign: "right" as const, padding: "8px 10px 4px", fontWeight: 700 }}>{totOrdered}</td>
+                        <td style={{ textAlign: "right" as const, padding: "8px 10px 4px", fontWeight: 700, color: "#166534" }}>{totDelivered}</td>
+                        <td style={{ textAlign: "right" as const, padding: "8px 10px 4px", fontWeight: 700, color: totDead > 0 ? "#dc2626" : "#cbd5e1" }}>{totDead}</td>
+                        <td style={{ textAlign: "right" as const, padding: "8px 10px 4px", fontWeight: 700, color: totMut  > 0 ? "#d97706" : "#cbd5e1" }}>{totMut}</td>
+                        <td style={{ textAlign: "right" as const, padding: "8px 10px 4px", fontWeight: 700, color: totNW   > 0 ? "#0891b2" : "#cbd5e1" }}>{totNW}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 const s: Record<string, CSSProperties> = {
