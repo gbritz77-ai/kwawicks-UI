@@ -79,10 +79,10 @@ export default function AdminReportsPage() {
           clients.length ? Promise.resolve(clients) : clientsApi.list(),
         ]);
         setInvoices(inv);
-        if (!clients.length) setClients(cls);
+        if (!clients.length) setClients(cls.filter((c: ClientDto) => !c.isWalkIn));
       }
       if (tab === "statement" && !clients.length) {
-        setClients(await clientsApi.list());
+        setClients((await clientsApi.list()).filter((c: ClientDto) => !c.isWalkIn));
       }
       if (tab === "species") setSpeciesRevenue(await reportsApi.getSpeciesRevenue(from || undefined, to || undefined));
       if (tab === "supplier-spend") setPoData(await procurementOrdersApi.list());

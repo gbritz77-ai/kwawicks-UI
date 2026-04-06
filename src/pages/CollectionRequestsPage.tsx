@@ -89,7 +89,7 @@ export default function CollectionRequestsPage() {
       setItems(crs);
       setPos(poList.filter(p => p.status === "Submitted"));
       setDrivers(driverList);
-      setClients(clientList);
+      setClients((clientList as ClientDto[]).filter(c => !c.isWalkIn));
     } catch { setError("Failed to load collection requests."); }
     finally { setLoading(false); }
   }

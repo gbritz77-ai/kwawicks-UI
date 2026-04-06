@@ -108,7 +108,7 @@ export default function DeliveryOrdersPage() {
         speciesApi.list(),
         usersApi.listDrivers(),
       ]);
-      setClients(c);
+      setClients(c.filter((x: any) => !x.isWalkIn));
       setSpecies(s);
       setDrivers(d);
     } catch (e: any) {
