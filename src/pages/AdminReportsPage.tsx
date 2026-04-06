@@ -1405,7 +1405,8 @@ function ClientOrdersTab({ clients, species, fmt }: {
   const [clientId, setClientId]       = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [orders, setOrders]           = useState<DeliveryOrderResponse[]>([]);
-  const [invoiceMap, setInvoiceMap]   = useState<Record<string, string>>({}); // invoiceId → invoiceNumber
+  const [invoiceMap, setInvoiceMap]   = useState<Record<string, string>>({}); // deliveryOrderId → invoiceNumber
+  const [invoiceIdMap, setInvoiceIdMap] = useState<Record<string, string>>({}); // deliveryOrderId → invoiceId
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState("");
   const [expandedId, setExpandedId]   = useState<string | null>(null);
@@ -1419,10 +1420,15 @@ function ClientOrdersTab({ clients, species, fmt }: {
       .then(([ordersData, invoicesData]: [DeliveryOrderResponse[], InvoiceItem[]]) => {
         setOrders(ordersData);
         const map: Record<string, string> = {};
+        const idMap: Record<string, string> = {};
         for (const inv of invoicesData) {
-          if (inv.invoiceId) map[inv.invoiceId] = inv.invoiceNumber;
+          if (inv.deliveryOrderId) {
+            map[inv.deliveryOrderId]  = inv.invoiceNumber;
+            idMap[inv.deliveryOrderId] = inv.invoiceId;
+          }
         }
         setInvoiceMap(map);
+        setInvoiceIdMap(idMap);
       })
       .catch(() => setOrdersError("Failed to load delivery orders."))
       .finally(() => setOrdersLoading(false));
@@ -1443,7 +1449,7 @@ function ClientOrdersTab({ clients, species, fmt }: {
       ["Invoice #", "Client", "Address", "City", "Date", "Driver", "Status", "Species", "Ordered", "Delivered", "Dead", "Mutilated", "Not Wanted"],
     ];
     for (const o of visible) {
-      const invNum = o.invoiceId ? (invoiceMap[o.invoiceId] ?? "") : "";
+      const invNum = invoiceMap[o.deliveryOrderId] ?? "";
       const client = clName(o.customerId);
       const addr   = o.deliveryAddressLine1 ?? "";
       const city   = o.city ?? "";
@@ -1472,7 +1478,7 @@ function ClientOrdersTab({ clients, species, fmt }: {
     const win = window.open("", "_blank", "width=900,height=700");
     if (!win) return;
     const rows = visible.map(o => {
-      const invNum = o.invoiceId ? (invoiceMap[o.invoiceId] ?? "") : "";
+      const invNum = invoiceMap[o.deliveryOrderId] ?? "";
       const hasRet = o.status === "Delivered" || o.status === "MarkedAtHub";
       const linesHtml = o.lines.map(l => `
         <tr>
@@ -1511,6 +1517,79 @@ function ClientOrdersTab({ clients, species, fmt }: {
         <button onclick="window.print()" style="padding:8px 16px;background:#15803d;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px">🖨️ Print</button>
       </div>
       ${rows}
+      </body></html>`);
+    win.document.close();
+  }
+
+  // ── Print single order ───────────────────────────────────────────────────
+  function printSingleOrder(o: DeliveryOrderResponse, invNum?: string) {
+    const win = window.open("", "_blank", "width=800,height=600");
+    if (!win) return;
+    const hasRet = o.status === "Delivered" || o.status === "MarkedAtHub";
+    const linesHtml = o.lines.map(l => {
+      const vatRate = species.find(sp => sp.speciesId === l.speciesId)?.vat ?? 0.15;
+      return `<tr>
+        <td style="padding:6px 10px 6px 0">${spName(l.speciesId)}</td>
+        <td style="text-align:right;padding:6px 10px">${l.quantity}</td>
+        ${hasRet ? `<td style="text-align:right;padding:6px 10px;color:#166534;font-weight:700">${l.deliveredQty || 0}</td>
+          <td style="text-align:right;padding:6px 10px;color:${(l.returnedDeadQty||0)>0?"#dc2626":"#cbd5e1"}">${l.returnedDeadQty || 0}</td>
+          <td style="text-align:right;padding:6px 10px;color:${(l.returnedMutilatedQty||0)>0?"#d97706":"#cbd5e1"}">${l.returnedMutilatedQty || 0}</td>
+          <td style="text-align:right;padding:6px 10px;color:${(l.returnedNotWantedQty||0)>0?"#0891b2":"#cbd5e1"}">${l.returnedNotWantedQty || 0}</td>
+          <td style="text-align:right;padding:6px 0 6px 10px">${fmt(l.unitPrice * (1 + vatRate))}</td>` : ""}
+      </tr>`;
+    }).join("");
+    const totOrd  = o.lines.reduce((t, l) => t + l.quantity, 0);
+    const totDel  = o.lines.reduce((t, l) => t + (l.deliveredQty || 0), 0);
+    const totDead = o.lines.reduce((t, l) => t + (l.returnedDeadQty || 0), 0);
+    const totMut  = o.lines.reduce((t, l) => t + (l.returnedMutilatedQty || 0), 0);
+    const totNW   = o.lines.reduce((t, l) => t + (l.returnedNotWantedQty || 0), 0);
+    const totalsRow = hasRet && o.lines.length > 1 ? `
+      <tfoot><tr style="border-top:2px solid #e2e8f0;font-weight:800">
+        <td style="padding:8px 10px 4px 0">Total</td>
+        <td style="text-align:right;padding:8px 10px 4px">${totOrd}</td>
+        <td style="text-align:right;padding:8px 10px 4px;color:#166534">${totDel}</td>
+        <td style="text-align:right;padding:8px 10px 4px;color:${totDead>0?"#dc2626":"#cbd5e1"}">${totDead}</td>
+        <td style="text-align:right;padding:8px 10px 4px;color:${totMut>0?"#d97706":"#cbd5e1"}">${totMut}</td>
+        <td style="text-align:right;padding:8px 10px 4px;color:${totNW>0?"#0891b2":"#cbd5e1"}">${totNW}</td>
+        <td></td>
+      </tr></tfoot>` : "";
+    const date = new Date(o.createdAt).toLocaleDateString("en-ZA", { day: "2-digit", month: "long", year: "numeric" });
+    win.document.write(`<!DOCTYPE html><html><head><title>${invNum ?? "Order"} — ${clName(o.customerId)}</title>
+      <style>
+        body{font-family:sans-serif;padding:32px;color:#1e293b;font-size:14px}
+        table{width:100%;border-collapse:collapse}
+        th{text-align:left;padding:6px 10px 8px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #e2e8f0;color:#64748b}
+        th.r{text-align:right}
+        td{border-bottom:1px solid #f1f5f9}
+        @media print{button{display:none}}
+      </style></head><body>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+        <div>
+          <h2 style="margin:0 0 4px">${clName(o.customerId)}</h2>
+          <div style="color:#64748b;font-size:13px">${o.deliveryAddressLine1 ?? ""}${o.city ? `, ${o.city}` : ""}${o.province ? `, ${o.province}` : ""}</div>
+          ${o.assignedDriverName ? `<div style="color:#64748b;font-size:13px;margin-top:2px">Driver: ${o.assignedDriverName}</div>` : ""}
+        </div>
+        <div style="text-align:right">
+          ${invNum ? `<div style="font-family:monospace;font-size:16px;font-weight:700;color:#15803d">${invNum}</div>` : ""}
+          <div style="font-size:13px;color:#64748b">${date}</div>
+          <div style="font-size:13px;font-weight:600;margin-top:4px">${STATUS_LABELS_CO[o.status] ?? o.status}</div>
+        </div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Species</th><th class="r">Ordered</th>
+          ${hasRet ? `<th class="r" style="color:#166534">Delivered</th>
+            <th class="r" style="color:#dc2626">Dead</th>
+            <th class="r" style="color:#d97706">Mutilated</th>
+            <th class="r" style="color:#0891b2">Not Wanted</th>
+            <th class="r">Unit Price</th>` : ""}
+        </tr></thead>
+        <tbody>${linesHtml}</tbody>
+        ${totalsRow}
+      </table>
+      <div style="margin-top:24px">
+        <button onclick="window.print()" style="padding:8px 20px;background:#15803d;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px">🖨️ Print</button>
+      </div>
       </body></html>`);
     win.document.close();
   }
@@ -1585,7 +1664,8 @@ function ClientOrdersTab({ clients, species, fmt }: {
         const totNW        = order.lines.reduce((t, l) => t + (l.returnedNotWantedQty || 0), 0);
         const badge        = STATUS_COLORS_CO[order.status] ?? {};
         const date         = new Date(order.createdAt).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" });
-        const invoiceNumber = order.invoiceId ? invoiceMap[order.invoiceId] : undefined;
+        const invoiceNumber = invoiceMap[order.deliveryOrderId];
+        const linkedInvoiceId = invoiceIdMap[order.deliveryOrderId];
 
         return (
           <div key={order.deliveryOrderId} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, marginBottom: 10, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
@@ -1624,24 +1704,35 @@ function ClientOrdersTab({ clients, species, fmt }: {
             {/* Expanded line breakdown */}
             {isExpanded && (
               <div style={{ borderTop: "1px solid #f1f5f9", padding: "12px 16px", overflowX: "auto" as const }}>
-                {invoiceNumber && (
-                  <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" as const }}>
+                <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" as const }}>
+                  {invoiceNumber && (
                     <span style={{ fontSize: 13, color: "#15803d", fontWeight: 600 }}>
                       Invoice: <span style={{ fontFamily: "monospace" }}>{invoiceNumber}</span>
                     </span>
-                    <button
-                      onClick={() => sendWhatsApp(order.invoiceId, order.customerId)}
-                      disabled={waSending === order.invoiceId}
-                      style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #16a34a", background: "#f0fdf4", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#15803d" }}>
-                      {waSending === order.invoiceId ? "Sending…" : "📱 WhatsApp Invoice"}
-                    </button>
-                    {waResult[order.invoiceId] && (
-                      <span style={{ fontSize: 12, color: waResult[order.invoiceId].startsWith("✅") ? "#15803d" : "#dc2626" }}>
-                        {waResult[order.invoiceId]}
-                      </span>
-                    )}
-                  </div>
-                )}
+                  )}
+                  {/* Per-order print */}
+                  <button
+                    onClick={() => printSingleOrder(order, invoiceNumber)}
+                    style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #cbd5e1", background: "#f8fafc", cursor: "pointer", fontSize: 12, fontWeight: 500, color: "#374151" }}>
+                    🖨️ Print
+                  </button>
+                  {/* WhatsApp — only when linked invoice exists */}
+                  {invoiceNumber && linkedInvoiceId && (
+                    <>
+                      <button
+                        onClick={() => sendWhatsApp(linkedInvoiceId, order.customerId)}
+                        disabled={waSending === linkedInvoiceId}
+                        style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #16a34a", background: "#f0fdf4", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#15803d" }}>
+                        {waSending === linkedInvoiceId ? "Sending…" : "📱 WhatsApp Invoice"}
+                      </button>
+                      {waResult[linkedInvoiceId] && (
+                        <span style={{ fontSize: 12, color: waResult[linkedInvoiceId].startsWith("✅") ? "#15803d" : "#dc2626" }}>
+                          {waResult[linkedInvoiceId]}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
                 <table style={{ width: "100%", borderCollapse: "collapse" as const, fontSize: 13, minWidth: 420 }}>
                   <thead>
                     <tr>
