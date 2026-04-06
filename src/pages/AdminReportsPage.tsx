@@ -13,6 +13,7 @@ import { collectionRequestsApi } from "../api/collectionRequestsApi";
 import type { CollectionRequestDto } from "../api/collectionRequestsApi";
 import { deliveryOrdersApi } from "../api/deliveryOrdersApi";
 import type { DeliveryOrderResponse } from "../api/deliveryOrdersApi";
+import type { InvoiceItem } from "../api/reportsApi";
 import type {
   RevenueSummaryResponse,
   OutstandingPaymentsResponse,
@@ -1405,14 +1406,25 @@ function ClientOrdersTab({ clients, species, fmt }: {
   const [clientId, setClientId]       = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [orders, setOrders]           = useState<DeliveryOrderResponse[]>([]);
+  const [invoiceMap, setInvoiceMap]   = useState<Record<string, string>>({}); // invoiceId → invoiceNumber
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState("");
   const [expandedId, setExpandedId]   = useState<string | null>(null);
 
   useEffect(() => {
     setOrdersLoading(true);
-    deliveryOrdersApi.list()
-      .then(setOrders)
+    Promise.all([
+      deliveryOrdersApi.list(),
+      reportsApi.getInvoices({}),
+    ])
+      .then(([ordersData, invoicesData]: [DeliveryOrderResponse[], InvoiceItem[]]) => {
+        setOrders(ordersData);
+        const map: Record<string, string> = {};
+        for (const inv of invoicesData) {
+          if (inv.invoiceId) map[inv.invoiceId] = inv.invoiceNumber;
+        }
+        setInvoiceMap(map);
+      })
       .catch(() => setOrdersError("Failed to load delivery orders."))
       .finally(() => setOrdersLoading(false));
   }, []);
@@ -1422,8 +1434,101 @@ function ClientOrdersTab({ clients, species, fmt }: {
     .filter(o => statusFilter === "All" || o.status === statusFilter)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  const spName = (id: string) => species.find(sp => sp.speciesId === id)?.name ?? id.slice(0, 10) + "…";
-  const clName = (id: string) => clients.find(c => c.clientId === id)?.clientName ?? "Unknown";
+  const spName  = (id: string) => species.find(sp => sp.speciesId === id)?.name ?? id.slice(0, 10) + "…";
+  const clName  = (id: string) => clients.find(c => c.clientId === id)?.clientName ?? "Unknown";
+  const clPhone = (id: string) => clients.find(c => c.clientId === id)?.clientPhone ?? "";
+
+  // ── Export CSV ────────────────────────────────────────────────────────────
+  function exportCsv() {
+    const rows: string[][] = [
+      ["Invoice #", "Client", "Address", "City", "Date", "Driver", "Status", "Species", "Ordered", "Delivered", "Dead", "Mutilated", "Not Wanted"],
+    ];
+    for (const o of visible) {
+      const invNum = o.invoiceId ? (invoiceMap[o.invoiceId] ?? "") : "";
+      const client = clName(o.customerId);
+      const addr   = o.deliveryAddressLine1 ?? "";
+      const city   = o.city ?? "";
+      const date   = new Date(o.createdAt).toLocaleDateString("en-ZA");
+      const driver = o.assignedDriverName ?? "";
+      const status = STATUS_LABELS_CO[o.status] ?? o.status;
+      for (const l of o.lines) {
+        rows.push([invNum, client, addr, city, date, driver, status, spName(l.speciesId),
+          String(l.quantity), String(l.deliveredQty || 0),
+          String(l.returnedDeadQty || 0), String(l.returnedMutilatedQty || 0), String(l.returnedNotWantedQty || 0)]);
+      }
+      if (o.lines.length === 0) {
+        rows.push([invNum, client, addr, city, date, driver, status, "", "0", "0", "0", "0", "0"]);
+      }
+    }
+    const csv = rows.map(r => r.map(v => `"${v.replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = `client-orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  }
+
+  // ── Print ────────────────────────────────────────────────────────────────
+  function printOrders() {
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (!win) return;
+    const rows = visible.map(o => {
+      const invNum = o.invoiceId ? (invoiceMap[o.invoiceId] ?? "") : "";
+      const hasRet = o.status === "Delivered" || o.status === "MarkedAtHub";
+      const linesHtml = o.lines.map(l => `
+        <tr>
+          <td>${spName(l.speciesId)}</td>
+          <td style="text-align:right">${l.quantity}</td>
+          ${hasRet ? `<td style="text-align:right;color:#166534">${l.deliveredQty || 0}</td>
+            <td style="text-align:right;color:#dc2626">${l.returnedDeadQty || 0}</td>
+            <td style="text-align:right;color:#d97706">${l.returnedMutilatedQty || 0}</td>
+            <td style="text-align:right;color:#0891b2">${l.returnedNotWantedQty || 0}</td>` : ""}
+        </tr>`).join("");
+      return `<div style="margin-bottom:24px;page-break-inside:avoid">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #15803d;padding-bottom:4px;margin-bottom:8px">
+          <strong style="font-size:14px">${clName(o.customerId)}</strong>
+          ${invNum ? `<span style="font-family:monospace;color:#15803d;font-weight:700">${invNum}</span>` : ""}
+          <span style="font-size:12px;color:#64748b">${new Date(o.createdAt).toLocaleDateString("en-ZA")} · ${STATUS_LABELS_CO[o.status] ?? o.status}</span>
+        </div>
+        <div style="font-size:12px;color:#475569;margin-bottom:6px">${o.deliveryAddressLine1 ?? ""}${o.city ? `, ${o.city}` : ""}${o.assignedDriverName ? ` · 🚛 ${o.assignedDriverName}` : ""}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="background:#f8fafc">
+            <th style="text-align:left;padding:4px 8px;border-bottom:1px solid #e2e8f0">Species</th>
+            <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #e2e8f0">Ordered</th>
+            ${hasRet ? `<th style="text-align:right;padding:4px 8px;border-bottom:1px solid #e2e8f0;color:#166534">Delivered</th>
+              <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #e2e8f0;color:#dc2626">Dead</th>
+              <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #e2e8f0;color:#d97706">Mutilated</th>
+              <th style="text-align:right;padding:4px 8px;border-bottom:1px solid #e2e8f0;color:#0891b2">Not Wanted</th>` : ""}
+          </tr></thead>
+          <tbody>${linesHtml}</tbody>
+        </table>
+      </div>`;
+    }).join("");
+    win.document.write(`<!DOCTYPE html><html><head><title>Client Orders</title>
+      <style>body{font-family:sans-serif;padding:24px;color:#1e293b} @media print{button{display:none}}</style>
+      </head><body>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px">
+        <h2 style="margin:0">Client Orders</h2>
+        <button onclick="window.print()" style="padding:8px 16px;background:#15803d;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px">🖨️ Print</button>
+      </div>
+      ${rows}
+      </body></html>`);
+    win.document.close();
+  }
+
+  // ── WhatsApp send ────────────────────────────────────────────────────────
+  const [waSending, setWaSending] = useState<string | null>(null); // invoiceId being sent
+  const [waResult,  setWaResult]  = useState<Record<string, string>>({}); // invoiceId → message
+
+  function sendWhatsApp(invoiceId: string, clientId: string) {
+    const phone = clPhone(clientId);
+    if (!phone) { setWaResult(r => ({ ...r, [invoiceId]: "No phone on record." })); return; }
+    setWaSending(invoiceId);
+    whatsappApi.sendInvoice(invoiceId, phone)
+      .then(res => setWaResult(r => ({ ...r, [invoiceId]: res.success ? "✅ Sent" : `❌ ${res.message}` })))
+      .catch(() => setWaResult(r => ({ ...r, [invoiceId]: "❌ Failed to send" })))
+      .finally(() => setWaSending(null));
+  }
 
   return (
     <div>
@@ -1448,8 +1553,18 @@ function ClientOrdersTab({ clients, species, fmt }: {
           </select>
         </div>
         {!ordersLoading && (
-          <div style={{ fontSize: 13, color: "#64748b", alignSelf: "flex-end", paddingBottom: 4 }}>
-            {visible.length} order{visible.length !== 1 ? "s" : ""}
+          <div style={{ display: "flex", gap: 8, alignSelf: "flex-end", alignItems: "center" }}>
+            <span style={{ fontSize: 13, color: "#64748b", paddingBottom: 4 }}>
+              {visible.length} order{visible.length !== 1 ? "s" : ""}
+            </span>
+            <button onClick={exportCsv} disabled={visible.length === 0}
+              style={{ padding: "7px 14px", borderRadius: 6, border: "1px solid #cbd5e1", background: "#f8fafc", cursor: "pointer", fontSize: 13, fontWeight: 500, color: "#374151" }}>
+              📥 Export CSV
+            </button>
+            <button onClick={printOrders} disabled={visible.length === 0}
+              style={{ padding: "7px 14px", borderRadius: 6, border: "1px solid #cbd5e1", background: "#f8fafc", cursor: "pointer", fontSize: 13, fontWeight: 500, color: "#374151" }}>
+              🖨️ Print
+            </button>
           </div>
         )}
       </div>
@@ -1471,6 +1586,7 @@ function ClientOrdersTab({ clients, species, fmt }: {
         const totNW        = order.lines.reduce((t, l) => t + (l.returnedNotWantedQty || 0), 0);
         const badge        = STATUS_COLORS_CO[order.status] ?? {};
         const date         = new Date(order.createdAt).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" });
+        const invoiceNumber = order.invoiceId ? invoiceMap[order.invoiceId] : undefined;
 
         return (
           <div key={order.deliveryOrderId} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, marginBottom: 10, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
@@ -1481,6 +1597,11 @@ function ClientOrdersTab({ clients, species, fmt }: {
                 {!clientId && <span style={{ color: "#2563eb" }}>{clName(order.customerId)} · </span>}
                 {order.deliveryAddressLine1}{order.city ? `, ${order.city}` : ""}
               </span>
+              {invoiceNumber && (
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#15803d", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "2px 8px", fontFamily: "monospace" }}>
+                  {invoiceNumber}
+                </span>
+              )}
               <span style={{ fontSize: 12, color: "#64748b" }}>{date}</span>
               {order.assignedDriverName && (
                 <span style={{ fontSize: 12, color: "#64748b" }}>🚛 {order.assignedDriverName}</span>
@@ -1504,6 +1625,24 @@ function ClientOrdersTab({ clients, species, fmt }: {
             {/* Expanded line breakdown */}
             {isExpanded && (
               <div style={{ borderTop: "1px solid #f1f5f9", padding: "12px 16px", overflowX: "auto" as const }}>
+                {invoiceNumber && (
+                  <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" as const }}>
+                    <span style={{ fontSize: 13, color: "#15803d", fontWeight: 600 }}>
+                      Invoice: <span style={{ fontFamily: "monospace" }}>{invoiceNumber}</span>
+                    </span>
+                    <button
+                      onClick={() => sendWhatsApp(order.invoiceId, order.customerId)}
+                      disabled={waSending === order.invoiceId}
+                      style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #16a34a", background: "#f0fdf4", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#15803d" }}>
+                      {waSending === order.invoiceId ? "Sending…" : "📱 WhatsApp Invoice"}
+                    </button>
+                    {waResult[order.invoiceId] && (
+                      <span style={{ fontSize: 12, color: waResult[order.invoiceId].startsWith("✅") ? "#15803d" : "#dc2626" }}>
+                        {waResult[order.invoiceId]}
+                      </span>
+                    )}
+                  </div>
+                )}
                 <table style={{ width: "100%", borderCollapse: "collapse" as const, fontSize: 13, minWidth: 420 }}>
                   <thead>
                     <tr>
