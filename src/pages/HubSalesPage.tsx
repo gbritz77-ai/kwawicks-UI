@@ -438,8 +438,8 @@ export default function HubSalesPage() {
                     : creditBalance === null
                       ? <div style={s.creditInfo}>Could not load balance.</div>
                       : grandTotal > creditBalance
-                        ? <div style={s.creditWarning}>
-                            ⚠️ Balance ({fmt(creditBalance)}) is less than the total ({fmt(grandTotal)}). Account will go negative.
+                        ? <div style={s.creditInfo}>
+                            💳 Balance: {fmt(creditBalance)} — account will be {fmt(creditBalance - grandTotal)} after this sale. Sale will be processed.
                           </div>
                         : <div style={s.creditOk}>
                             ✓ Balance: {fmt(creditBalance)} — {fmt(creditBalance - grandTotal)} remaining after this sale.
