@@ -73,6 +73,14 @@ export default function DriverPage() {
   const [clientHasPhone, setClientHasPhone] = useState(true);
   const [clientPhone, setClientPhone] = useState("");
 
+  // Pending stock returns state
+  const [pendingReturnOrders, setPendingReturnOrders] = useState<DeliveryOrderResponse[]>([]);
+  const [loadingReturns, setLoadingReturns] = useState(true);
+  const [returningOrder, setReturningOrder] = useState<DeliveryOrderResponse | null>(null);
+  const [returnQtys, setReturnQtys] = useState<Record<string, string>>({});
+  const [returnBusy, setReturnBusy] = useState(false);
+  const [returnError, setReturnError] = useState<string | null>(null);
+
   // Collection request state
   const [collections, setCollections] = useState<CollectionRequestDto[]>([]);
   const [loadingCollections, setLoadingCollections] = useState(true);
@@ -109,6 +117,21 @@ export default function DriverPage() {
     }
   }
 
+  async function loadPendingReturns() {
+    if (!driverId) return;
+    try {
+      setLoadingReturns(true);
+      const data = await deliveryOrdersApi.list({ driverId, status: "Delivered" });
+      setPendingReturnOrders(
+        data.filter(o => !o.returnSubmitted && o.lines.some(l => l.returnedNotWantedQty > 0))
+      );
+    } catch {
+      // non-fatal
+    } finally {
+      setLoadingReturns(false);
+    }
+  }
+
   async function loadCollections() {
     if (!driverId) return;
     try {
@@ -126,6 +149,7 @@ export default function DriverPage() {
   useEffect(() => {
     loadOrders();
     loadCollections();
+    loadPendingReturns();
   }, [driverId]);
 
   // ── Delivery order actions ─────────────────────────────────────────────────
@@ -318,6 +342,50 @@ export default function DriverPage() {
     }
   }
 
+  function openReturnModal(order: DeliveryOrderResponse) {
+    const initial: Record<string, string> = {};
+    order.lines.forEach(l => {
+      if (l.returnedNotWantedQty > 0) initial[l.speciesId] = String(l.returnedNotWantedQty);
+    });
+    setReturnQtys(initial);
+    setReturnError(null);
+    setReturningOrder(order);
+  }
+
+  async function submitReturn() {
+    if (!returningOrder) return;
+    const lines = returningOrder.lines
+      .filter(l => l.returnedNotWantedQty > 0)
+      .map(l => ({ speciesId: l.speciesId, qty: parseInt(returnQtys[l.speciesId] ?? "0") || 0 }))
+      .filter(l => l.qty > 0);
+
+    if (lines.length === 0) {
+      setReturnError("Enter at least one return quantity.");
+      return;
+    }
+
+    // Validate qtys don't exceed not-wanted
+    for (const line of lines) {
+      const ordered = returningOrder.lines.find(l => l.speciesId === line.speciesId)?.returnedNotWantedQty ?? 0;
+      if (line.qty > ordered) {
+        setReturnError(`Return qty for ${getSpeciesName(line.speciesId)} (${line.qty}) exceeds not-wanted qty (${ordered}).`);
+        return;
+      }
+    }
+
+    setReturnBusy(true);
+    setReturnError(null);
+    try {
+      await deliveryOrdersApi.submitReturn(returningOrder.deliveryOrderId, lines);
+      setPendingReturnOrders(prev => prev.filter(o => o.deliveryOrderId !== returningOrder.deliveryOrderId));
+      setReturningOrder(null);
+    } catch (e: any) {
+      setReturnError(e?.message || "Could not submit return.");
+    } finally {
+      setReturnBusy(false);
+    }
+  }
+
   // ── Derived ────────────────────────────────────────────────────────────────
 
   const activeOrders = orders.filter((o) => o.status === "Open" || o.status === "OutForDelivery");
@@ -331,7 +399,7 @@ export default function DriverPage() {
       {/* ── Header ── */}
       <div style={s.header}>
         <div style={s.title}>My Work</div>
-        <button style={s.secondaryBtn} onClick={() => { loadOrders(); loadCollections(); }} disabled={loading && loadingCollections}>
+        <button style={s.secondaryBtn} onClick={() => { loadOrders(); loadCollections(); loadPendingReturns(); }} disabled={loading && loadingCollections}>
           Refresh
         </button>
       </div>
@@ -627,6 +695,103 @@ export default function DriverPage() {
                 <button style={{ ...s.completeBtn, marginTop: 20 }} onClick={closeCompletion}>Back to deliveries</button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════ PENDING RETURNS */}
+      {(loadingReturns || pendingReturnOrders.length > 0) && (
+        <>
+          <div style={{ ...s.sectionHeader, marginTop: 28 }}>
+            <span style={s.sectionIcon}>🔄</span>
+            <span style={s.sectionTitle}>Return Stock to Hub</span>
+          </div>
+
+          {loadingReturns ? (
+            <div style={s.emptyCard}>Checking for pending returns…</div>
+          ) : (
+            <div style={s.list}>
+              {pendingReturnOrders.map(order => {
+                const returnLines = order.lines.filter(l => l.returnedNotWantedQty > 0);
+                return (
+                  <div key={order.deliveryOrderId} style={s.orderCard}>
+                    <div style={s.cardHeader}>
+                      <div style={{ flex: 1 }}>
+                        <div style={s.cardTitle}>
+                          {order.deliveryAddressLine1 || order.city || "Delivery"}
+                          <span style={{ ...s.badge, background: "rgba(234,179,8,0.15)", color: "#92400e", border: "1px solid rgba(234,179,8,0.4)" }}>
+                            Pending Return
+                          </span>
+                        </div>
+                        <div style={s.cardMeta}>
+                          <span>{returnLines.reduce((s, l) => s + l.returnedNotWantedQty, 0)} items to return</span>
+                          <span style={s.dot}>·</span>
+                          <span style={s.mono}>{order.deliveryOrderId.slice(0, 8)}…</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ padding: "0 14px 14px" }}>
+                      {returnLines.map(l => (
+                        <div key={l.speciesId} style={s.lineItem}>
+                          <span style={s.lineSpecies}>{getSpeciesName(l.speciesId)}</span>
+                          <span style={{ ...s.lineQty, color: "#92400e" }}>{l.returnedNotWantedQty} not wanted</span>
+                        </div>
+                      ))}
+                      <button
+                        style={{ ...s.completeBtn, marginTop: 10, width: "100%" }}
+                        onClick={() => openReturnModal(order)}
+                      >
+                        📦 Return to Hub
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Return to Hub Modal ── */}
+      {returningOrder && (
+        <div style={s.backdrop}>
+          <div style={s.modal}>
+            <div style={s.modalTitle}>Return Stock to Hub</div>
+            <div style={s.modalSub}>Enter how many of each species you are physically returning.</div>
+            {returnError && <div style={s.completionError}>{returnError}</div>}
+
+            {returningOrder.lines.filter(l => l.returnedNotWantedQty > 0).map(l => (
+              <div key={l.speciesId} style={s.returnBlock}>
+                <div style={s.returnSpecies}>
+                  {getSpeciesName(l.speciesId)}
+                  <span style={s.returnOrdered}>Not-wanted: {l.returnedNotWantedQty}</span>
+                </div>
+                <div style={s.returnFields}>
+                  <label style={s.returnLabel}>
+                    Returning
+                    <input
+                      style={s.returnInput}
+                      inputMode="numeric"
+                      value={returnQtys[l.speciesId] ?? "0"}
+                      max={l.returnedNotWantedQty}
+                      onChange={e => setReturnQtys(q => ({ ...q, [l.speciesId]: e.target.value }))}
+                      disabled={returnBusy}
+                    />
+                  </label>
+                </div>
+              </div>
+            ))}
+
+            <div style={{ marginTop: 10, padding: "8px 12px", background: "rgba(234,179,8,0.1)", border: "1px solid rgba(234,179,8,0.3)", borderRadius: 7, fontSize: 12, color: "#92400e" }}>
+              ℹ Hub staff will verify the quantities when you arrive.
+            </div>
+
+            <div style={s.modalBtns}>
+              <button style={s.secondaryBtn} onClick={() => setReturningOrder(null)} disabled={returnBusy}>Cancel</button>
+              <button style={s.completeBtn} onClick={submitReturn} disabled={returnBusy}>
+                {returnBusy ? "Submitting…" : "Submit Return"}
+              </button>
+            </div>
           </div>
         </div>
       )}

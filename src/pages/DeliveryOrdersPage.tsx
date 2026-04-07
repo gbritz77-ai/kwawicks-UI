@@ -82,8 +82,13 @@ export default function DeliveryOrdersPage() {
   // Mark at hub
   const [markingAtHubId, setMarkingAtHubId] = useState<string | null>(null);
 
+  // Check in return
+  const [checkingInId, setCheckingInId] = useState<string | null>(null);
+  const [checkInError, setCheckInError] = useState<string | null>(null);
+
   const canOverridePrice = hasAnyRole("Owner", "Finance");
   const canMarkAtHub = hasAnyRole("Owner", "Admin", "HubStaff");
+  const canCheckIn = hasAnyRole("Owner", "Admin", "HubStaff");
 
   // ── Loaders ──────────────────────────────────────────────────────────────
 
@@ -91,7 +96,9 @@ export default function DeliveryOrdersPage() {
     try {
       setError(null);
       setLoading(true);
-      const data = await deliveryOrdersApi.list(statusFilter ? { status: statusFilter } : undefined);
+      // "pending-return" is a client-side filter — fetch Delivered orders from server
+      const apiStatus = statusFilter === "pending-return" ? "Delivered" : (statusFilter || undefined);
+      const data = await deliveryOrdersApi.list(apiStatus ? { status: apiStatus } : undefined);
       setOrders(data);
     } catch (e: any) {
       setError(e?.message || "Could not load delivery orders.");
@@ -124,6 +131,21 @@ export default function DeliveryOrdersPage() {
     return () => clearInterval(interval);
   }, [statusFilter]);
 
+  async function checkInReturn(orderId: string) {
+    setCheckingInId(orderId);
+    setCheckInError(null);
+    try {
+      await deliveryOrdersApi.checkInReturn(orderId);
+      setOrders(prev => prev.map(o =>
+        o.deliveryOrderId === orderId ? { ...o, returnCheckedIn: true } : o
+      ));
+    } catch (e: any) {
+      setCheckInError(e?.message || "Could not check in return.");
+    } finally {
+      setCheckingInId(null);
+    }
+  }
+
   async function markAtHub(orderId: string) {
     setMarkingAtHubId(orderId);
     try {
@@ -139,16 +161,23 @@ export default function DeliveryOrdersPage() {
   // ── Filtered list ─────────────────────────────────────────────────────────
 
   const filtered = useMemo(() => {
+    let result = orders;
+    // Client-side filter for pending returns
+    if (statusFilter === "pending-return") {
+      result = result.filter(o =>
+        o.returnSubmitted && !o.returnCheckedIn && o.lines.some(l => l.returnedNotWantedQty > 0)
+      );
+    }
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return orders;
-    return orders.filter(
+    if (!q) return result;
+    return result.filter(
       (o) =>
         o.deliveryOrderId.toLowerCase().includes(q) ||
         o.assignedDriverName.toLowerCase().includes(q) ||
         o.customerId.toLowerCase().includes(q) ||
         o.city.toLowerCase().includes(q)
     );
-  }, [orders, searchQuery]);
+  }, [orders, searchQuery, statusFilter]);
 
   // ── Form helpers ──────────────────────────────────────────────────────────
 
@@ -293,6 +322,7 @@ export default function DeliveryOrdersPage() {
           <option value="OutForDelivery">Out for Delivery</option>
           <option value="Delivered">Delivered</option>
           <option value="MarkedAtHub">Marked at Hub</option>
+          <option value="pending-return">Pending Return Check-In</option>
         </select>
       </div>
 
@@ -373,6 +403,7 @@ export default function DeliveryOrdersPage() {
                             <div style={{ textAlign: "right" }}>Dead</div>
                             <div style={{ textAlign: "right" }}>Mutilated</div>
                             <div style={{ textAlign: "right" }}>Not Wanted</div>
+                            {order.returnSubmitted && <div style={{ textAlign: "right" }}>Returning</div>}
                           </>
                         )}
                       </div>
@@ -391,14 +422,50 @@ export default function DeliveryOrdersPage() {
                               <div style={{ textAlign: "right", color: "#7f1d1d" }}>{line.returnedDeadQty}</div>
                               <div style={{ textAlign: "right", color: "#78350f" }}>{line.returnedMutilatedQty}</div>
                               <div style={{ textAlign: "right", color: "#1e3a8a" }}>{line.returnedNotWantedQty}</div>
+                              {order.returnSubmitted && (
+                                <div style={{ textAlign: "right", color: "#166534", fontWeight: 700 }}>{line.returnedToHubQty}</div>
+                              )}
                             </>
                           )}
                         </div>
                       ))}
                     </div>
 
-                    {canMarkAtHub && order.status === "Delivered" && (
-                      <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
+                    {/* Return status banner */}
+                    {(order.status === "Delivered" || order.status === "MarkedAtHub") &&
+                      order.lines.some(l => l.returnedNotWantedQty > 0) && (
+                      <div style={{
+                        marginTop: 14,
+                        padding: "10px 14px",
+                        borderRadius: 8,
+                        fontSize: 13,
+                        ...(order.returnCheckedIn
+                          ? { background: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.3)", color: "#166534" }
+                          : order.returnSubmitted
+                            ? { background: "rgba(234,179,8,0.1)", border: "1px solid rgba(234,179,8,0.4)", color: "#92400e" }
+                            : { background: "#f8fafc", border: "1px solid #e2e8f0", color: "#64748b" })
+                      }}>
+                        {order.returnCheckedIn
+                          ? "✅ Stock return checked in"
+                          : order.returnSubmitted
+                            ? "🔄 Driver has submitted return — awaiting hub check-in"
+                            : "⏳ Driver has not yet submitted return"}
+                      </div>
+                    )}
+
+                    {checkInError && <div style={{ ...s.error, marginTop: 8 }}>{checkInError}</div>}
+
+                    <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                      {canCheckIn && order.returnSubmitted && !order.returnCheckedIn && (
+                        <button
+                          style={{ ...s.markAtHubBtn, background: "#166534", color: "#fff", borderColor: "#166534" }}
+                          disabled={checkingInId === order.deliveryOrderId}
+                          onClick={() => checkInReturn(order.deliveryOrderId)}
+                        >
+                          {checkingInId === order.deliveryOrderId ? "Checking in…" : "📦 Check In Returns"}
+                        </button>
+                      )}
+                      {canMarkAtHub && order.status === "Delivered" && (
                         <button
                           style={s.markAtHubBtn}
                           disabled={markingAtHubId === order.deliveryOrderId}
@@ -406,8 +473,8 @@ export default function DeliveryOrdersPage() {
                         >
                           {markingAtHubId === order.deliveryOrderId ? "Marking…" : "✅ Mark at Hub"}
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

@@ -10,6 +10,7 @@ export type DeliveryOrderLineDto = {
   returnedDeadQty: number;
   returnedMutilatedQty: number;
   returnedNotWantedQty: number;
+  returnedToHubQty: number;
 };
 
 export type DeliveryOrderResponse = {
@@ -25,6 +26,8 @@ export type DeliveryOrderResponse = {
   province: string;
   postalCode: string;
   lines: DeliveryOrderLineDto[];
+  returnSubmitted: boolean;
+  returnCheckedIn: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -47,6 +50,13 @@ export type CreateDeliveryOrderRequest = {
   lines: CreateDeliveryOrderLine[];
 };
 
+export type DriverStockItem = {
+  speciesId: string;
+  speciesName: string;
+  availableQty: number;
+  unitPrice: number;
+};
+
 export const deliveryOrdersApi = {
   list: (params?: { driverId?: string; hubId?: string; status?: string }) => {
     const qs = new URLSearchParams();
@@ -61,4 +71,10 @@ export const deliveryOrdersApi = {
     api.post<{ deliveryOrderId: string }>("/api/delivery-orders", body),
   updateStatus: (id: string, status: string) =>
     api.put<void>(`/api/delivery-orders/${id}/status`, { status }),
+  getDriverStock: () =>
+    api.get<DriverStockItem[]>("/api/delivery-orders/driver-stock"),
+  submitReturn: (id: string, lines: { speciesId: string; qty: number }[]) =>
+    api.post<void>(`/api/delivery-orders/${id}/submit-return`, { lines }),
+  checkInReturn: (id: string) =>
+    api.post<void>(`/api/delivery-orders/${id}/check-in`, {}),
 };

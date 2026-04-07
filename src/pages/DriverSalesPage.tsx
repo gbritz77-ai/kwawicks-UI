@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { clientsApi } from "../api/clientsApi";
 import type { ClientDto } from "../api/clientsApi";
-import { speciesApi } from "../api/speciesApi";
-import type { SpeciesResponse } from "../api/speciesApi";
 import { driverSalesApi } from "../api/driverSalesApi";
 import { clientCreditApi } from "../api/clientCreditApi";
 import { invoicesApi } from "../api/invoicesApi";
+import { deliveryOrdersApi } from "../api/deliveryOrdersApi";
+import type { DriverStockItem } from "../api/deliveryOrdersApi";
 
 const VAT_RATE = 0.15;
 type CustomerMode = "existing" | "walkin";
@@ -24,9 +24,10 @@ function fmt(n: number) {
 }
 
 export default function DriverSalesPage() {
-  const [clients, setClients]   = useState<ClientDto[]>([]);
-  const [species, setSpecies]   = useState<SpeciesResponse[]>([]);
-  const [loading, setLoading]   = useState(true);
+  const [clients, setClients]       = useState<ClientDto[]>([]);
+  const [driverStock, setDriverStock] = useState<DriverStockItem[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [stockEmpty, setStockEmpty] = useState(false);
 
   // Customer
   const [mode, setMode]                   = useState<CustomerMode>("existing");
@@ -69,10 +70,11 @@ export default function DriverSalesPage() {
   const receiptInputRef                   = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    Promise.all([clientsApi.list(200), speciesApi.list()])
-      .then(([c, sp]) => {
+    Promise.all([clientsApi.list(200), deliveryOrdersApi.getDriverStock()])
+      .then(([c, stock]) => {
         setClients(c);
-        setSpecies(sp.filter((x: SpeciesResponse) => x.isActive));
+        setDriverStock(stock);
+        setStockEmpty(stock.length === 0);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -98,10 +100,13 @@ export default function DriverSalesPage() {
   const vatTotal   = grandTotal - subTotal;
 
   function addLine() {
-    const sp = species.find(s => s.speciesId === addSpeciesId);
+    const stockItem = driverStock.find(s => s.speciesId === addSpeciesId);
     const parsedQty = parseInt(addQty);
     const parsedPrice = Number(addPrice);
-    if (!sp || !addQty || parsedQty <= 0 || !addPrice || parsedPrice <= 0) return;
+    if (!stockItem || !addQty || parsedQty <= 0 || !addPrice || parsedPrice <= 0) return;
+    // Enforce qty cap: cannot exceed available stock
+    const alreadyOnLine = lines.find(l => l.speciesId === addSpeciesId)?.quantity ?? 0;
+    if (parsedQty + alreadyOnLine > stockItem.availableQty) return;
     if (lines.find(l => l.speciesId === addSpeciesId)) {
       setLines(ls => ls.map(l => l.speciesId === addSpeciesId
         ? { ...l, quantity: l.quantity + parsedQty, unitPrice: parsedPrice }
@@ -109,7 +114,7 @@ export default function DriverSalesPage() {
     } else {
       setLines(ls => [...ls, {
         speciesId: addSpeciesId,
-        speciesName: sp.name,
+        speciesName: stockItem.speciesName,
         quantity: parsedQty,
         unitPrice: parsedPrice,
         vatRate: VAT_RATE,
@@ -125,6 +130,11 @@ export default function DriverSalesPage() {
   }
 
   function updateLine(speciesId: string, field: "quantity" | "unitPrice", value: number) {
+    if (field === "quantity") {
+      const stockItem = driverStock.find(s => s.speciesId === speciesId);
+      const cap = stockItem?.availableQty ?? Infinity;
+      value = Math.min(value, cap);
+    }
     setLines(ls => ls.map(l => l.speciesId === speciesId ? { ...l, [field]: value } : l));
   }
 
@@ -213,7 +223,9 @@ export default function DriverSalesPage() {
   const filteredClients = clients.filter(c =>
     !c.isWalkIn && (!clientSearch || c.clientName.toLowerCase().includes(clientSearch.toLowerCase()))
   );
-  const selectedSpeciesItem = species.find(s => s.speciesId === addSpeciesId);
+  const selectedStockItem = driverStock.find(s => s.speciesId === addSpeciesId);
+  const alreadyOnLineQty = lines.find(l => l.speciesId === addSpeciesId)?.quantity ?? 0;
+  const remainingQty = selectedStockItem ? selectedStockItem.availableQty - alreadyOnLineQty : 0;
 
   if (loading) return <div style={{ padding: 32, color: "#94a3b8" }}>Loading...</div>;
 
@@ -431,75 +443,89 @@ export default function DriverSalesPage() {
       {/* Add item */}
       <div style={s.card}>
         <div style={s.cardTitle}>Add Item</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label style={s.label}>Species</label>
-            <select
-              style={s.select}
-              value={addSpeciesId}
-              onChange={e => {
-                const sp = species.find(x => x.speciesId === e.target.value);
-                setAddSpeciesId(e.target.value);
-                if (sp) setAddPrice(sp.sellPrice != null ? String(sp.sellPrice) : "");
-              }}
+
+        {stockEmpty ? (
+          <div style={s.emptyStock}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>📦</div>
+            <div style={{ fontWeight: 700, color: "#374151", marginBottom: 4 }}>No leftover stock available</div>
+            <div style={{ fontSize: 13, color: "#64748b" }}>
+              You can only sell stock that was returned (not wanted) from your deliveries.
+              Complete a delivery with not-wanted returns to see available items here.
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={s.label}>Species</label>
+                <select
+                  style={s.select}
+                  value={addSpeciesId}
+                  onChange={e => {
+                    const item = driverStock.find(x => x.speciesId === e.target.value);
+                    setAddSpeciesId(e.target.value);
+                    if (item) setAddPrice(String(item.unitPrice));
+                  }}
+                >
+                  <option value="">— Select —</option>
+                  {driverStock.map(item => (
+                    <option key={item.speciesId} value={item.speciesId}>
+                      {item.speciesName} — {item.availableQty} available
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={s.label}>Qty {selectedStockItem ? `(max ${remainingQty})` : ""}</label>
+                <input
+                  style={s.input} type="number" min={1}
+                  max={selectedStockItem ? remainingQty : undefined}
+                  placeholder="1"
+                  value={addQty}
+                  onChange={e => setAddQty(e.target.value)}
+                />
+              </div>
+              <div>
+                <label style={s.label}>Unit Price (incl. VAT)</label>
+                <input
+                  style={s.input} type="number" min={0} step={0.01}
+                  placeholder="0.00" value={addPrice}
+                  onChange={e => setAddPrice(e.target.value)}
+                  onFocus={e => e.target.select()}
+                />
+              </div>
+            </div>
+
+            {selectedStockItem && (
+              <div style={s.stockRow}>
+                <span style={{
+                  ...s.stockBadge,
+                  background: remainingQty > 0 ? "#f0fdf4" : "#fef2f2",
+                  border: `1px solid ${remainingQty > 0 ? "#bbf7d0" : "#fca5a5"}`,
+                  color: remainingQty > 0 ? "#166534" : "#dc2626",
+                }}>
+                  {remainingQty > 0 ? `✓ ${remainingQty} available to sell` : "✗ None remaining"}
+                </span>
+              </div>
+            )}
+            {selectedStockItem && addQty && parseInt(addQty) > remainingQty && (
+              <div style={s.stockWarning}>
+                ⚠️ Qty ({addQty}) exceeds your available stock ({remainingQty})
+              </div>
+            )}
+
+            <button
+              style={{ ...s.btnPrimary, width: "100%", marginTop: 12 }}
+              onClick={addLine}
+              disabled={
+                !addSpeciesId || !addQty || parseInt(addQty) <= 0 || !addPrice || Number(addPrice) <= 0
+                || parseInt(addQty) > remainingQty
+              }
             >
-              <option value="">— Select —</option>
-              {species.map(sp => (
-                <option key={sp.speciesId} value={sp.speciesId}>
-                  {sp.name}{sp.qtyAvailable > 0 ? ` — ${sp.qtyAvailable} available` : " — Out of stock"}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label style={s.label}>Qty</label>
-            <input
-              style={s.input} type="number" min={1} placeholder="1"
-              value={addQty}
-              onChange={e => setAddQty(e.target.value)}
-            />
-          </div>
-          <div>
-            <label style={s.label}>Unit Price (incl. VAT)</label>
-            <input
-              style={s.input} type="number" min={0} step={0.01}
-              placeholder="0.00" value={addPrice}
-              onChange={e => setAddPrice(e.target.value)}
-              onFocus={e => e.target.select()}
-            />
-          </div>
-        </div>
-
-        {selectedSpeciesItem && (
-          <div style={s.stockRow}>
-            <span style={{
-              ...s.stockBadge,
-              background: selectedSpeciesItem.qtyAvailable > 0 ? "#f0fdf4" : "#fef2f2",
-              border: `1px solid ${selectedSpeciesItem.qtyAvailable > 0 ? "#bbf7d0" : "#fca5a5"}`,
-              color: selectedSpeciesItem.qtyAvailable > 0 ? "#166534" : "#dc2626",
-            }}>
-              {selectedSpeciesItem.qtyAvailable > 0
-                ? `✓ ${selectedSpeciesItem.qtyAvailable} available`
-                : "✗ Out of stock"}
-            </span>
-            <span style={{ ...s.stockBadge, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#64748b" }}>
-              {selectedSpeciesItem.qtyOnHandHub} on hand
-            </span>
-          </div>
+              + Add to Sale
+            </button>
+          </>
         )}
-        {selectedSpeciesItem && parseInt(addQty) > selectedSpeciesItem.qtyAvailable && selectedSpeciesItem.qtyAvailable >= 0 && (
-          <div style={s.stockWarning}>
-            ⚠️ Qty ({addQty}) exceeds available stock ({selectedSpeciesItem.qtyAvailable})
-          </div>
-        )}
-
-        <button
-          style={{ ...s.btnPrimary, width: "100%", marginTop: 12 }}
-          onClick={addLine}
-          disabled={!addSpeciesId || !addQty || parseInt(addQty) <= 0 || !addPrice || Number(addPrice) <= 0}
-        >
-          + Add to Sale
-        </button>
       </div>
 
       {/* Lines */}
@@ -582,7 +608,7 @@ export default function DriverSalesPage() {
         <button
           style={{ ...s.btnPrimary, width: "100%", marginTop: 16, padding: 14, fontSize: 16 }}
           onClick={reviewInvoice}
-          disabled={lines.length === 0}
+          disabled={lines.length === 0 || stockEmpty}
         >
           Review Invoice
         </button>
@@ -630,6 +656,7 @@ const s: Record<string, React.CSSProperties> = {
   attachBtn:     { display: "block", width: "100%", padding: 14, background: "#f0f9ff", border: "2px dashed #7dd3fc", borderRadius: 8, color: "#0369a1", fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 16 },
   fileChosen:    { display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "10px 14px", marginTop: 12, fontSize: 13, color: "#166534" },
   removeFile:    { background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, fontWeight: 700 },
+  emptyStock:    { textAlign: "center" as const, padding: "24px 16px", color: "#64748b", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" },
 
   // Invoice preview
   previewDoc:      { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: "24px 20px", maxWidth: 560, margin: "0 auto", boxShadow: "0 2px 8px rgba(0,0,0,0.07)" },
