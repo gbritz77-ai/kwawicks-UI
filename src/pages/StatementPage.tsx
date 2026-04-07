@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { reportsApi } from "../api/reportsApi";
 import type { CustomerStatementResponse } from "../api/reportsApi";
 import { whatsappApi } from "../api/whatsappApi";
+import { clientCreditApi } from "../api/clientCreditApi";
 
 const fmt = (n: number) =>
   `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -17,6 +18,7 @@ export default function StatementPage() {
 
   const [statement, setStatement] = useState<CustomerStatementResponse | null>(null);
   const [allStatements, setAllStatements] = useState<CustomerStatementResponse[] | null>(null);
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [waModalOpen, setWaModalOpen] = useState(false);
   const [waPhone, setWaPhone] = useState("");
@@ -33,6 +35,9 @@ export default function StatementPage() {
       reportsApi.getCustomerStatement(customerId, from, to)
         .then(setStatement)
         .catch(() => setError("Failed to load statement."));
+      clientCreditApi.getBalance(customerId)
+        .then(r => setCreditBalance(r.balance))
+        .catch(() => setCreditBalance(null)); // non-critical — ignore errors
     }
   }, [customerId, from, to]);
 
@@ -144,14 +149,14 @@ export default function StatementPage() {
 
       {statements.map((st, idx) => (
         <div key={st.customerId} className={idx < statements.length - 1 ? "page-break" : undefined}>
-          <StatementDocument statement={st} />
+          <StatementDocument statement={st} creditBalance={customerId !== "ALL" ? creditBalance : null} />
         </div>
       ))}
     </>
   );
 }
 
-function StatementDocument({ statement }: { statement: CustomerStatementResponse }) {
+function StatementDocument({ statement, creditBalance }: { statement: CustomerStatementResponse; creditBalance: number | null }) {
   const periodLabel = statement.from || statement.to
     ? `${statement.from ? fmtDate(statement.from) : "—"} to ${statement.to ? fmtDate(statement.to) : "—"}`
     : "All time";
@@ -247,6 +252,17 @@ function StatementDocument({ statement }: { statement: CustomerStatementResponse
             bold
             color={statement.totalOutstanding > 0 ? "#dc2626" : "#166534"}
           />
+          {creditBalance !== null && creditBalance > 0 && (
+            <>
+              <div style={s.totalsDivider} />
+              <TotalRow
+                label="Credit Balance"
+                value={fmt(creditBalance)}
+                bold
+                color="#166534"
+              />
+            </>
+          )}
         </div>
       </div>
 
