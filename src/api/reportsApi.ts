@@ -108,6 +108,7 @@ export type InvoiceItem = {
   hubId: string;
   deliveryOrderId: string;
   createdByDriverId: string;
+  saleType: string;
   status: string;
   paymentType: string;
   paymentStatus: string;

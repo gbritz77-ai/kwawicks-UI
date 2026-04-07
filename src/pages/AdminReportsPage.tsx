@@ -876,6 +876,7 @@ function InvoicesTab({
   const [confirming, setConfirming] = useState<string | null>(null);
   const [creditBlockMsg, setCreditBlockMsg] = useState<string | null>(null);
   const [payTypeFilter, setPayTypeFilter] = useState("");
+  const [saleTypeFilter, setSaleTypeFilter] = useState("");
   const [creditBalances, setCreditBalances] = useState<Record<string, number>>({}); // customerId → balance
   const [creditBalanceLoading, setCreditBalanceLoading] = useState<Record<string, boolean>>({});
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
@@ -987,9 +988,24 @@ function InvoicesTab({
   const totalPending    = invoices?.filter((i) => i.paymentStatus === "Pending").reduce((s, i) => s + i.grandTotal, 0) ?? 0;
   const totalPaid       = invoices?.filter((i) => i.paymentStatus === "Paid").reduce((s, i) => s + i.grandTotal, 0) ?? 0;
   const visibleInvoices = invoices?.filter((i) =>
-    (!payFilter    || i.paymentStatus === payFilter) &&
-    (!payTypeFilter || i.paymentType  === payTypeFilter)
+    (!payFilter      || i.paymentStatus === payFilter) &&
+    (!payTypeFilter  || i.paymentType   === payTypeFilter) &&
+    (!saleTypeFilter || i.saleType      === saleTypeFilter)
   ) ?? [];
+
+  const SALE_TYPE_LABELS: Record<string, string> = {
+    HubDirect:    "Hub Sale",
+    DriverDirect: "Driver Sale",
+    Delivery:     "Delivery",
+  };
+  const saleTypeLabel = (t: string) => SALE_TYPE_LABELS[t] ?? t;
+  const saleTypeChannels = ["HubDirect", "DriverDirect", "Delivery"];
+  const channelTotals = saleTypeChannels.map(ch => ({
+    key: ch,
+    label: SALE_TYPE_LABELS[ch],
+    count: invoices?.filter(i => i.saleType === ch).length ?? 0,
+    total: invoices?.filter(i => i.saleType === ch).reduce((s, i) => s + i.grandTotal, 0) ?? 0,
+  }));
 
   return (
     <div>
@@ -1028,6 +1044,18 @@ function InvoicesTab({
           {clients.map((c) => (
             <option key={c.clientId} value={c.clientId}>{c.clientName}</option>
           ))}
+        </select>
+
+        <label style={s.label}>Sale Source</label>
+        <select
+          value={saleTypeFilter}
+          onChange={e => setSaleTypeFilter(e.target.value)}
+          style={{ ...s.dateInput, minWidth: 150 }}
+        >
+          <option value="">All Sources</option>
+          <option value="HubDirect">Hub Sale</option>
+          <option value="DriverDirect">Driver Sale</option>
+          <option value="Delivery">Delivery</option>
         </select>
 
         <label style={s.label}>Payment Type</label>
@@ -1079,12 +1107,27 @@ function InvoicesTab({
             <KpiCard label="Pending" value={fmt(totalPending)} />
             <KpiCard label="Paid" value={fmt(totalPaid)} highlight />
           </div>
+          {/* Sales channel breakdown */}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" as const, marginBottom: 20 }}>
+            {channelTotals.map(ch => (
+              <button key={ch.key} onClick={() => setSaleTypeFilter(saleTypeFilter === ch.key ? "" : ch.key)}
+                style={{ flex: "1 1 160px", borderRadius: 10, padding: "12px 16px", border: `2px solid ${saleTypeFilter === ch.key ? "#2563eb" : "#e2e8f0"}`,
+                  background: saleTypeFilter === ch.key ? "#eff6ff" : "#fff", cursor: "pointer", textAlign: "left" as const }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: 0.5, marginBottom: 4 }}>
+                  {ch.label}
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: saleTypeFilter === ch.key ? "#2563eb" : "#0f172a" }}>{fmt(ch.total)}</div>
+                <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{ch.count} invoice{ch.count !== 1 ? "s" : ""}</div>
+              </button>
+            ))}
+          </div>
 
           <ScrollTable>
             <thead>
               <tr>
                 <Th>Invoice</Th>
                 <Th>Customer</Th>
+                <Th>Source</Th>
                 <Th>Driver</Th>
                 <Th>Payment Type</Th>
                 <Th>Status</Th>
@@ -1112,6 +1155,14 @@ function InvoicesTab({
                   <tr key={inv.invoiceId}>
                     <Td><span style={s.mono}>{inv.invoiceNumber || inv.invoiceId.slice(0, 8) + "…"}</span></Td>
                     <Td>{clientMap[inv.customerId] ?? inv.customerId}</Td>
+                    <Td>
+                      <span style={{ fontSize: 12, fontWeight: 600, padding: "2px 8px", borderRadius: 6,
+                        background: inv.saleType === "HubDirect" ? "#eff6ff" : inv.saleType === "DriverDirect" ? "#f0fdf4" : "#fef9c3",
+                        color:      inv.saleType === "HubDirect" ? "#1d4ed8" : inv.saleType === "DriverDirect" ? "#15803d"  : "#92400e",
+                      }}>
+                        {saleTypeLabel(inv.saleType || "Delivery")}
+                      </span>
+                    </Td>
                     <Td style={{ color: "#64748b", fontSize: 13 }}>{inv.createdByDriverId || "—"}</Td>
                     <Td>
                       <div>{inv.paymentType || "—"}</div>
