@@ -875,6 +875,7 @@ function InvoicesTab({
   const isOwner = hasAnyRole("Owner");
   const [confirming, setConfirming] = useState<string | null>(null);
   const [creditBlockMsg, setCreditBlockMsg] = useState<string | null>(null);
+  const [payTypeFilter, setPayTypeFilter] = useState("");
   const [creditBalances, setCreditBalances] = useState<Record<string, number>>({}); // customerId → balance
   const [creditBalanceLoading, setCreditBalanceLoading] = useState<Record<string, boolean>>({});
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
@@ -985,7 +986,10 @@ function InvoicesTab({
 
   const totalPending    = invoices?.filter((i) => i.paymentStatus === "Pending").reduce((s, i) => s + i.grandTotal, 0) ?? 0;
   const totalPaid       = invoices?.filter((i) => i.paymentStatus === "Paid").reduce((s, i) => s + i.grandTotal, 0) ?? 0;
-  const visibleInvoices = invoices?.filter((i) => !payFilter || i.paymentStatus === payFilter) ?? [];
+  const visibleInvoices = invoices?.filter((i) =>
+    (!payFilter    || i.paymentStatus === payFilter) &&
+    (!payTypeFilter || i.paymentType  === payTypeFilter)
+  ) ?? [];
 
   return (
     <div>
@@ -1024,6 +1028,22 @@ function InvoicesTab({
           {clients.map((c) => (
             <option key={c.clientId} value={c.clientId}>{c.clientName}</option>
           ))}
+        </select>
+
+        <label style={s.label}>Payment Type</label>
+        <select
+          value={payTypeFilter}
+          onChange={e => setPayTypeFilter(e.target.value)}
+          style={{ ...s.dateInput, minWidth: 150 }}
+        >
+          <option value="">All Types</option>
+          <option value="Cash">Cash</option>
+          <option value="EFT">EFT</option>
+          <option value="Card">Card</option>
+          <option value="CardMachine">Card Machine</option>
+          <option value="AccountCredit">Account Credit</option>
+          <option value="Credit">Credit</option>
+          <option value="OnAccount">On Account</option>
         </select>
 
         <label style={s.label}>From</label>
