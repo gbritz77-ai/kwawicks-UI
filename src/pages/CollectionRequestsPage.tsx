@@ -38,6 +38,11 @@ export default function CollectionRequestsPage() {
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  // Filters
+  const [filterStatus, setFilterStatus]   = useState("");
+  const [filterDriver, setFilterDriver]   = useState("");
+  const [filterSearch, setFilterSearch]   = useState("");
+
   // Allocation modal — supports multiple client slots in one session
   type AllocSlot = {
     clientId: string;
@@ -303,11 +308,66 @@ export default function CollectionRequestsPage() {
 
       {error && <div style={s.errorBanner}>{error}</div>}
 
+      {/* Filter bar */}
+      {!loading && items.length > 0 && (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" as const, marginBottom: 16, alignItems: "flex-end" }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Status</div>
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={s.filterSelect}>
+              <option value="">All Statuses</option>
+              {Object.keys(STATUS_COLORS).map(st => <option key={st} value={st}>{st}</option>)}
+            </select>
+          </div>
+          {!isDriver() && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Driver</div>
+              <select value={filterDriver} onChange={e => setFilterDriver(e.target.value)} style={s.filterSelect}>
+                <option value="">All Drivers</option>
+                {[...new Set(items.map(i => i.assignedDriverName).filter(Boolean))].sort().map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Supplier</div>
+            <input
+              type="text"
+              placeholder="Search supplier…"
+              value={filterSearch}
+              onChange={e => setFilterSearch(e.target.value)}
+              style={s.filterSelect}
+            />
+          </div>
+          {(filterStatus || filterDriver || filterSearch) && (
+            <button
+              onClick={() => { setFilterStatus(""); setFilterDriver(""); setFilterSearch(""); }}
+              style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #cbd5e1", background: "#f8fafc", cursor: "pointer", fontSize: 13, alignSelf: "flex-end", color: "#64748b" }}>
+              ✕ Clear
+            </button>
+          )}
+          <div style={{ fontSize: 13, color: "#64748b", alignSelf: "flex-end", paddingBottom: 2 }}>
+            {(() => {
+              const count = items.filter(cr =>
+                (!filterStatus || cr.status === filterStatus) &&
+                (!filterDriver || cr.assignedDriverName === filterDriver) &&
+                (!filterSearch || (cr.supplierName ?? "").toLowerCase().includes(filterSearch.toLowerCase()))
+              ).length;
+              return `${count} of ${items.length}`;
+            })()}
+          </div>
+        </div>
+      )}
+
       {loading ? <div style={s.loading}>Loading…</div> : items.length === 0 ? (
         <div style={s.empty}>No collection requests found.</div>
       ) : (
         <div style={s.list}>
-          {items.map(cr => (
+          {items.filter(cr =>
+            (!filterStatus || cr.status === filterStatus) &&
+            (!filterDriver || cr.assignedDriverName === filterDriver) &&
+            (!filterSearch || (cr.supplierName ?? "").toLowerCase().includes(filterSearch.toLowerCase()))
+          ).map(cr => (
             <div key={cr.collectionRequestId} style={s.card}>
               <div style={s.cardHeader} onClick={() => setExpanded(expanded === cr.collectionRequestId ? null : cr.collectionRequestId)}>
                 <div style={s.cardLeft}>
@@ -735,6 +795,7 @@ const s: Record<string, React.CSSProperties> = {
   empty: { textAlign: "center", padding: 40, color: "#94a3b8", fontSize: 15 },
   errorBanner: { background: "#fef2f2", border: "1px solid #fca5a5", color: "#dc2626", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 14 },
   list: { display: "flex", flexDirection: "column", gap: 10 },
+  filterSelect: { padding: "6px 10px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 13, background: "#fff", minWidth: 160 },
   card: { background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", overflow: "hidden" },
   cardHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", cursor: "pointer" },
   cardLeft: { flex: 1, minWidth: 0 },
