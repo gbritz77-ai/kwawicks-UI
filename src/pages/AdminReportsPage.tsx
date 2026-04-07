@@ -875,6 +875,8 @@ function InvoicesTab({
   const isOwner = hasAnyRole("Owner");
   const [confirming, setConfirming] = useState<string | null>(null);
   const [creditBlockMsg, setCreditBlockMsg] = useState<string | null>(null);
+  const [creditBalances, setCreditBalances] = useState<Record<string, number>>({}); // customerId → balance
+  const [creditBalanceLoading, setCreditBalanceLoading] = useState<Record<string, boolean>>({});
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [waModal, setWaModal] = useState<{ invoiceId: string; invoiceNumber: string; customerId: string } | null>(null);
@@ -928,17 +930,18 @@ function InvoicesTab({
   const clientPhoneMap = Object.fromEntries(clients.map((c) => [c.clientId, c.clientPhone || c.clientContactDetails || ""]));
   const clientFullMap = Object.fromEntries(clients.map((c) => [c.clientId, c]));
 
-  async function handleConfirm(invoiceId: string, customerId: string, paymentType: string, grandTotal: number) {
-    // For Credit invoices, verify the client has enough credit before confirming
-    if (paymentType === "Credit") {
+  async function handleConfirm(invoiceId: string, customerId: string, paymentType: string) {
+    // For AccountCredit invoices, block if the client's balance is negative
+    if (paymentType === "AccountCredit") {
       setConfirming(invoiceId);
       try {
         const { balance } = await clientCreditApi.getBalance(customerId);
-        if (balance < grandTotal) {
+        setCreditBalances(b => ({ ...b, [customerId]: balance }));
+        if (balance < 0) {
           const clientName = clientMap[customerId] ?? "this client";
           const fmt2 = (n: number) => `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
           setCreditBlockMsg(
-            `Cannot confirm — ${clientName} has ${fmt2(balance)} credit available but this invoice is ${fmt2(grandTotal)}.`
+            `Cannot confirm — ${clientName}'s credit account is ${fmt2(balance)}. They must top up their account before this invoice can be confirmed.`
           );
           return;
         }
@@ -955,6 +958,18 @@ function InvoicesTab({
       onConfirmed();
     } finally {
       setConfirming(null);
+    }
+  }
+
+  // Fetch and cache credit balance for a given customer (called when row is rendered)
+  async function fetchCreditBalance(customerId: string) {
+    if (customerId in creditBalances || creditBalanceLoading[customerId]) return;
+    setCreditBalanceLoading(l => ({ ...l, [customerId]: true }));
+    try {
+      const { balance } = await clientCreditApi.getBalance(customerId);
+      setCreditBalances(b => ({ ...b, [customerId]: balance }));
+    } catch { /* ignore */ } finally {
+      setCreditBalanceLoading(l => ({ ...l, [customerId]: false }));
     }
   }
 
@@ -1068,12 +1083,29 @@ function InvoicesTab({
                 const payColor = inv.paymentStatus === "Paid" ? "#166534" : "#854d0e";
                 const payBg    = inv.paymentStatus === "Paid" ? "#dcfce7" : "#fef9c3";
                 const hasReceipt = !!inv.receiptS3Key;
+                const isAccountCredit = inv.paymentType === "AccountCredit";
+                // Trigger lazy credit balance fetch for AccountCredit pending invoices
+                if (isAccountCredit && inv.paymentStatus === "Pending") fetchCreditBalance(inv.customerId);
+                const creditBal = isAccountCredit ? creditBalances[inv.customerId] : undefined;
+                const creditNegative = creditBal !== undefined && creditBal < 0;
                 return (
                   <tr key={inv.invoiceId}>
                     <Td><span style={s.mono}>{inv.invoiceNumber || inv.invoiceId.slice(0, 8) + "…"}</span></Td>
                     <Td>{clientMap[inv.customerId] ?? inv.customerId}</Td>
                     <Td style={{ color: "#64748b", fontSize: 13 }}>{inv.createdByDriverId || "—"}</Td>
-                    <Td>{inv.paymentType || "—"}</Td>
+                    <Td>
+                      <div>{inv.paymentType || "—"}</div>
+                      {isAccountCredit && inv.paymentStatus === "Pending" && (
+                        <div style={{ fontSize: 11, marginTop: 3, fontWeight: 600,
+                          color: creditBal === undefined ? "#94a3b8" : creditNegative ? "#dc2626" : "#166534" }}>
+                          {creditBal === undefined
+                            ? "Loading…"
+                            : creditNegative
+                              ? `⚠ Balance: ${fmt(creditBal)}`
+                              : `✓ Balance: ${fmt(creditBal)}`}
+                        </div>
+                      )}
+                    </Td>
                     <Td>
                       <span style={{ ...s.badge, background: payBg, color: payColor }}>
                         {inv.paymentStatus}
@@ -1099,9 +1131,13 @@ function InvoicesTab({
                     <Td>
                       {inv.paymentStatus === "Pending" ? (
                         <button
-                          disabled={confirming === inv.invoiceId}
-                          onClick={() => handleConfirm(inv.invoiceId, inv.customerId, inv.paymentType, inv.grandTotal)}
-                          style={s.confirmBtn}
+                          disabled={confirming === inv.invoiceId || (isAccountCredit && (creditBal === undefined || creditNegative))}
+                          onClick={() => handleConfirm(inv.invoiceId, inv.customerId, inv.paymentType)}
+                          style={{
+                            ...s.confirmBtn,
+                            ...(isAccountCredit && creditNegative ? { background: "#94a3b8", cursor: "not-allowed" } : {}),
+                          }}
+                          title={isAccountCredit && creditNegative ? "Credit balance is negative — client must top up first" : undefined}
                         >
                           {confirming === inv.invoiceId ? "…" : "Confirm"}
                         </button>
