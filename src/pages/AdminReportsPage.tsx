@@ -946,8 +946,9 @@ function InvoicesTab({
     }
   }
 
-  const totalPending = invoices?.filter((i) => i.paymentStatus === "Pending").reduce((s, i) => s + i.grandTotal, 0) ?? 0;
-  const totalPaid    = invoices?.filter((i) => i.paymentStatus === "Paid").reduce((s, i) => s + i.grandTotal, 0) ?? 0;
+  const totalPending    = invoices?.filter((i) => i.paymentStatus === "Pending").reduce((s, i) => s + i.grandTotal, 0) ?? 0;
+  const totalPaid       = invoices?.filter((i) => i.paymentStatus === "Paid").reduce((s, i) => s + i.grandTotal, 0) ?? 0;
+  const visibleInvoices = invoices?.filter((i) => !payFilter || i.paymentStatus === payFilter) ?? [];
 
   return (
     <div>
@@ -977,7 +978,7 @@ function InvoicesTab({
         {(["", "Pending", "Paid"] as const).map((v) => (
           <button
             key={v}
-            onClick={() => { setPayFilter(v); onApply(); }}
+            onClick={() => setPayFilter(v)}
             style={{
               ...s.tab,
               ...(payFilter === v ? s.tabActive : {}),
@@ -1018,7 +1019,7 @@ function InvoicesTab({
               </tr>
             </thead>
             <tbody>
-              {invoices.map((inv) => {
+              {visibleInvoices.map((inv) => {
                 const payColor = inv.paymentStatus === "Paid" ? "#166534" : "#854d0e";
                 const payBg    = inv.paymentStatus === "Paid" ? "#dcfce7" : "#fef9c3";
                 const hasReceipt = !!inv.receiptS3Key;
