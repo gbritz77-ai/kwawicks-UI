@@ -12,6 +12,7 @@ import type { ProcurementOrderDto } from "../api/procurementOrdersApi";
 import { collectionRequestsApi } from "../api/collectionRequestsApi";
 import type { CollectionRequestDto } from "../api/collectionRequestsApi";
 import { deliveryOrdersApi } from "../api/deliveryOrdersApi";
+import { clientCreditApi } from "../api/clientCreditApi";
 import type { DeliveryOrderResponse } from "../api/deliveryOrdersApi";
 import type {
   RevenueSummaryResponse,
@@ -873,6 +874,7 @@ function InvoicesTab({
 }) {
   const isOwner = hasAnyRole("Owner");
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [creditBlockMsg, setCreditBlockMsg] = useState<string | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [waModal, setWaModal] = useState<{ invoiceId: string; invoiceNumber: string; customerId: string } | null>(null);
@@ -926,7 +928,27 @@ function InvoicesTab({
   const clientPhoneMap = Object.fromEntries(clients.map((c) => [c.clientId, c.clientPhone || c.clientContactDetails || ""]));
   const clientFullMap = Object.fromEntries(clients.map((c) => [c.clientId, c]));
 
-  async function handleConfirm(invoiceId: string) {
+  async function handleConfirm(invoiceId: string, customerId: string, paymentType: string, grandTotal: number) {
+    // For Credit invoices, verify the client has enough credit before confirming
+    if (paymentType === "Credit") {
+      setConfirming(invoiceId);
+      try {
+        const { balance } = await clientCreditApi.getBalance(customerId);
+        if (balance < grandTotal) {
+          const clientName = clientMap[customerId] ?? "this client";
+          const fmt2 = (n: number) => `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          setCreditBlockMsg(
+            `Cannot confirm — ${clientName} has ${fmt2(balance)} credit available but this invoice is ${fmt2(grandTotal)}.`
+          );
+          return;
+        }
+      } catch {
+        setCreditBlockMsg("Could not verify credit balance. Please try again.");
+        return;
+      } finally {
+        setConfirming(null);
+      }
+    }
     setConfirming(invoiceId);
     try {
       await invoicesApi.confirmPayment(invoiceId);
@@ -952,6 +974,29 @@ function InvoicesTab({
 
   return (
     <div>
+      {/* Credit block modal */}
+      {creditBlockMsg && (
+        <div
+          onClick={() => setCreditBlockMsg(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.6)", backdropFilter: "blur(4px)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: "#fff", borderRadius: 14, padding: "32px 28px", maxWidth: 440, width: "100%", boxShadow: "0 24px 60px rgba(0,0,0,0.3)", textAlign: "center" }}
+          >
+            <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#dc2626", marginBottom: 10 }}>Insufficient Credit</div>
+            <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.6, marginBottom: 24 }}>{creditBlockMsg}</div>
+            <button
+              onClick={() => setCreditBlockMsg(null)}
+              style={{ padding: "10px 28px", borderRadius: 8, border: "none", background: "#dc2626", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer" }}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Filters */}
       <div style={{ ...s.filterRow, marginBottom: 16 }}>
         <label style={s.label}>Customer</label>
@@ -1055,7 +1100,7 @@ function InvoicesTab({
                       {inv.paymentStatus === "Pending" ? (
                         <button
                           disabled={confirming === inv.invoiceId}
-                          onClick={() => handleConfirm(inv.invoiceId)}
+                          onClick={() => handleConfirm(inv.invoiceId, inv.customerId, inv.paymentType, inv.grandTotal)}
                           style={s.confirmBtn}
                         >
                           {confirming === inv.invoiceId ? "…" : "Confirm"}
