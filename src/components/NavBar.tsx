@@ -106,9 +106,10 @@ export default function NavBar() {
 
     // Admin group
     const adminItems: Leaf[] = [];
-    if (canSeeStaff)   adminItems.push(leaf("Staff",    "/app/staff-members"));
-    if (isUserManager) adminItems.push(leaf("Users",    "/app/users"));
-    if (isOwner)       adminItems.push(leaf("Settings", "/app/settings"));
+    if (canSeeStaff)   adminItems.push(leaf("Staff",            "/app/staff-members"));
+    if (isUserManager) adminItems.push(leaf("Users",            "/app/users"));
+    if (isUserManager) adminItems.push(leaf("Price Approvals",  "/app/price-approvals"));
+    if (isOwner)       adminItems.push(leaf("Settings",         "/app/settings"));
     if (adminItems.length) entries.push(group("Admin", adminItems));
 
     entries.push(leaf("Help", "/app/help"));
