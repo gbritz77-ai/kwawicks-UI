@@ -1,0 +1,92 @@
+name: Android — Play Store
+
+on:
+  workflow_dispatch:   # trigger manually from GitHub Actions tab
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'android/**'
+      - 'capacitor.config.ts'
+      - 'package*.json'
+      - 'vite.config.ts'
+
+jobs:
+  build-and-publish:
+    name: Build AAB & publish to Play Store
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Node ──────────────────────────────────────────────────────────────────
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # ── Java (required by Gradle) ─────────────────────────────────────────────
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # ── Build React app ───────────────────────────────────────────────────────
+      - name: Install npm dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build React app
+        run: npm run build
+
+      # ── Restore keystore from secret ──────────────────────────────────────────
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > kwawicks-release.keystore
+
+      # ── Capacitor sync ────────────────────────────────────────────────────────
+      - name: Sync Capacitor
+        run: |
+          rm -rf android/app/src/main/assets/public
+          npx cap sync android
+
+      # ── Gradle permissions ────────────────────────────────────────────────────
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      # ── Bump version code ─────────────────────────────────────────────────────
+      - name: Bump versionCode
+        run: |
+          VERSION_CODE=${{ github.run_number }}
+          sed -i "s/versionCode [0-9]*/versionCode $VERSION_CODE/" android/app/build.gradle
+          echo "Version code set to $VERSION_CODE"
+
+      # ── Build release AAB ─────────────────────────────────────────────────────
+      - name: Build Android AAB
+        run: |
+          cd android
+          ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file=../../kwawicks-release.keystore \
+            -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_STORE_PASSWORD }} \
+            -Pandroid.injected.signing.key.alias=${{ secrets.KEYSTORE_KEY_ALIAS }} \
+            -Pandroid.injected.signing.key.password=${{ secrets.KEYSTORE_KEY_PASSWORD }}
+
+      # ── Upload artifact (keep AAB for 30 days) ────────────────────────────────
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kwawicks-release-${{ github.run_number }}.aab
+          path: android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+
+      # ── Publish to Play Store internal track ──────────────────────────────────
+      - name: Publish to Play Store (internal track)
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_CREDENTIALS }}
+          packageName: co.za.outsec.kwawicks
+          releaseFiles: android/app/build/outputs/bundle/release/*.aab
+          track: internal
+          status: completed
