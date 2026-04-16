@@ -23,9 +23,10 @@ export const driverSalesApi = {
   create: (req: CreateDriverSaleRequest) =>
     api.post<{
       invoiceId: string;
-      whatsAppSent: boolean;
-      whatsAppError?: string;
+      otpSent: boolean;
+      awaitingOtp: boolean;
       creditCharged?: boolean;
       newCreditBalance?: number;
+      belowCostFlagged?: boolean;
     }>("/api/driver-sales", req),
 };

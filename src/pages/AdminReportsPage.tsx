@@ -122,20 +122,20 @@ export default function AdminReportsPage() {
           })
           .map((t) => (
           <button key={t} style={tab === t ? { ...s.tab, ...s.tabActive } : s.tab} onClick={() => setTab(t)}>
-            {t === "revenue" && "Revenue"}
-            {t === "outstanding" && "Outstanding"}
-            {t === "invoices" && "Invoices"}
-            {t === "drivers" && "Driver Performance"}
-            {t === "returns" && "Returns"}
-            {t === "deliveries" && "Deliveries"}
-            {t === "species" && "Species Revenue"}
-            {t === "statement" && "Customer Statement"}
-            {t === "supplier-spend" && "💼 Supplier Spend"}
-            {t === "margin"            && "📊 Cost vs Sell Margin"}
-            {t === "load-discrepancy"      && "⚠ Load Discrepancy"}
-            {t === "transit-discrepancy"    && "🚛 Transit Loss"}
-            {t === "supplier-reliability"   && "⭐ Supplier Reliability"}
-            {t === "client-orders"          && "📦 Client Orders"}
+            {t === "revenue"               && "💰 Revenue"}
+            {t === "outstanding"           && "⚠️ Outstanding"}
+            {t === "invoices"              && "🧾 Invoices"}
+            {t === "drivers"               && "🚚 Driver Performance"}
+            {t === "returns"               && "↩️ Returns"}
+            {t === "deliveries"            && "📬 Deliveries"}
+            {t === "species"               && "🐔 Species Revenue"}
+            {t === "statement"             && "📄 Customer Statement"}
+            {t === "supplier-spend"        && "💼 Supplier Spend"}
+            {t === "margin"                && "📊 Cost vs Sell Margin"}
+            {t === "load-discrepancy"      && "⚠️ Load Discrepancy"}
+            {t === "transit-discrepancy"   && "🚛 Transit Loss"}
+            {t === "supplier-reliability"  && "⭐ Supplier Reliability"}
+            {t === "client-orders"         && "📦 Client Orders"}
           </button>
         ))}
       </div>

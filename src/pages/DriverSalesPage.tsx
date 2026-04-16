@@ -3,6 +3,8 @@ import { clientsApi } from "../api/clientsApi";
 import type { ClientDto } from "../api/clientsApi";
 import { driverSalesApi } from "../api/driverSalesApi";
 import { clientCreditApi } from "../api/clientCreditApi";
+import { otpApi } from "../api/otpApi";
+import { hasAnyRole } from "../api/auth";
 import { invoicesApi } from "../api/invoicesApi";
 import { deliveryOrdersApi } from "../api/deliveryOrdersApi";
 import type { DriverStockItem } from "../api/deliveryOrdersApi";
@@ -57,7 +59,8 @@ export default function DriverSalesPage() {
   // Success + receipt upload
   type SuccessState = {
     invoiceId: string;
-    whatsAppSent: boolean;
+    awaitingOtp: boolean;
+    otpSent: boolean;
     creditCharged?: boolean;
     newCreditBalance?: number;
     needsReceipt: boolean;  // EFT or Card
@@ -67,6 +70,15 @@ export default function DriverSalesPage() {
   const [uploading, setUploading]         = useState(false);
   const [uploadDone, setUploadDone]       = useState(false);
   const [uploadError, setUploadError]     = useState("");
+
+  // OTP state
+  const [otpCode, setOtpCode]         = useState("");
+  const [otpBusy, setOtpBusy]         = useState(false);
+  const [otpError, setOtpError]       = useState("");
+  const [otpDone, setOtpDone]         = useState(false);
+  const [bypassReason, setBypassReason] = useState("");
+  const [showBypass, setShowBypass]   = useState(false);
+  const isAdmin = hasAnyRole("Owner", "Admin", "Finance");
   const receiptInputRef                   = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -193,7 +205,8 @@ export default function DriverSalesPage() {
       });
       setSuccess({
         invoiceId: result.invoiceId,
-        whatsAppSent: result.whatsAppSent,
+        awaitingOtp: result.awaitingOtp ?? false,
+        otpSent: result.otpSent ?? false,
         creditCharged: result.creditCharged,
         newCreditBalance: result.newCreditBalance,
         needsReceipt: paymentType === "EFT" || paymentType === "Card",
@@ -312,6 +325,88 @@ export default function DriverSalesPage() {
 
   // ── Success screen ──────────────────────────────────────────────────────────
   if (success) {
+    // OTP confirmation step
+    if (success.awaitingOtp && !otpDone) {
+      return (
+        <div style={s.page}>
+          <div style={s.successBox}>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>📲</div>
+            <div style={{ ...s.successTitle, color: "#1e3a8a" }}>Awaiting Client Confirmation</div>
+            <div style={{ ...s.successSub, marginBottom: 16 }}>
+              OTP sent to client's WhatsApp.<br />Ask them for the code.
+            </div>
+
+            {!showBypass ? (
+              <>
+                <input
+                  style={{ fontSize: 28, fontWeight: 800, letterSpacing: 12, textAlign: "center", padding: "10px 16px", border: "2px solid #2563eb", borderRadius: 10, width: 200 }}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="••••••"
+                  value={otpCode}
+                  onChange={e => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                  autoFocus
+                />
+                {otpError && <div style={{ color: "#ef4444", fontSize: 13, marginTop: 8 }}>{otpError}</div>}
+                <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "center", flexWrap: "wrap" }}>
+                  <button
+                    style={{ ...s.btnPrimary, fontSize: 15, padding: "10px 24px" }}
+                    disabled={otpBusy || otpCode.length < 6}
+                    onClick={async () => {
+                      setOtpBusy(true); setOtpError("");
+                      try { await otpApi.verify(success.invoiceId, otpCode); setOtpDone(true); }
+                      catch (e: any) { setOtpError(e?.message ?? "Incorrect code."); }
+                      finally { setOtpBusy(false); }
+                    }}
+                  >{otpBusy ? "Verifying…" : "✓ Verify"}</button>
+                  <button
+                    style={{ background: "#f1f5f9", border: "1px solid #cbd5e1", color: "#475569", borderRadius: 8, padding: "10px 16px", cursor: "pointer", fontSize: 13 }}
+                    disabled={otpBusy}
+                    onClick={async () => {
+                      setOtpBusy(true); setOtpError("");
+                      try { await otpApi.resend(success.invoiceId); setOtpError("✓ New code sent!"); }
+                      catch (e: any) { setOtpError(e?.message ?? "Resend failed."); }
+                      finally { setOtpBusy(false); }
+                    }}
+                  >↺ Resend</button>
+                  {isAdmin && (
+                    <button
+                      style={{ background: "#fef9c3", border: "1px solid #fde047", color: "#854d0e", borderRadius: 8, padding: "10px 12px", cursor: "pointer", fontSize: 12 }}
+                      onClick={() => setShowBypass(true)}
+                    >⚠ Bypass</button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <input
+                  style={{ fontSize: 14, padding: "8px 12px", border: "1px solid #cbd5e1", borderRadius: 7, width: "100%", maxWidth: 300, marginBottom: 10 }}
+                  placeholder="Reason for bypass (required)"
+                  value={bypassReason}
+                  onChange={e => setBypassReason(e.target.value)}
+                />
+                {otpError && <div style={{ color: "#ef4444", fontSize: 13 }}>{otpError}</div>}
+                <div style={{ display: "flex", gap: 8, marginTop: 10, justifyContent: "center" }}>
+                  <button style={{ background: "#f1f5f9", border: "1px solid #cbd5e1", color: "#475569", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }} onClick={() => setShowBypass(false)}>Cancel</button>
+                  <button
+                    style={{ background: "#dc2626", border: "none", color: "#fff", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontWeight: 600 }}
+                    disabled={otpBusy || !bypassReason.trim()}
+                    onClick={async () => {
+                      setOtpBusy(true); setOtpError("");
+                      try { await otpApi.bypass(success.invoiceId, bypassReason); setOtpDone(true); }
+                      catch (e: any) { setOtpError(e?.message ?? "Bypass failed."); }
+                      finally { setOtpBusy(false); }
+                    }}
+                  >{otpBusy ? "…" : "Confirm Bypass"}</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div style={s.page}>
         <div style={s.successBox}>
@@ -319,10 +414,8 @@ export default function DriverSalesPage() {
             <>
               <div style={{ fontSize: 44, marginBottom: 10 }}>✅</div>
               <div style={s.successTitle}>Sale Complete</div>
-              <div style={s.successSub}>Invoice created successfully.</div>
-              {success.whatsAppSent
-                ? <div style={s.successNote}>📱 Invoice sent via WhatsApp</div>
-                : <div style={{ ...s.successNote, color: "#64748b" }}>No WhatsApp sent (no phone on file)</div>}
+              <div style={s.successSub}>Invoice created and client confirmed.</div>
+              <div style={s.successNote}>📱 Invoice sent via WhatsApp</div>
               {success.creditCharged && success.newCreditBalance !== undefined && (
                 <div style={{ ...s.successNote, color: "#1d4ed8" }}>
                   💳 Credit charged — new balance: {fmt(success.newCreditBalance)}

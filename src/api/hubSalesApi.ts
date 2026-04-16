@@ -29,5 +29,5 @@ export type CreateHubSaleRequest = {
 
 export const hubSalesApi = {
   create: (req: CreateHubSaleRequest) =>
-    api.post<{ invoiceId: string; whatsAppSent: boolean; whatsAppError?: string; creditCharged?: boolean; newCreditBalance?: number }>("/api/hub-sales", req),
+    api.post<{ invoiceId: string; otpSent: boolean; awaitingOtp: boolean; creditCharged?: boolean; newCreditBalance?: number; belowCostFlagged?: boolean }>("/api/hub-sales", req),
 };
