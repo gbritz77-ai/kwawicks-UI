@@ -241,6 +241,7 @@ export default function SlaughterPage() {
                           step="0.01"
                           min={0}
                           value={y.unitCost}
+                          onFocus={e => e.target.select()}
                           onChange={e => setYieldField(y._key, "unitCost", parseFloat(e.target.value) || 0)}
                         />
                       </td>
@@ -251,6 +252,7 @@ export default function SlaughterPage() {
                           step="0.01"
                           min={0}
                           value={y.unitPrice}
+                          onFocus={e => e.target.select()}
                           onChange={e => setYieldField(y._key, "unitPrice", parseFloat(e.target.value) || 0)}
                         />
                       </td>
