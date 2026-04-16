@@ -77,6 +77,7 @@ export default function NavBar() {
     if (canSeeHubRequests) salesItems.push(leaf("Hub Requests", "/app/hub-requests"));
     if (isOperational)     salesItems.push(leaf("Deliveries",   "/app/delivery-orders"));
     if (canSeeCollections) salesItems.push(leaf("Collections",  "/app/collection-requests"));
+    if (isOperational)     salesItems.push(leaf("Slaughter",    "/app/slaughter"));
     if (salesItems.length) entries.push(group("Sales", salesItems));
 
     // Stock — Species as a top-level leaf (no longer a group)
