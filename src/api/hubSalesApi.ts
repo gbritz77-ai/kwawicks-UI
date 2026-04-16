@@ -7,6 +7,11 @@ export type HubSaleLineRequest = {
   vatRate: number;
 };
 
+export type SplitPaymentLineRequest = {
+  method: string;  // Cash | Card | EFT
+  amount: number;
+};
+
 export type CreateHubSaleRequest = {
   customerId?: string;
   newClient?: {
@@ -25,6 +30,7 @@ export type CreateHubSaleRequest = {
   paymentType: string;
   clientPhone?: string;
   lines: HubSaleLineRequest[];
+  splitPayments?: SplitPaymentLineRequest[];
 };
 
 export const hubSalesApi = {

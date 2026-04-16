@@ -7,6 +7,11 @@ export type DriverSaleLineRequest = {
   vatRate: number;
 };
 
+export type SplitPaymentLineRequest = {
+  method: string;  // Cash | Card | EFT
+  amount: number;
+};
+
 export type CreateDriverSaleRequest = {
   customerId?: string;
   newClient?: {
@@ -17,6 +22,7 @@ export type CreateDriverSaleRequest = {
   hubId: string;
   paymentType: string;
   lines: DriverSaleLineRequest[];
+  splitPayments?: SplitPaymentLineRequest[];
 };
 
 export const driverSalesApi = {

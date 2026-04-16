@@ -9,7 +9,9 @@ import type { CollectionRequestDto } from "../api/collectionRequestsApi";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type PaymentType = "Cash" | "EFT" | "Credit" | "CardMachine";
+type PaymentType = "Cash" | "EFT" | "Credit" | "CardMachine" | "Split";
+type SplitLine = { method: string; amount: string };
+const DELIVERY_SPLIT_METHODS = ["Cash", "EFT", "CardMachine"] as const;
 
 type ReturnLine = {
   speciesId: string;
@@ -63,6 +65,7 @@ export default function DriverPage() {
   const [step, setStep] = useState<CompletionStep>("returns");
   const [returnLines, setReturnLines] = useState<ReturnLine[]>([]);
   const [paymentType, setPaymentType] = useState<PaymentType>("Cash");
+  const [splitLines, setSplitLines] = useState<SplitLine[]>([{ method: "Cash", amount: "" }, { method: "CardMachine", amount: "" }]);
   const [completionBusy, setCompletionBusy] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
   const [createdInvoiceId, setCreatedInvoiceId] = useState<string | null>(null);
@@ -180,6 +183,7 @@ export default function DriverPage() {
     setReceiptFile(null);
     setReceiptDone(false);
     setPaymentType("Cash");
+    setSplitLines([{ method: "Cash", amount: "" }, { method: "CardMachine", amount: "" }]);
     setClientPhone("");
     setReturnLines(
       order.lines.map((l) => ({
@@ -235,6 +239,29 @@ export default function DriverPage() {
     if (!completing) return;
     const validationError = validateReturns();
     if (validationError) { setCompletionError(validationError); return; }
+
+    // Validate split payment if selected
+    if (paymentType === "Split") {
+      const validSplitLines = splitLines.filter(l => parseFloat(l.amount) > 0);
+      if (validSplitLines.length === 0) {
+        setCompletionError("Enter at least one split payment amount.");
+        return;
+      }
+      const splitAllocated = validSplitLines.reduce((s, l) => s + parseFloat(l.amount), 0);
+      // Compute local grand total for validation
+      const localTotal = returnLines.reduce((total, rl) => {
+        const sp = (speciesList as any[]).find((s: any) => s.speciesId === rl.speciesId);
+        const doLine = completing.lines.find(l => l.speciesId === rl.speciesId);
+        const delivered = parseInt(rl.deliveredQty) || 0;
+        const unitPriceIncl = doLine?.unitPrice ?? sp?.sellPrice ?? 0;
+        return total + delivered * unitPriceIncl;
+      }, 0);
+      if (Math.abs(splitAllocated - localTotal) > 0.05) {
+        setCompletionError(`Split payments total R ${splitAllocated.toFixed(2)} must equal invoice total R ${localTotal.toFixed(2)}.`);
+        return;
+      }
+    }
+
     try {
       setCompletionError(null);
       setCompletionBusy(true);
@@ -258,8 +285,18 @@ export default function DriverPage() {
       });
       const invoiceId = result.invoiceId;
       setCreatedInvoiceId(invoiceId);
-      await invoicesApi.recordPayment(invoiceId, paymentType);
-      if (paymentType === "EFT" || paymentType === "CardMachine") {
+
+      // Record payment — pass split breakdown when Split is selected
+      const splitPaymentsForApi = paymentType === "Split"
+        ? splitLines.filter(l => parseFloat(l.amount) > 0).map(l => ({ method: l.method, amount: parseFloat(l.amount) }))
+        : undefined;
+      await invoicesApi.recordPayment(invoiceId, paymentType, splitPaymentsForApi);
+
+      // Prompt for receipt if EFT or CardMachine was used (directly or within a split)
+      const needsReceipt = paymentType === "EFT" || paymentType === "CardMachine"
+        || (paymentType === "Split" && splitLines.some(l => parseFloat(l.amount) > 0 && (l.method === "EFT" || l.method === "CardMachine")));
+
+      if (needsReceipt) {
         setStep("receipt");
       } else {
         setStep("done");
@@ -617,17 +654,84 @@ export default function DriverPage() {
                 <div style={s.paymentSection}>
                   <div style={s.paymentHeading}>Payment Method</div>
                   <div style={s.paymentOptions}>
-                    {(["Cash", "EFT", "CardMachine", "Credit"] as PaymentType[]).map((pt) => (
+                    {(["Cash", "EFT", "CardMachine", "Credit", "Split"] as PaymentType[]).map((pt) => (
                       <button key={pt} style={{ ...s.paymentOption, ...(paymentType === pt ? s.paymentOptionActive : {}) }} onClick={() => setPaymentType(pt)} disabled={completionBusy}>
                         {pt === "Cash" && "💵 "}
                         {pt === "EFT" && "📱 "}
                         {pt === "CardMachine" && "💳 "}
                         {pt === "Credit" && "📋 "}
+                        {pt === "Split" && "✂️ "}
                         {pt === "CardMachine" ? "Card Machine" : pt}
                       </button>
                     ))}
                   </div>
-                  {(paymentType === "EFT" || paymentType === "CardMachine") && (
+
+                  {/* ── Split breakdown panel ── */}
+                  {paymentType === "Split" && (() => {
+                    const splitAllocated = splitLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+                    const localTotal = returnLines.reduce((total, rl) => {
+                      const sp = (speciesList as any[]).find((s: any) => s.speciesId === rl.speciesId);
+                      const doLine = completing?.lines.find(l => l.speciesId === rl.speciesId);
+                      const delivered = parseInt(rl.deliveredQty) || 0;
+                      return total + delivered * (doLine?.unitPrice ?? sp?.sellPrice ?? 0);
+                    }, 0);
+                    const splitRemaining = localTotal - splitAllocated;
+                    return (
+                      <div style={s.splitPanel}>
+                        <div style={s.splitPanelTitle}>Split Payment Breakdown</div>
+                        {splitLines.map((sl, i) => (
+                          <div key={i} style={s.splitRow}>
+                            <select
+                              style={{ flex: 1, padding: "10px 8px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)", fontSize: 14, background: "white" }}
+                              value={sl.method}
+                              onChange={e => setSplitLines(prev => prev.map((x, j) => j === i ? { ...x, method: e.target.value } : x))}
+                              disabled={completionBusy}
+                            >
+                              {DELIVERY_SPLIT_METHODS.map(m => <option key={m} value={m}>{m === "CardMachine" ? "Card Machine" : m}</option>)}
+                            </select>
+                            <input
+                              style={{ width: 110, padding: "10px 8px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)", fontSize: 14, textAlign: "right", boxSizing: "border-box" }}
+                              type="number"
+                              min={0}
+                              step={0.01}
+                              placeholder="0.00"
+                              value={sl.amount}
+                              onChange={e => setSplitLines(prev => prev.map((x, j) => j === i ? { ...x, amount: e.target.value } : x))}
+                              onFocus={e => e.target.select()}
+                              disabled={completionBusy}
+                            />
+                            <button
+                              style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 16, padding: "4px 6px" }}
+                              disabled={splitLines.length <= 1 || completionBusy}
+                              onClick={() => setSplitLines(prev => prev.filter((_, j) => j !== i))}
+                            >✕</button>
+                          </div>
+                        ))}
+                        <button
+                          style={{ background: "none", border: "1px dashed rgba(0,0,0,0.2)", color: "rgba(0,0,0,0.5)", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 13, width: "100%", marginBottom: 8 }}
+                          onClick={() => setSplitLines(prev => [...prev, { method: "Cash", amount: "" }])}
+                          disabled={completionBusy}
+                        >+ Add method</button>
+                        <div style={{
+                          fontWeight: 700, fontSize: 13, textAlign: "right",
+                          color: Math.abs(splitRemaining) < 0.01 ? "#16a34a" : Math.abs(splitRemaining) > 0.05 ? "#dc2626" : "#92400e",
+                          paddingTop: 6, borderTop: "1px solid rgba(0,0,0,0.1)"
+                        }}>
+                          {Math.abs(splitRemaining) < 0.01
+                            ? `✓ Allocated: R ${splitAllocated.toFixed(2)}`
+                            : splitRemaining > 0
+                              ? `Still to allocate: R ${splitRemaining.toFixed(2)}`
+                              : `Over-allocated by: R ${Math.abs(splitRemaining).toFixed(2)}`
+                          }
+                          {localTotal > 0 && <span style={{ fontWeight: 400, color: "rgba(0,0,0,0.4)", marginLeft: 8 }}>of R {localTotal.toFixed(2)}</span>}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {(paymentType === "EFT" || paymentType === "CardMachine"
+                    || (paymentType === "Split" && splitLines.some(l => parseFloat(l.amount) > 0 && (l.method === "EFT" || l.method === "CardMachine")))
+                  ) && (
                     <div style={s.eftNote}>You'll be prompted to take a photo of the receipt after confirming.</div>
                   )}
                   {paymentType === "Credit" && (
@@ -928,10 +1032,13 @@ const s: Record<string, React.CSSProperties> = {
 
   paymentSection: { marginTop: 16 },
   paymentHeading: { fontWeight: 900, fontSize: 13, textTransform: "uppercase" as const, letterSpacing: 0.5, color: "rgba(0,0,0,0.5)", marginBottom: 10 },
-  paymentOptions: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 },
-  paymentOption: { padding: "14px 10px", borderRadius: 12, border: "1px solid rgba(0,0,0,0.15)", background: "white", fontWeight: 800, fontSize: 14, cursor: "pointer" },
+  paymentOptions: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 8 },
+  paymentOption: { padding: "12px 8px", borderRadius: 12, border: "1px solid rgba(0,0,0,0.15)", background: "white", fontWeight: 800, fontSize: 13, cursor: "pointer" },
   paymentOptionActive: { border: "2px solid #2563eb", background: "rgba(37,99,235,0.08)", color: "#1d4ed8" },
   eftNote: { marginTop: 8, fontSize: 13, color: "rgba(0,0,0,0.55)", fontStyle: "italic" },
+  splitPanel: { marginTop: 12, padding: "12px 14px", background: "#f8fafc", borderRadius: 12, border: "1px solid rgba(0,0,0,0.1)" },
+  splitPanelTitle: { fontSize: 12, fontWeight: 800, color: "rgba(0,0,0,0.5)", textTransform: "uppercase" as const, letterSpacing: 0.4, marginBottom: 10 },
+  splitRow: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 },
 
   receiptBox: { margin: "14px 0" },
   cameraBtn: { width: "100%", padding: "32px 20px", borderRadius: 16, border: "2px dashed rgba(37,99,235,0.3)", background: "rgba(37,99,235,0.04)", cursor: "pointer", textAlign: "center" as const, color: "#1d4ed8" },

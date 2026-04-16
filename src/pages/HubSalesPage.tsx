@@ -23,7 +23,10 @@ type SaleLine = {
 };
 
 
-const PAYMENT_TYPES = ["Cash", "EFT", "Card"] as const;
+const PAYMENT_TYPES = ["Cash", "EFT", "Card", "Split"] as const;
+const SPLIT_METHODS = ["Cash", "Card", "EFT"] as const;
+
+type SplitLine = { method: string; amount: string };
 
 export default function HubSalesPage() {
   const [clients, setClients] = useState<ClientDto[]>([]);
@@ -49,6 +52,7 @@ export default function HubSalesPage() {
 
   // Payment
   const [paymentType, setPaymentType] = useState("Cash");
+  const [splitLines, setSplitLines] = useState<SplitLine[]>([{ method: "Cash", amount: "" }, { method: "Card", amount: "" }]);
 
   // Submission
   const [busy, setBusy] = useState(false);
@@ -139,10 +143,17 @@ export default function HubSalesPage() {
     setClientSearch("");
     setLines([]);
     setPaymentType("Cash");
+    setSplitLines([{ method: "Cash", amount: "" }, { method: "Card", amount: "" }]);
     setCreditBalance(null);
     setError("");
     setSuccess(null);
   }
+
+  // Split payment helpers
+  const splitAllocated = paymentType === "Split"
+    ? splitLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+    : 0;
+  const splitRemaining = grandTotal - splitAllocated;
 
   async function handleSubmit() {
     setError("");
@@ -154,14 +165,24 @@ export default function HubSalesPage() {
     if (mode === "existing" && !selectedClientId) { setError("Select a customer."); return; }
     if (mode === "staff" && !selectedStaffId) { setError("Select a staff member."); return; }
 
+    if (paymentType === "Split") {
+      const validSplitLines = splitLines.filter(l => parseFloat(l.amount) > 0);
+      if (validSplitLines.length === 0) { setError("Add at least one split payment amount."); return; }
+      if (Math.abs(splitAllocated - grandTotal) > 0.05) {
+        setError(`Split payments total ${fmt(splitAllocated)} must equal sale total ${fmt(grandTotal)}.`);
+        return;
+      }
+    }
+
     setBusy(true);
     try {
+      const effectivePay = mode === "staff" ? "OnAccount" : paymentType;
       const result = await hubSalesApi.create({
         customerId: mode === "existing" ? selectedClientId : undefined,
         newClient: mode === "walkin" ? { clientName: "Walk-in", clientType: 0, isWalkIn: true } : undefined,
         staffMemberId: mode === "staff" ? selectedStaffId : undefined,
         hubId: "main",
-        paymentType: mode === "staff" ? "OnAccount" : paymentType,
+        paymentType: effectivePay,
         lines: lines.map(l => ({
           speciesId: l.speciesId,
           quantity: l.quantity,
@@ -169,6 +190,11 @@ export default function HubSalesPage() {
           unitPrice: l.unitPrice / (1 + l.vatRate),
           vatRate: l.vatRate,
         })),
+        splitPayments: effectivePay === "Split"
+          ? splitLines
+              .filter(l => parseFloat(l.amount) > 0)
+              .map(l => ({ method: l.method, amount: parseFloat(l.amount) }))
+          : undefined,
       });
       setSuccess({ invoiceId: result.invoiceId, awaitingOtp: result.awaitingOtp ?? false, otpSent: result.otpSent ?? false, creditCharged: result.creditCharged, newCreditBalance: result.newCreditBalance });
     } catch (e: any) {
@@ -543,6 +569,54 @@ export default function HubSalesPage() {
                             ✓ Balance: {fmt(creditBalance)} — {fmt(creditBalance - grandTotal)} remaining after this sale.
                           </div>
                 )}
+
+                {/* ── Split payment panel ── */}
+                {paymentType === "Split" && (
+                  <div style={s.splitPanel}>
+                    <div style={s.splitPanelTitle}>Split Payment Breakdown</div>
+                    {splitLines.map((sl, i) => (
+                      <div key={i} style={s.splitRow}>
+                        <select
+                          style={{ ...s.select, flex: 1, marginTop: 0 }}
+                          value={sl.method}
+                          onChange={e => setSplitLines(prev => prev.map((x, j) => j === i ? { ...x, method: e.target.value } : x))}
+                        >
+                          {SPLIT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                        <input
+                          style={{ ...s.input, width: 110, textAlign: "right" }}
+                          type="number"
+                          min={0}
+                          step={0.01}
+                          placeholder="0.00"
+                          value={sl.amount}
+                          onChange={e => setSplitLines(prev => prev.map((x, j) => j === i ? { ...x, amount: e.target.value } : x))}
+                          onFocus={e => e.target.select()}
+                        />
+                        <button
+                          style={s.removeBtn}
+                          disabled={splitLines.length <= 1}
+                          onClick={() => setSplitLines(prev => prev.filter((_, j) => j !== i))}
+                        >✕</button>
+                      </div>
+                    ))}
+                    <button
+                      style={{ ...s.splitAddBtn }}
+                      onClick={() => setSplitLines(prev => [...prev, { method: "Cash", amount: "" }])}
+                    >+ Add method</button>
+                    <div style={{
+                      ...s.splitTotal,
+                      color: Math.abs(splitRemaining) < 0.01 ? "#166534" : Math.abs(splitRemaining) > 0.05 ? "#dc2626" : "#92400e"
+                    }}>
+                      {Math.abs(splitRemaining) < 0.01
+                        ? `✓ Allocated: ${fmt(splitAllocated)}`
+                        : splitRemaining > 0
+                          ? `Still to allocate: ${fmt(splitRemaining)}`
+                          : `Over-allocated by: ${fmt(Math.abs(splitRemaining))}`
+                      }
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <div style={s.infoBanner}>On Account (salary deduction at month-end)</div>
@@ -606,4 +680,9 @@ const s: Record<string, React.CSSProperties> = {
   creditInfo:    { fontSize: 12, color: "#64748b", marginTop: 4, padding: "7px 10px", background: "#f8fafc", borderRadius: 6, border: "1px solid #e2e8f0" },
   creditWarning: { background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 6, padding: "8px 10px", fontSize: 12, color: "#92400e", marginTop: 4 },
   creditOk:      { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 10px", fontSize: 12, color: "#166534", marginTop: 4 },
+  splitPanel:     { background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", marginTop: 10 },
+  splitPanelTitle:{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 10 },
+  splitRow:       { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 },
+  splitAddBtn:    { background: "none", border: "1px dashed #94a3b8", color: "#64748b", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, width: "100%", marginBottom: 8 },
+  splitTotal:     { fontSize: 13, fontWeight: 700, textAlign: "right" as const, paddingTop: 4, borderTop: "1px solid #e2e8f0" },
 };

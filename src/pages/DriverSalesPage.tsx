@@ -11,7 +11,10 @@ import type { DriverStockItem } from "../api/deliveryOrdersApi";
 
 const VAT_RATE = 0.15;
 type CustomerMode = "existing" | "walkin";
-const PAYMENT_TYPES = ["Cash", "EFT", "Card"] as const;
+const PAYMENT_TYPES = ["Cash", "EFT", "Card", "Split"] as const;
+const SPLIT_METHODS = ["Cash", "Card", "EFT"] as const;
+
+type SplitLine = { method: string; amount: string };
 
 type SaleLine = {
   speciesId: string;
@@ -50,6 +53,7 @@ export default function DriverSalesPage() {
 
   // Payment
   const [paymentType, setPaymentType]     = useState("Cash");
+  const [splitLines, setSplitLines]       = useState<SplitLine[]>([{ method: "Cash", amount: "" }, { method: "Card", amount: "" }]);
 
   // Submission
   const [busy, setBusy]       = useState(false);
@@ -156,6 +160,7 @@ export default function DriverSalesPage() {
     setClientSearch("");
     setLines([]);
     setPaymentType("Cash");
+    setSplitLines([{ method: "Cash", amount: "" }, { method: "Card", amount: "" }]);
     setCreditBalance(null);
     setError("");
     setSuccess(null);
@@ -168,11 +173,23 @@ export default function DriverSalesPage() {
     setAddPrice("");
   }
 
+  // Split payment helpers
+  const splitAllocated = paymentType === "Split"
+    ? splitLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
+    : 0;
+  const splitRemaining = grandTotal - splitAllocated;
+
   function validate(): string | null {
     if (lines.length === 0) return "Add at least one item.";
     const zeroPrice = lines.find(l => l.unitPrice <= 0);
     if (zeroPrice) return `Price for "${zeroPrice.speciesName}" cannot be R 0.`;
     if (mode === "existing" && !selectedClientId) return "Select a customer.";
+    if (paymentType === "Split") {
+      const validSplitLines = splitLines.filter(l => parseFloat(l.amount) > 0);
+      if (validSplitLines.length === 0) return "Add at least one split payment amount.";
+      if (Math.abs(splitAllocated - grandTotal) > 0.05)
+        return `Split payments total ${fmt(splitAllocated)} must equal sale total ${fmt(grandTotal)}.`;
+    }
     return null;
   }
 
@@ -202,6 +219,11 @@ export default function DriverSalesPage() {
           unitPrice: l.unitPrice / (1 + l.vatRate), // back-calc to ex-VAT
           vatRate: l.vatRate,
         })),
+        splitPayments: paymentType === "Split"
+          ? splitLines
+              .filter(l => parseFloat(l.amount) > 0)
+              .map(l => ({ method: l.method, amount: parseFloat(l.amount) }))
+          : undefined,
       });
       setSuccess({
         invoiceId: result.invoiceId,
@@ -209,7 +231,8 @@ export default function DriverSalesPage() {
         otpSent: result.otpSent ?? false,
         creditCharged: result.creditCharged,
         newCreditBalance: result.newCreditBalance,
-        needsReceipt: paymentType === "EFT" || paymentType === "Card",
+        needsReceipt: paymentType === "EFT" || paymentType === "Card"
+          || (paymentType === "Split" && splitLines.some(l => parseFloat(l.amount) > 0 && (l.method === "EFT" || l.method === "Card"))),
       });
     } catch (e: any) {
       setError(e?.message ?? "Failed to create sale.");
@@ -682,7 +705,57 @@ export default function DriverSalesPage() {
                 : <div style={s.creditOk}>✓ Balance: {fmt(creditBalance)} — {fmt(creditBalance - grandTotal)} remaining after this sale.</div>
         )}
 
-        {(paymentType === "EFT" || paymentType === "Card") && (
+        {/* ── Split payment panel ── */}
+        {paymentType === "Split" && (
+          <div style={s.splitPanel}>
+            <div style={s.splitPanelTitle}>Split Payment Breakdown</div>
+            {splitLines.map((sl, i) => (
+              <div key={i} style={s.splitRow}>
+                <select
+                  style={{ ...s.select, flex: 1, marginTop: 0 }}
+                  value={sl.method}
+                  onChange={e => setSplitLines(prev => prev.map((x, j) => j === i ? { ...x, method: e.target.value } : x))}
+                >
+                  {SPLIT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <input
+                  style={{ ...s.input, width: 110, textAlign: "right" }}
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  placeholder="0.00"
+                  value={sl.amount}
+                  onChange={e => setSplitLines(prev => prev.map((x, j) => j === i ? { ...x, amount: e.target.value } : x))}
+                  onFocus={e => e.target.select()}
+                />
+                <button
+                  style={s.removeBtn}
+                  disabled={splitLines.length <= 1}
+                  onClick={() => setSplitLines(prev => prev.filter((_, j) => j !== i))}
+                >✕</button>
+              </div>
+            ))}
+            <button
+              style={s.splitAddBtn}
+              onClick={() => setSplitLines(prev => [...prev, { method: "Cash", amount: "" }])}
+            >+ Add method</button>
+            <div style={{
+              ...s.splitTotal,
+              color: Math.abs(splitRemaining) < 0.01 ? "#166534" : Math.abs(splitRemaining) > 0.05 ? "#dc2626" : "#92400e"
+            }}>
+              {Math.abs(splitRemaining) < 0.01
+                ? `✓ Allocated: ${fmt(splitAllocated)}`
+                : splitRemaining > 0
+                  ? `Still to allocate: ${fmt(splitRemaining)}`
+                  : `Over-allocated by: ${fmt(Math.abs(splitRemaining))}`
+              }
+            </div>
+          </div>
+        )}
+
+        {(paymentType === "EFT" || paymentType === "Card"
+          || (paymentType === "Split" && splitLines.some(l => parseFloat(l.amount) > 0 && (l.method === "EFT" || l.method === "Card")))
+        ) && (
           <div style={{ ...s.infoBanner, marginTop: 8 }}>
             📎 You'll be asked to upload proof of payment after the sale is recorded.
           </div>
@@ -767,4 +840,9 @@ const s: Record<string, React.CSSProperties> = {
   previewTotalRow: { display: "flex", justifyContent: "space-between", fontSize: 14, color: "#374151" },
   previewGrand:    { fontSize: 18, fontWeight: 800, color: "#166534", borderTop: "1px solid #e2e8f0", paddingTop: 8, marginTop: 4 },
   previewActions:  { display: "flex", gap: 10, marginTop: 4 },
+  splitPanel:      { background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", marginTop: 10 },
+  splitPanelTitle: { fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 10 },
+  splitRow:        { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 },
+  splitAddBtn:     { background: "none", border: "1px dashed #94a3b8", color: "#64748b", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontSize: 12, width: "100%", marginBottom: 8 },
+  splitTotal:      { fontSize: 13, fontWeight: 700, textAlign: "right" as const, paddingTop: 4, borderTop: "1px solid #e2e8f0" },
 };

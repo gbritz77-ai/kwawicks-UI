@@ -85,8 +85,8 @@ export const invoicesApi = {
   get: (invoiceId: string) =>
     api.get<InvoiceResponse>(`/api/invoices/${invoiceId}`),
 
-  recordPayment: (invoiceId: string, paymentType: string) =>
-    api.post<void>(`/api/invoices/${invoiceId}/payment`, { paymentType }),
+  recordPayment: (invoiceId: string, paymentType: string, splitPayments?: { method: string; amount: number }[]) =>
+    api.post<void>(`/api/invoices/${invoiceId}/payment`, { paymentType, splitPayments }),
 
   confirmPayment: (invoiceId: string) =>
     api.put<void>(`/api/invoices/${invoiceId}/confirm-payment`, {}),
