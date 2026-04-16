@@ -910,18 +910,28 @@ export default function DriverPage() {
             <div style={s.stepNote}>Enter the quantity you are loading onto your vehicle for each species.</div>
             {loadLines.map((ll, i) => {
               const orig = loadingCrItem.lines[i];
+              const isShort = ll.loadedQty < (orig?.orderedQty ?? 0);
+              const shortfallQty = (orig?.orderedQty ?? 0) - ll.loadedQty;
               return (
                 <div key={ll.speciesId} style={s.returnBlock}>
                   <div style={s.returnSpecies}>
                     {orig?.speciesName || ll.speciesId}
                     <span style={s.returnOrdered}>Ordered: {orig?.orderedQty}</span>
+                    {isShort && ll.loadedQty >= 0 && (
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#dc2626", background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.3)", padding: "2px 8px", borderRadius: 999 }}>
+                        ⚠ {shortfallQty} short
+                      </span>
+                    )}
                   </div>
                   <div style={s.returnFields}>
                     <label style={s.returnLabel}>
                       Loaded Qty
-                      <input style={s.returnInput} inputMode="numeric" value={ll.loadedQty}
+                      <input
+                        style={{ ...s.returnInput, borderColor: isShort ? "#fca5a5" : undefined }}
+                        inputMode="numeric" value={ll.loadedQty}
                         onChange={e => setLoadLines(ls => ls.map((x, j) => j === i ? { ...x, loadedQty: parseInt(e.target.value) || 0 } : x))}
                         disabled={crBusy}
+                        onFocus={e => e.target.select()}
                       />
                     </label>
                     <label style={s.returnLabel}>

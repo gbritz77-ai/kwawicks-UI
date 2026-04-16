@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { collectionRequestsApi } from "../api/collectionRequestsApi";
-import type { CollectionRequestDto, CollectionRequestLineDto } from "../api/collectionRequestsApi";
+import type { CollectionRequestDto, CollectionRequestLineDto, CollectionShortfallReportItem } from "../api/collectionRequestsApi";
 import { procurementOrdersApi } from "../api/procurementOrdersApi";
 import type { ProcurementOrderDto } from "../api/procurementOrdersApi";
 import { usersApi } from "../api/usersApi";
@@ -74,6 +74,12 @@ export default function CollectionRequestsPage() {
   const [deliveryNoteUrl, setDeliveryNoteUrl] = useState<string | null>(null);
   const [deliveryNoteLoading, setDeliveryNoteLoading] = useState(false);
 
+  // Shortfall report
+  const [showShortfall, setShowShortfall] = useState(false);
+  const [shortfallReport, setShortfallReport] = useState<CollectionShortfallReportItem[] | null>(null);
+  const [shortfallLoading, setShortfallLoading] = useState(false);
+  const [shortfallError, setShortfallError] = useState("");
+
   // Per-card delivery note photo (inline view on expanded card)
   const [cardDnUrls, setCardDnUrls] = useState<Record<string, string>>({});
   const [cardDnLoading, setCardDnLoading] = useState<string | null>(null);
@@ -97,6 +103,18 @@ export default function CollectionRequestsPage() {
       setClients((clientList as ClientDto[]).filter(c => !c.isWalkIn));
     } catch { setError("Failed to load collection requests."); }
     finally { setLoading(false); }
+  }
+
+  async function openShortfallReport() {
+    setShowShortfall(true);
+    setShortfallError("");
+    if (shortfallReport !== null) return; // already loaded
+    setShortfallLoading(true);
+    try {
+      const data = await collectionRequestsApi.shortfallReport();
+      setShortfallReport(data);
+    } catch (e: any) { setShortfallError(e?.message ?? "Failed to load shortfall report."); }
+    finally { setShortfallLoading(false); }
   }
 
   async function handleCreate() {
@@ -303,7 +321,10 @@ export default function CollectionRequestsPage() {
           <div style={s.pageTitle}>Collection Requests</div>
           <div style={s.pageSub}>{isDriver() ? "Your collection assignments" : "Manage stock collections from suppliers"}</div>
         </div>
-        {canCreate() && <button style={s.primaryBtn} onClick={() => { setCreateError(""); setShowCreate(true); }}>+ New Collection</button>}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
+          {!isDriver() && <button style={s.shortfallBtn} onClick={openShortfallReport}>⚠ Shortfall Report</button>}
+          {canCreate() && <button style={s.primaryBtn} onClick={() => { setCreateError(""); setShowCreate(true); }}>+ New Collection</button>}
+        </div>
       </div>
 
       {error && <div style={s.errorBanner}>{error}</div>}
@@ -374,6 +395,9 @@ export default function CollectionRequestsPage() {
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                     <span style={s.orderId}>CR-{shortId(cr.collectionRequestId)}</span>
                     <span style={{ ...s.badge, ...STATUS_COLORS[cr.status] }}>{cr.status}</span>
+                    {cr.shortfallFlagged && (
+                      <span style={{ ...s.badge, background: "rgba(234,88,12,0.12)", color: "#9a3412", border: "1px solid rgba(234,88,12,0.4)" }}>⚠ Shortfall</span>
+                    )}
                   </div>
                   <div style={s.cardMeta}>
                     <span>{cr.supplierName}</span>
@@ -578,11 +602,18 @@ export default function CollectionRequestsPage() {
               const origLine = loadingItem.lines[i];
               return (
                 <div key={ll.speciesId} style={s.loadLineCard}>
-                  <div style={s.loadLineName}>{origLine?.speciesName || ll.speciesId}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+                    <div style={s.loadLineName}>{origLine?.speciesName || ll.speciesId}</div>
+                    {ll.loadedQty < (origLine?.orderedQty ?? 0) && ll.loadedQty >= 0 && (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#dc2626", background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.3)", borderRadius: 20, padding: "1px 8px" }}>
+                        ⚠ {(origLine?.orderedQty ?? 0) - ll.loadedQty} short
+                      </span>
+                    )}
+                  </div>
                   <div style={s.loadLineOrdered}>Ordered: {origLine?.orderedQty}</div>
                   <div style={s.loadLineInputs}>
                     <label style={s.label}>Loaded Qty
-                      <input style={s.input} inputMode="numeric" value={ll.loadedQty}
+                      <input style={{ ...s.input, borderColor: ll.loadedQty < (origLine?.orderedQty ?? 0) ? "#fca5a5" : undefined }} inputMode="numeric" value={ll.loadedQty}
                         onChange={e => setLoadLines(ls => ls.map((x, j) => j === i ? { ...x, loadedQty: parseInt(e.target.value) || 0 } : x))} disabled={busy} onFocus={e => e.target.select()} />
                     </label>
                     <label style={s.label}>Notes (if short)
@@ -733,6 +764,77 @@ export default function CollectionRequestsPage() {
         </div>
       )}
 
+      {/* Shortfall report modal */}
+      {showShortfall && (
+        <div style={s.backdrop} onClick={() => setShowShortfall(false)}>
+          <div style={{ ...s.modal, maxWidth: 680 }} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>⚠ Loading Shortfall Report</div>
+            <div style={s.modalSub}>Collection requests where the driver loaded less stock than ordered</div>
+            {shortfallError && <div style={s.formError}>{shortfallError}</div>}
+            {shortfallLoading ? (
+              <div style={{ textAlign: "center", padding: 32, color: "#64748b" }}>Loading report…</div>
+            ) : shortfallReport && shortfallReport.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 24, color: "#16a34a", fontWeight: 700, fontSize: 15 }}>✓ No shortfalls recorded</div>
+            ) : shortfallReport ? (
+              <div style={{ maxHeight: 480, overflowY: "auto" }}>
+                {shortfallReport.map(item => (
+                  <div key={item.collectionRequestId} style={{ background: "#fff7ed", border: "1px solid rgba(234,88,12,0.3)", borderRadius: 10, padding: 14, marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: "#0f172a" }}>
+                          CR-{item.collectionRequestId.split("-")[0].toUpperCase()} · {item.supplierName}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                          {item.assignedDriverName}
+                          {item.collectionDate && <span> · 📅 {new Date(item.collectionDate).toLocaleDateString("en-ZA")}</span>}
+                          <span> · Created {new Date(item.createdAt).toLocaleDateString("en-ZA")}</span>
+                        </div>
+                      </div>
+                      <span style={{ ...s.badge, ...STATUS_COLORS[item.status] }}>{item.status}</span>
+                    </div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid rgba(234,88,12,0.2)" }}>
+                          <th style={{ textAlign: "left", padding: "4px 6px", color: "#64748b", fontWeight: 600 }}>Species</th>
+                          <th style={{ textAlign: "right", padding: "4px 6px", color: "#64748b", fontWeight: 600 }}>Ordered</th>
+                          <th style={{ textAlign: "right", padding: "4px 6px", color: "#64748b", fontWeight: 600 }}>Loaded</th>
+                          <th style={{ textAlign: "right", padding: "4px 6px", color: "#dc2626", fontWeight: 700 }}>Shortfall</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {item.shortfallLines.map(line => (
+                          <tr key={line.speciesId} style={{ borderBottom: "1px solid rgba(234,88,12,0.1)" }}>
+                            <td style={{ padding: "4px 6px", fontWeight: 600 }}>{line.speciesName || line.speciesId}</td>
+                            <td style={{ padding: "4px 6px", textAlign: "right" }}>{line.orderedQty.toLocaleString()}</td>
+                            <td style={{ padding: "4px 6px", textAlign: "right" }}>{line.loadedQty.toLocaleString()}</td>
+                            <td style={{ padding: "4px 6px", textAlign: "right", fontWeight: 800, color: "#dc2626" }}>
+                              -{line.shortfallQty.toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {item.shortfallLines.some(l => l.loadingNotes) && (
+                      <div style={{ marginTop: 8 }}>
+                        {item.shortfallLines.filter(l => l.loadingNotes).map(l => (
+                          <div key={l.speciesId} style={{ fontSize: 12, color: "#92400e", marginTop: 3 }}>
+                            {l.speciesName}: {l.loadingNotes}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <div style={s.modalBtns}>
+              <button style={s.secondaryBtn} onClick={() => setShowShortfall(false)}>Close</button>
+              <button style={s.secondaryBtn} onClick={() => { setShortfallReport(null); openShortfallReport(); }}>↻ Refresh</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Finance acknowledge modal */}
       {ackItem && (
         <div style={s.backdrop} onClick={() => !busy && setAckItem(null)}>
@@ -870,6 +972,7 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 13,
     cursor: "pointer",
   },
+  shortfallBtn: { padding: "10px 18px", borderRadius: 8, background: "rgba(234,88,12,0.08)", border: "1px solid rgba(234,88,12,0.4)", color: "#9a3412", fontWeight: 700, fontSize: 14, cursor: "pointer" },
   allocSlotCard: { background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: 14, marginBottom: 14 },
   allocSection: {
     marginTop: 14,

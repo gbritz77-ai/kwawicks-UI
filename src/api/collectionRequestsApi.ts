@@ -37,10 +37,30 @@ export type CollectionRequestDto = {
   collectionDate: string | null;
   invoiceS3Key: string;
   deliveryNoteS3Key: string;
+  shortfallFlagged: boolean;
   lines: CollectionRequestLineDto[];
   deliveryAllocations: CollectionDeliveryAllocationDto[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type CollectionShortfallLine = {
+  speciesId: string;
+  speciesName: string;
+  orderedQty: number;
+  loadedQty: number;
+  shortfallQty: number;
+  loadingNotes: string;
+};
+
+export type CollectionShortfallReportItem = {
+  collectionRequestId: string;
+  supplierName: string;
+  assignedDriverName: string;
+  collectionDate: string | null;
+  createdAt: string;
+  status: string;
+  shortfallLines: CollectionShortfallLine[];
 };
 
 export type AddDeliveryAllocationRequest = {
@@ -80,4 +100,11 @@ export const collectionRequestsApi = {
   getDeliveryNoteViewUrl:   (id: string) => api.get<{ viewUrl: string }>(`/api/collection-requests/${id}/delivery-note-view-url`),
   addAllocation: (id: string, req: AddDeliveryAllocationRequest) =>
     api.post<CollectionRequestDto>(`/api/collection-requests/${id}/allocations`, req),
+  shortfallReport: (from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
+    const q = qs.toString();
+    return api.get<CollectionShortfallReportItem[]>(`/api/collection-requests/shortfall-report${q ? `?${q}` : ""}`);
+  },
 };
