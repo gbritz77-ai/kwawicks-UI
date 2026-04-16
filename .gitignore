@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Android keystore — never commit; upload to Codemagic directly
+kwawicks-release.keystore
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

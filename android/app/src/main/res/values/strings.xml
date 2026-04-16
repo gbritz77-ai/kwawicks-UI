@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">KwaWicks</string>
+    <string name="title_activity_main">KwaWicks</string>
+    <string name="package_name">co.za.outsec.kwawicks</string>
+    <string name="custom_url_scheme">co.za.outsec.kwawicks</string>
+</resources>
