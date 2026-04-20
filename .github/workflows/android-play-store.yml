@@ -101,4 +101,4 @@ jobs:
           packageName: co.za.outsec.kwawicks
           releaseFiles: android/app/build/outputs/bundle/release/*.aab
           track: internal
-          status: completed
+          status: draft
