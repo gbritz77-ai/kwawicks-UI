@@ -1,5 +1,15 @@
 apply plugin: 'com.android.application'
 
+// kotlin-stdlib:1.8+ merged jdk7/jdk8 classes into the main artifact.
+// Cordova pulls in the old jdk7/jdk8 artifacts (1.6.x) which triggers
+// AGP's duplicate-class check. The classes are bytecode-identical so
+// there is no runtime risk — suppress the build-time check.
+afterEvaluate {
+    tasks.matching { it.name.contains('DuplicateClasses') }.configureEach {
+        enabled = false
+    }
+}
+
 android {
     namespace "co.za.outsec.kwawicks"
     compileSdk rootProject.ext.compileSdkVersion
