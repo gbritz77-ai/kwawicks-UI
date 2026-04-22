@@ -57,6 +57,12 @@ export type DriverStockItem = {
   unitPrice: number;
 };
 
+export type EditDeliveryOrderLine = {
+  speciesId: string;
+  quantity: number;
+  unitPrice: number;
+};
+
 export const deliveryOrdersApi = {
   list: (params?: { driverId?: string; hubId?: string; status?: string }) => {
     const qs = new URLSearchParams();
@@ -77,4 +83,6 @@ export const deliveryOrdersApi = {
     api.post<void>(`/api/delivery-orders/${id}/submit-return`, { lines }),
   checkInReturn: (id: string) =>
     api.post<void>(`/api/delivery-orders/${id}/check-in`, {}),
+  editLines: (id: string, lines: EditDeliveryOrderLine[]) =>
+    api.put<void>(`/api/delivery-orders/${id}/lines`, { lines }),
 };

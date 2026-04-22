@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { deliveryOrdersApi, type DeliveryOrderResponse, type DeliveryOrderStatus } from "../api/deliveryOrdersApi";
+import { deliveryOrdersApi, type DeliveryOrderResponse, type DeliveryOrderStatus, type EditDeliveryOrderLine } from "../api/deliveryOrdersApi";
 import { clientsApi, type ClientDto } from "../api/clientsApi";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
 import { usersApi, type DriverDto } from "../api/usersApi";
@@ -89,6 +89,13 @@ export default function DeliveryOrdersPage() {
   const canOverridePrice = hasAnyRole("Owner", "Finance");
   const canMarkAtHub = hasAnyRole("Owner", "Admin", "HubStaff");
   const canCheckIn = hasAnyRole("Owner", "Admin", "HubStaff");
+  const canEditLines = hasAnyRole("Owner", "Finance", "Admin");
+
+  // Edit lines modal state
+  const [editOrder, setEditOrder] = useState<DeliveryOrderResponse | null>(null);
+  const [editLines, setEditLines] = useState<EditDeliveryOrderLine[]>([]);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // ── Loaders ──────────────────────────────────────────────────────────────
 
@@ -261,6 +268,42 @@ export default function DeliveryOrdersPage() {
       setError(e?.message || "Could not create delivery order.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  // ── Edit lines ────────────────────────────────────────────────────────────
+
+  function openEditModal(order: DeliveryOrderResponse) {
+    setEditOrder(order);
+    setEditLines(order.lines.map(l => ({ speciesId: l.speciesId, quantity: l.quantity, unitPrice: l.unitPrice })));
+    setEditError(null);
+    if (species.length === 0) loadReferenceData();
+  }
+
+  function setEditLine(idx: number, field: keyof EditDeliveryOrderLine, value: string) {
+    setEditLines(prev => {
+      const lines = [...prev];
+      lines[idx] = { ...lines[idx], [field]: field === "speciesId" ? value : (Number(value) || 0) };
+      return lines;
+    });
+  }
+
+  async function submitEditLines() {
+    if (!editOrder) return;
+    for (let i = 0; i < editLines.length; i++) {
+      if (editLines[i].quantity <= 0) return setEditError(`Line ${i + 1}: quantity must be greater than 0.`);
+      if (editLines[i].unitPrice < 0) return setEditError(`Line ${i + 1}: unit price cannot be negative.`);
+    }
+    setEditBusy(true);
+    setEditError(null);
+    try {
+      await deliveryOrdersApi.editLines(editOrder.deliveryOrderId, editLines);
+      setEditOrder(null);
+      await loadOrders();
+    } catch (e: any) {
+      setEditError(e?.message || "Could not update order lines.");
+    } finally {
+      setEditBusy(false);
     }
   }
 
@@ -455,7 +498,15 @@ export default function DeliveryOrdersPage() {
 
                     {checkInError && <div style={{ ...s.error, marginTop: 8 }}>{checkInError}</div>}
 
-                    <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                    <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
+                      {canEditLines && order.status === "Open" && (
+                        <button
+                          style={{ ...s.markAtHubBtn, background: "#7c3aed", borderColor: "#7c3aed" }}
+                          onClick={() => openEditModal(order)}
+                        >
+                          ✏️ Edit Lines
+                        </button>
+                      )}
                       {canCheckIn && order.returnSubmitted && !order.returnCheckedIn && (
                         <button
                           style={{ ...s.markAtHubBtn, background: "#166534", color: "#fff", borderColor: "#166534" }}
@@ -480,6 +531,63 @@ export default function DeliveryOrdersPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── Edit Lines Modal ── */}
+      {editOrder && (
+        <div style={s.backdrop} onClick={() => !editBusy && setEditOrder(null)}>
+          <div style={s.modal} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>✏️ Edit Order Lines</div>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>
+              Order <span style={{ fontFamily: "monospace" }}>{editOrder.deliveryOrderId.slice(0, 8)}…</span>
+              {" · "}{getClientName(editOrder.customerId)}
+              {" · "}{editOrder.assignedDriverName}
+            </div>
+            <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(124,58,237,0.06)", border: "1px solid rgba(124,58,237,0.2)", fontSize: 13, color: "#4c1d95", marginBottom: 14 }}>
+              ⚠️ Adjusting quantity will update hub stock. Reducing qty releases stock back; increasing qty deducts from available stock.
+            </div>
+
+            {editError && <div style={{ ...s.error, marginBottom: 10 }}>{editError}</div>}
+
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8, fontWeight: 900, fontSize: 12, textTransform: "uppercase", color: "#64748b", padding: "0 2px 4px" }}>
+              <div>Species</div>
+              <div style={{ textAlign: "center" }}>Qty</div>
+              <div style={{ textAlign: "center" }}>Unit Price (R)</div>
+            </div>
+
+            {editLines.map((line, idx) => (
+              <div key={idx} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                <div style={{ padding: "10px 12px", background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0", fontSize: 14, fontWeight: 700 }}>
+                  {getSpeciesName(line.speciesId)}
+                </div>
+                <input
+                  style={{ ...s.input, textAlign: "center" as const }}
+                  type="number"
+                  min={1}
+                  value={line.quantity}
+                  onChange={e => setEditLine(idx, "quantity", e.target.value)}
+                  disabled={editBusy}
+                />
+                <input
+                  style={{ ...s.input, textAlign: "center" as const }}
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={line.unitPrice}
+                  onChange={e => setEditLine(idx, "unitPrice", e.target.value)}
+                  disabled={editBusy}
+                />
+              </div>
+            ))}
+
+            <div style={s.modalBtns}>
+              <button style={s.secondaryBtn} onClick={() => setEditOrder(null)} disabled={editBusy}>Cancel</button>
+              <button style={{ ...s.primaryBtn, background: "#7c3aed" }} onClick={submitEditLines} disabled={editBusy}>
+                {editBusy ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
