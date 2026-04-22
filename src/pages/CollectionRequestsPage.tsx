@@ -387,6 +387,108 @@ export default function CollectionRequestsPage() {
     );
   }
 
+  function renderDeliverySummary(cr: CollectionRequestDto) {
+    const allocations = cr.deliveryAllocations ?? [];
+    if (allocations.length === 0) return null;
+    if (!["InTransit", "ArrivedAtHub", "HubConfirmed", "FinanceAcknowledged"].includes(cr.status)) return null;
+
+    // Per-species rows
+    const rows = cr.lines.map(line => {
+      const clientQtys = allocations.map(a => ({
+        doId: a.deliveryOrderId,
+        clientName: a.clientName,
+        qty: a.lines.find(l => l.speciesId === line.speciesId)?.qty ?? 0,
+        unitPrice: a.lines.find(l => l.speciesId === line.speciesId)?.unitPrice ?? 0,
+      }));
+      const totalDelivered = clientQtys.reduce((s, c) => s + c.qty, 0);
+      const hubReturn = line.loadedQty - totalDelivered;
+      return { line, clientQtys, totalDelivered, hubReturn };
+    });
+
+    // Client column totals
+    const clientTotals = allocations.map(a => ({
+      doId: a.deliveryOrderId,
+      clientName: a.clientName,
+      totalQty: a.lines.reduce((s, l) => s + l.qty, 0),
+      totalValue: a.lines.reduce((s, l) => s + l.qty * l.unitPrice, 0),
+    }));
+
+    const totalLoaded = cr.lines.reduce((s, l) => s + l.loadedQty, 0);
+    const totalDeliveredAll = clientTotals.reduce((s, c) => s + c.totalQty, 0);
+    const totalHubReturn = totalLoaded - totalDeliveredAll;
+    const allAccountedFor = totalHubReturn === 0;
+
+    return (
+      <div style={s.summarySection}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+          <div style={s.summarySectionTitle}>📊 Delivery Summary</div>
+          <div style={{
+            fontSize: 11, fontWeight: 700, padding: "2px 10px", borderRadius: 20,
+            background: allAccountedFor ? "rgba(22,163,74,0.1)" : "rgba(180,83,9,0.1)",
+            color: allAccountedFor ? "#15803d" : "#92400e",
+            border: `1px solid ${allAccountedFor ? "rgba(22,163,74,0.3)" : "rgba(180,83,9,0.3)"}`,
+          }}>
+            {allAccountedFor ? "✓ All stock accounted for" : `⚠ ${totalHubReturn.toLocaleString()} units returned to hub`}
+          </div>
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 380 }}>
+            <thead>
+              <tr style={{ background: "#f1f5f9", borderRadius: 6 }}>
+                <th style={s.thLeft}>Species</th>
+                <th style={s.thRight}>Loaded</th>
+                {allocations.map(a => (
+                  <th key={a.deliveryOrderId} style={s.thRight}>
+                    {a.clientName}
+                    <div style={{ fontSize: 10, fontWeight: 500, color: "#94a3b8" }}>DO-{a.deliveryOrderId.split("-")[0].toUpperCase()}</div>
+                  </th>
+                ))}
+                <th style={{ ...s.thRight, color: "#92400e" }}>Hub Return</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ line, clientQtys, hubReturn }) => (
+                <tr key={line.speciesId} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                  <td style={{ padding: "7px 8px", fontWeight: 600, color: "#0f172a" }}>{line.speciesName || line.speciesId}</td>
+                  <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 600 }}>{line.loadedQty.toLocaleString()}</td>
+                  {clientQtys.map(cq => (
+                    <td key={cq.doId} style={{ padding: "7px 8px", textAlign: "right" }}>
+                      {cq.qty > 0 ? cq.qty.toLocaleString() : <span style={{ color: "#cbd5e1" }}>—</span>}
+                      {cq.qty > 0 && cq.unitPrice > 0 && (
+                        <div style={{ fontSize: 10, color: "#64748b" }}>R{(cq.qty * cq.unitPrice).toFixed(2)}</div>
+                      )}
+                    </td>
+                  ))}
+                  <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 700, color: hubReturn > 0 ? "#b45309" : "#16a34a" }}>
+                    {hubReturn > 0 ? hubReturn.toLocaleString() : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ borderTop: "2px solid #e2e8f0", background: "#f8fafc" }}>
+                <td style={{ padding: "7px 8px", fontWeight: 800, fontSize: 12, color: "#374151", textTransform: "uppercase", letterSpacing: "0.03em" }}>Total</td>
+                <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 800 }}>{totalLoaded.toLocaleString()}</td>
+                {clientTotals.map(ct => (
+                  <td key={ct.doId} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 800 }}>
+                    {ct.totalQty.toLocaleString()}
+                    {ct.totalValue > 0 && (
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "#15803d" }}>R{ct.totalValue.toFixed(2)}</div>
+                    )}
+                  </td>
+                ))}
+                <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 800, color: totalHubReturn > 0 ? "#b45309" : "#16a34a" }}>
+                  {totalHubReturn > 0 ? totalHubReturn.toLocaleString() : "—"}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={s.page}>
       <div style={s.headerRow}>
@@ -565,6 +667,8 @@ export default function CollectionRequestsPage() {
                       ))}
                     </div>
                   )}
+
+                  {renderDeliverySummary(cr)}
 
                   <div style={s.cardActions}>
                     {/* Driver actions */}
@@ -1130,6 +1234,10 @@ const s: Record<string, React.CSSProperties> = {
   shortfallBtn: { padding: "10px 18px", borderRadius: 8, background: "rgba(234,88,12,0.08)", border: "1px solid rgba(234,88,12,0.4)", color: "#9a3412", fontWeight: 700, fontSize: 14, cursor: "pointer" },
   refreshBtn: { padding: "8px 12px", borderRadius: 8, background: "#f1f5f9", border: "1px solid #cbd5e1", color: "#64748b", fontWeight: 700, fontSize: 15, cursor: "pointer", lineHeight: 1 },
   editAllocBtn: { padding: "2px 10px", borderRadius: 6, background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.35)", color: "#6d28d9", fontWeight: 700, fontSize: 11, cursor: "pointer" },
+  summarySection: { marginTop: 14, padding: "12px 14px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10 },
+  summarySectionTitle: { fontSize: 12, fontWeight: 800, color: "#334155", textTransform: "uppercase" as const, letterSpacing: "0.05em" },
+  thLeft: { padding: "6px 8px", textAlign: "left" as const, color: "#64748b", fontWeight: 700, fontSize: 11, textTransform: "uppercase" as const, letterSpacing: "0.04em" },
+  thRight: { padding: "6px 8px", textAlign: "right" as const, color: "#64748b", fontWeight: 700, fontSize: 11, textTransform: "uppercase" as const, letterSpacing: "0.04em" },
   allocSlotCard: { background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: 14, marginBottom: 14 },
   allocSection: {
     marginTop: 14,
