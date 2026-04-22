@@ -12,7 +12,7 @@ import { hasAnyRole } from "../api/auth";
 
 const VAT_RATE = 0.15;
 
-type CustomerMode = "existing" | "walkin" | "staff";
+type CustomerMode = "existing" | "walkin" | "staff" | "credit";
 
 type SaleLine = {
   speciesId: string;
@@ -57,7 +57,15 @@ export default function HubSalesPage() {
   // Submission
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState<{ invoiceId: string; awaitingOtp: boolean; otpSent: boolean; creditCharged?: boolean; newCreditBalance?: number } | null>(null);
+  const [success, setSuccess] = useState<{ invoiceId: string; awaitingOtp: boolean; otpSent: boolean; creditCharged?: boolean; newCreditBalance?: number; isDeposit?: boolean; depositAmount?: number; depositClientName?: string } | null>(null);
+
+  // Credit deposit mode state
+  const [depositAmount, setDepositAmount]   = useState("");
+  const [depositMethod, setDepositMethod]   = useState<"Cash" | "EFT" | "CardMachine">("Cash");
+  const [depositNotes, setDepositNotes]     = useState("");
+  const [depositProof, setDepositProof]     = useState<File | null>(null);
+  const [depositBusy, setDepositBusy]       = useState(false);
+  const [depositUpload, setDepositUpload]   = useState<"idle" | "uploading" | "done">("idle");
 
   // OTP verification
   const [otpCode, setOtpCode] = useState("");
@@ -147,6 +155,7 @@ export default function HubSalesPage() {
     setCreditBalance(null);
     setError("");
     setSuccess(null);
+    setDepositAmount(""); setDepositMethod("Cash"); setDepositNotes(""); setDepositProof(null); setDepositUpload("idle");
   }
 
   // Split payment helpers
@@ -202,6 +211,34 @@ export default function HubSalesPage() {
     } finally { setBusy(false); }
   }
 
+  async function handleDepositSubmit() {
+    if (!selectedClientId) { setError("Select a client."); return; }
+    const amount = parseFloat(depositAmount);
+    if (!amount || amount <= 0) { setError("Enter a valid deposit amount greater than zero."); return; }
+    setDepositBusy(true); setError("");
+    try {
+      let proofS3Key: string | undefined;
+      if (depositProof) {
+        setDepositUpload("uploading");
+        const { uploadUrl, s3Key } = await clientCreditApi.getProofUploadUrl(
+          selectedClientId, depositProof.type || "application/octet-stream"
+        );
+        await fetch(uploadUrl, { method: "PUT", body: depositProof, headers: { "Content-Type": depositProof.type || "application/octet-stream" } });
+        proofS3Key = s3Key;
+        setDepositUpload("done");
+      }
+      await clientCreditApi.addDeposit(selectedClientId, {
+        amount,
+        paymentMethod: depositMethod,
+        notes: depositNotes || undefined,
+        proofS3Key,
+      });
+      const clientName = clients.find(c => c.clientId === selectedClientId)?.clientName ?? "Client";
+      setSuccess({ invoiceId: "", awaitingOtp: false, otpSent: false, isDeposit: true, depositAmount: amount, depositClientName: clientName });
+    } catch (e: any) { setError(e?.message ?? "Failed to record credit deposit."); }
+    finally { setDepositBusy(false); }
+  }
+
   const filteredClients = clients.filter(c =>
     !c.isWalkIn && (!clientSearch || c.clientName.toLowerCase().includes(clientSearch.toLowerCase()))
   );
@@ -211,6 +248,26 @@ export default function HubSalesPage() {
   if (loading) return <div style={{ padding: 32, color: "#94a3b8" }}>Loading...</div>;
 
   if (success) {
+    // ── Credit deposit success ────────────────────────────────────────────
+    if (success.isDeposit) {
+      return (
+        <div style={s.page}>
+          <div style={s.successBox}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>💰</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#166534", marginBottom: 8 }}>Credit Deposited</div>
+            <div style={{ fontSize: 15, color: "#374151", marginBottom: 4 }}>
+              <strong>{fmt(success.depositAmount!)}</strong> added to {success.depositClientName}'s account.
+            </div>
+            <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+              {depositMethod === "CardMachine" ? "Card Machine" : depositMethod}
+              {depositNotes ? ` · ${depositNotes}` : ""}
+            </div>
+            <button style={{ ...s.btnPrimary, marginTop: 28 }} onClick={reset}>Done</button>
+          </div>
+        </div>
+      );
+    }
+
     // ── OTP confirmation step ─────────────────────────────────────────────
     if (success.awaitingOtp && !otpDone) {
       return (
@@ -336,18 +393,20 @@ export default function HubSalesPage() {
           <div style={s.card}>
             <div style={s.cardTitle}>Customer</div>
             <div style={s.modeRow}>
-              {(["existing", "walkin", "staff"] as CustomerMode[]).map(m => (
+              {(["existing", "walkin", "staff", "credit"] as CustomerMode[]).map(m => (
                 <button
                   key={m}
-                  style={mode === m ? { ...s.modeBtn, ...s.modeBtnActive } : s.modeBtn}
-                  onClick={() => { setMode(m); setError(""); }}
+                  style={mode === m
+                    ? { ...s.modeBtn, ...(m === "credit" ? s.modeBtnCredit : s.modeBtnActive) }
+                    : s.modeBtn}
+                  onClick={() => { setMode(m); setError(""); if (m !== "existing" && m !== "credit") setSelectedClientId(""); }}
                 >
-                  {m === "existing" ? "Existing Client" : m === "walkin" ? "Walk-in" : "Staff Member"}
+                  {m === "existing" ? "Existing Client" : m === "walkin" ? "Walk-in" : m === "staff" ? "Staff Member" : "💰 Credit Deposit"}
                 </button>
               ))}
             </div>
 
-            {mode === "existing" && (
+            {(mode === "existing" || mode === "credit") && (
               <>
                 <input
                   style={s.input}
@@ -408,8 +467,66 @@ export default function HubSalesPage() {
             )}
           </div>
 
+          {/* Credit deposit form */}
+          {mode === "credit" && (
+            <div style={{ ...s.card, border: "1px solid #bbf7d0", background: "#f0fdf4" }}>
+              <div style={s.cardTitle}>💰 Deposit Details</div>
+              <label style={s.label}>Amount (R) *</label>
+              <input
+                style={{ ...s.input, fontSize: 20, fontWeight: 700, marginBottom: 14 }}
+                type="number"
+                min={0}
+                step={0.01}
+                placeholder="0.00"
+                value={depositAmount}
+                onChange={e => setDepositAmount(e.target.value)}
+                onFocus={e => e.target.select()}
+                disabled={depositBusy}
+              />
+              <label style={s.label}>Payment Method *</label>
+              <div style={{ ...s.modeRow, marginBottom: 14 }}>
+                {(["Cash", "EFT", "CardMachine"] as const).map(m => (
+                  <button
+                    key={m}
+                    style={depositMethod === m ? { ...s.modeBtn, ...s.modeBtnActive } : s.modeBtn}
+                    onClick={() => setDepositMethod(m)}
+                    disabled={depositBusy}
+                    type="button"
+                  >
+                    {m === "CardMachine" ? "Card Machine" : m}
+                  </button>
+                ))}
+              </div>
+              <label style={s.label}>Reference / Notes (optional)</label>
+              <input
+                style={{ ...s.input, marginBottom: 14 }}
+                placeholder="e.g. EFT ref, reason…"
+                value={depositNotes}
+                onChange={e => setDepositNotes(e.target.value)}
+                disabled={depositBusy}
+              />
+              <label style={s.label}>Proof of Payment (optional)</label>
+              <div
+                style={{
+                  border: "2px dashed #d1d5db", borderRadius: 8, padding: "12px 14px",
+                  background: depositProof ? "#f0fdf4" : "#f9fafb", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  borderColor: depositProof ? "#16a34a" : "#d1d5db", fontSize: 13, color: "#64748b",
+                }}
+                onClick={() => !depositBusy && (document.getElementById("deposit-proof-input") as HTMLInputElement)?.click()}
+              >
+                {depositProof
+                  ? <><span>{depositProof.type === "application/pdf" ? "📄" : "🖼️"}</span><span style={{ fontWeight: 600, color: "#15803d" }}>{depositProof.name}</span><button style={{ marginLeft: "auto", background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 16 }} onClick={e => { e.stopPropagation(); setDepositProof(null); }}>✕</button></>
+                  : <><span>📎</span><span>Click to attach photo or PDF</span></>
+                }
+              </div>
+              <input id="deposit-proof-input" type="file" accept="image/jpeg,image/png,image/heic,application/pdf" style={{ display: "none" }} onChange={e => { setDepositProof(e.target.files?.[0] ?? null); e.target.value = ""; }} disabled={depositBusy} />
+              {depositUpload === "uploading" && <div style={{ fontSize: 12, color: "#92400e", marginTop: 6 }}>⏳ Uploading proof…</div>}
+            </div>
+          )}
+
           {/* Add item */}
-          <div style={s.card}>
+          {mode !== "credit" && <div style={s.card}>
             <div style={s.cardTitle}>Add Item</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: 8, alignItems: "end" }}>
               <div>
@@ -483,10 +600,10 @@ export default function HubSalesPage() {
               </div>
             )}
             <div style={{ fontSize: 11, color: "#16a34a", marginTop: 4 }}>✓ Enter all prices inclusive of VAT — the VAT portion is calculated automatically</div>
-          </div>
+          </div>}
 
           {/* Lines table */}
-          {lines.length > 0 && (
+          {mode !== "credit" && lines.length > 0 && (
             <div style={s.card}>
               <div style={s.cardTitle}>Order Lines</div>
               <table style={s.table}>
@@ -532,7 +649,42 @@ export default function HubSalesPage() {
 
         {/* ── Right: Summary + Payment ── */}
         <div style={s.rightCol}>
-          <div style={s.card}>
+
+          {/* Credit deposit summary panel */}
+          {mode === "credit" && (
+            <div style={{ ...s.card, border: "1px solid #bbf7d0", background: "#f0fdf4" }}>
+              <div style={s.cardTitle}>Deposit Summary</div>
+              <div style={s.summaryBox}>
+                <div style={s.summaryRow}>
+                  <span>Client</span>
+                  <span style={{ fontWeight: 700 }}>{clients.find(c => c.clientId === selectedClientId)?.clientName ?? "—"}</span>
+                </div>
+                <div style={s.summaryRow}>
+                  <span>Method</span>
+                  <span>{depositMethod === "CardMachine" ? "Card Machine" : depositMethod}</span>
+                </div>
+                <div style={{ ...s.summaryRow, ...s.summaryTotal, color: "#15803d" }}>
+                  <span>Deposit Amount</span>
+                  <span>{fmt(parseFloat(depositAmount) || 0)}</span>
+                </div>
+              </div>
+              {depositProof && (
+                <div style={{ fontSize: 12, color: "#64748b", marginTop: 8 }}>📎 {depositProof.name}</div>
+              )}
+              {error && <div style={s.errorText}>{error}</div>}
+              <button
+                style={{ ...s.btnPrimary, width: "100%", marginTop: 16, padding: "12px", fontSize: 15, background: "#15803d" }}
+                onClick={handleDepositSubmit}
+                disabled={depositBusy || !selectedClientId || !(parseFloat(depositAmount) > 0)}
+              >
+                {depositBusy
+                  ? depositUpload === "uploading" ? "Uploading proof…" : "Recording…"
+                  : "Record Credit Deposit 💰"}
+              </button>
+            </div>
+          )}
+
+          {mode !== "credit" && <div style={s.card}>
             <div style={s.cardTitle}>Payment</div>
 
             {mode !== "staff" ? (
@@ -637,7 +789,8 @@ export default function HubSalesPage() {
             >
               {busy ? "Processing…" : "Complete Sale"}
             </button>
-          </div>
+          </div>}
+
         </div>
       </div>
     </div>
@@ -657,6 +810,7 @@ const s: Record<string, React.CSSProperties> = {
   modeRow: { display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" as const },
   modeBtn: { padding: "6px 12px", borderRadius: 6, border: "1px solid #d1d5db", background: "#f8fafc", cursor: "pointer", fontSize: 13 },
   modeBtnActive: { background: "#166534", color: "#fff", borderColor: "#166534", fontWeight: 600 },
+  modeBtnCredit: { background: "#15803d", color: "#fff", borderColor: "#15803d", fontWeight: 700 },
   label: { display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 3 },
   input: { width: "100%", padding: "7px 9px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 13, boxSizing: "border-box" as const },
   select: { width: "100%", padding: "7px 9px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 13, background: "#fff" },

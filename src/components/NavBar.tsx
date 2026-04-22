@@ -73,11 +73,12 @@ export default function NavBar() {
 
     // Sales group
     const salesItems: Leaf[] = [];
-    if (canSeeHubSales)    salesItems.push(leaf("Hub Sales",    "/app/hub-sales"));
-    if (canSeeHubRequests) salesItems.push(leaf("Hub Requests", "/app/hub-requests"));
-    if (isOperational)     salesItems.push(leaf("Deliveries",   "/app/delivery-orders"));
-    if (canSeeCollections) salesItems.push(leaf("Collections",  "/app/collection-requests"));
-    if (isOperational)     salesItems.push(leaf("Slaughter",    "/app/slaughter"));
+    if (canSeeHubSales)    salesItems.push(leaf("Hub Sales",        "/app/hub-sales"));
+    if (canSeeHubSales)    salesItems.push(leaf("Client Accounts",  "/app/client-accounts"));
+    if (canSeeHubRequests) salesItems.push(leaf("Hub Requests",     "/app/hub-requests"));
+    if (isOperational)     salesItems.push(leaf("Deliveries",       "/app/delivery-orders"));
+    if (canSeeCollections) salesItems.push(leaf("Collections",      "/app/collection-requests"));
+    if (isOperational)     salesItems.push(leaf("Slaughter",        "/app/slaughter"));
     if (salesItems.length) entries.push(group("Sales", salesItems));
 
     // Stock — Species as a top-level leaf (no longer a group)
