@@ -63,6 +63,12 @@ export type CollectionShortfallReportItem = {
   shortfallLines: CollectionShortfallLine[];
 };
 
+export type EditAllocationLine = {
+  speciesId: string;
+  qty: number;
+  unitPrice: number;
+};
+
 export type AddDeliveryAllocationRequest = {
   clientId: string;
   lines: { speciesId: string; qty: number; unitPrice?: number }[];
@@ -100,6 +106,8 @@ export const collectionRequestsApi = {
   getDeliveryNoteViewUrl:   (id: string) => api.get<{ viewUrl: string }>(`/api/collection-requests/${id}/delivery-note-view-url`),
   addAllocation: (id: string, req: AddDeliveryAllocationRequest) =>
     api.post<CollectionRequestDto>(`/api/collection-requests/${id}/allocations`, req),
+  editAllocation: (id: string, deliveryOrderId: string, lines: EditAllocationLine[]) =>
+    api.put<CollectionRequestDto>(`/api/collection-requests/${id}/allocations/${deliveryOrderId}`, { lines }),
   shortfallReport: (from?: string, to?: string) => {
     const qs = new URLSearchParams();
     if (from) qs.set("from", from);

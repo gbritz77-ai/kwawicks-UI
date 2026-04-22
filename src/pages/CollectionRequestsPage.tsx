@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { collectionRequestsApi } from "../api/collectionRequestsApi";
-import type { CollectionRequestDto, CollectionRequestLineDto, CollectionShortfallReportItem } from "../api/collectionRequestsApi";
+import type { CollectionRequestDto, CollectionRequestLineDto, CollectionShortfallReportItem, CollectionDeliveryAllocationDto } from "../api/collectionRequestsApi";
 import { procurementOrdersApi } from "../api/procurementOrdersApi";
 import type { ProcurementOrderDto } from "../api/procurementOrdersApi";
 import { usersApi } from "../api/usersApi";
@@ -79,6 +79,15 @@ export default function CollectionRequestsPage() {
   const [shortfallReport, setShortfallReport] = useState<CollectionShortfallReportItem[] | null>(null);
   const [shortfallLoading, setShortfallLoading] = useState(false);
   const [shortfallError, setShortfallError] = useState("");
+
+  // Edit allocation modal
+  const [editAllocCr, setEditAllocCr] = useState<CollectionRequestDto | null>(null);
+  const [editAllocDoId, setEditAllocDoId] = useState<string>("");
+  const [editAllocClientName, setEditAllocClientName] = useState<string>("");
+  type EditAllocLine = { speciesId: string; speciesName: string; qty: number; unitPrice: number; orderedQty: number; otherClientsQty: number };
+  const [editAllocLines, setEditAllocLines] = useState<EditAllocLine[]>([]);
+  const [editAllocBusy, setEditAllocBusy] = useState(false);
+  const [editAllocError, setEditAllocError] = useState("");
 
   // Per-card delivery note photo (inline view on expanded card)
   const [cardDnUrls, setCardDnUrls] = useState<Record<string, string>>({});
@@ -290,6 +299,52 @@ export default function CollectionRequestsPage() {
     finally { setBusy(false); }
   }
 
+  function openEditAllocModal(cr: CollectionRequestDto, alloc: CollectionDeliveryAllocationDto) {
+    setEditAllocCr(cr);
+    setEditAllocDoId(alloc.deliveryOrderId);
+    setEditAllocClientName(alloc.clientName);
+    setEditAllocError("");
+    setEditAllocLines(cr.lines.map(l => {
+      const existingLine = alloc.lines.find(al => al.speciesId === l.speciesId);
+      const otherClientsQty = (cr.deliveryAllocations ?? [])
+        .filter(a => a.deliveryOrderId !== alloc.deliveryOrderId)
+        .flatMap(a => a.lines)
+        .filter(al => al.speciesId === l.speciesId)
+        .reduce((sum, al) => sum + al.qty, 0);
+      return {
+        speciesId: l.speciesId,
+        speciesName: l.speciesName || l.speciesId,
+        qty: existingLine?.qty ?? 0,
+        unitPrice: existingLine?.unitPrice ?? 0,
+        orderedQty: l.orderedQty,
+        otherClientsQty,
+      };
+    }));
+  }
+
+  async function submitEditAlloc() {
+    if (!editAllocCr) return;
+    for (const l of editAllocLines) {
+      const maxQty = l.orderedQty - l.otherClientsQty;
+      if (l.qty < 0) { setEditAllocError(`${l.speciesName}: qty cannot be negative.`); return; }
+      if (l.qty > maxQty) {
+        setEditAllocError(`${l.speciesName}: ${l.qty} entered but only ${maxQty} available (ordered ${l.orderedQty}, other clients have ${l.otherClientsQty}).`);
+        return;
+      }
+    }
+    setEditAllocBusy(true); setEditAllocError("");
+    try {
+      const updated = await collectionRequestsApi.editAllocation(
+        editAllocCr.collectionRequestId,
+        editAllocDoId,
+        editAllocLines.map(l => ({ speciesId: l.speciesId, qty: l.qty, unitPrice: l.unitPrice })),
+      );
+      setItems(i => i.map(x => x.collectionRequestId === updated.collectionRequestId ? updated : x));
+      setEditAllocCr(null);
+    } catch (e: any) { setEditAllocError(e?.message ?? "Failed to update allocation."); }
+    finally { setEditAllocBusy(false); }
+  }
+
   const shortId = (id: string) => id.split("-")[0].toUpperCase();
 
   function renderLine(line: CollectionRequestLineDto, cr: CollectionRequestDto) {
@@ -464,7 +519,15 @@ export default function CollectionRequestsPage() {
                         <div key={a.deliveryOrderId} style={s.allocCard}>
                           <div style={s.allocClientRow}>
                             <span style={s.allocClientName}>{a.clientName}</span>
-                            <span style={s.allocDoId}>DO-{a.deliveryOrderId.split("-")[0].toUpperCase()}</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span style={s.allocDoId}>DO-{a.deliveryOrderId.split("-")[0].toUpperCase()}</span>
+                              {canAllocate() && cr.status !== "FinanceAcknowledged" && (
+                                <button
+                                  style={s.editAllocBtn}
+                                  onClick={() => openEditAllocModal(cr, a)}
+                                >✏️ Edit</button>
+                              )}
+                            </div>
                           </div>
                           <div style={s.allocLines}>
                             {a.lines.map(l => (
@@ -835,6 +898,74 @@ export default function CollectionRequestsPage() {
         </div>
       )}
 
+      {/* Edit allocation modal */}
+      {editAllocCr && (
+        <div style={s.backdrop} onClick={() => !editAllocBusy && setEditAllocCr(null)}>
+          <div style={{ ...s.modal, maxWidth: 580 }} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>Edit Allocation — {editAllocClientName}</div>
+            <div style={s.modalSub}>
+              DO-{editAllocDoId.split("-")[0].toUpperCase()} · {editAllocCr.supplierName} · {editAllocCr.assignedDriverName}
+            </div>
+            <div style={{ background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.4)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#713f12", marginBottom: 14 }}>
+              ⚠ Editing will update qty and price on the linked delivery order. Stock booked to other clients is preserved.
+            </div>
+            {editAllocError && <div style={s.formError}>{editAllocError}</div>}
+
+            {editAllocLines.map((l, i) => {
+              const maxQty = l.orderedQty - l.otherClientsQty;
+              const overAllocated = l.qty > maxQty;
+              return (
+                <div key={l.speciesId} style={{ ...s.loadLineCard, borderColor: overAllocated ? "#fca5a5" : undefined }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
+                    <div style={s.loadLineName}>{l.speciesName}</div>
+                    <div style={{ fontSize: 11, color: "#64748b" }}>
+                      Ordered: {l.orderedQty.toLocaleString()}
+                      {l.otherClientsQty > 0 && <span style={{ color: "#b45309" }}> · Other clients: {l.otherClientsQty.toLocaleString()}</span>}
+                      <span style={{ color: maxQty > 0 ? "#16a34a" : "#dc2626", fontWeight: 700 }}> · Max: {maxQty.toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <div style={s.loadLineInputs}>
+                    <label style={s.label}>Qty
+                      <input
+                        style={{ ...s.input, borderColor: overAllocated ? "#fca5a5" : undefined }}
+                        inputMode="numeric"
+                        value={l.qty}
+                        onChange={e => setEditAllocLines(ls => ls.map((x, j) => j === i ? { ...x, qty: parseInt(e.target.value) || 0 } : x))}
+                        disabled={editAllocBusy}
+                        onFocus={e => e.target.select()}
+                      />
+                    </label>
+                    <label style={s.label}>Unit Price (R, incl. VAT)
+                      <input
+                        style={s.input}
+                        inputMode="decimal"
+                        value={l.unitPrice || ""}
+                        placeholder="0.00"
+                        onChange={e => setEditAllocLines(ls => ls.map((x, j) => j === i ? { ...x, unitPrice: parseFloat(e.target.value) || 0 } : x))}
+                        disabled={editAllocBusy}
+                        onFocus={e => e.target.select()}
+                      />
+                    </label>
+                  </div>
+                  {overAllocated && (
+                    <div style={{ fontSize: 12, color: "#dc2626", marginTop: 4, fontWeight: 600 }}>
+                      ✕ Exceeds available qty by {l.qty - maxQty}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            <div style={s.modalBtns}>
+              <button style={s.secondaryBtn} onClick={() => setEditAllocCr(null)} disabled={editAllocBusy}>Cancel</button>
+              <button style={s.primaryBtn} onClick={submitEditAlloc} disabled={editAllocBusy}>
+                {editAllocBusy ? "Saving…" : "Save Changes ✓"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Finance acknowledge modal */}
       {ackItem && (
         <div style={s.backdrop} onClick={() => !busy && setAckItem(null)}>
@@ -973,6 +1104,7 @@ const s: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
   shortfallBtn: { padding: "10px 18px", borderRadius: 8, background: "rgba(234,88,12,0.08)", border: "1px solid rgba(234,88,12,0.4)", color: "#9a3412", fontWeight: 700, fontSize: 14, cursor: "pointer" },
+  editAllocBtn: { padding: "2px 10px", borderRadius: 6, background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.35)", color: "#6d28d9", fontWeight: 700, fontSize: 11, cursor: "pointer" },
   allocSlotCard: { background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: 14, marginBottom: 14 },
   allocSection: {
     marginTop: 14,
