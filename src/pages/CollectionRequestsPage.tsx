@@ -94,7 +94,14 @@ export default function CollectionRequestsPage() {
   const [cardDnLoading, setCardDnLoading] = useState<string | null>(null);
   const [cardDnErrors, setCardDnErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => { load(); }, []);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+
+  useEffect(() => {
+    load();
+    // Auto-refresh every 30 seconds — keeps driver's list current without a manual reload
+    const timer = setInterval(() => silentRefresh(), 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
   async function load() {
     try {
@@ -110,8 +117,19 @@ export default function CollectionRequestsPage() {
       setPos(poList.filter(p => p.status === "Submitted"));
       setDrivers(driverList);
       setClients((clientList as ClientDto[]).filter(c => !c.isWalkIn));
+      setLastRefresh(new Date());
     } catch { setError("Failed to load collection requests."); }
     finally { setLoading(false); }
+  }
+
+  // Silent background refresh — no spinner, preserves open modals
+  async function silentRefresh() {
+    try {
+      const driverId = isDriver() ? getUsername() : undefined;
+      const crs = await collectionRequestsApi.list(driverId ? { driverId } : undefined);
+      setItems(crs);
+      setLastRefresh(new Date());
+    } catch { /* non-fatal — just skip this tick */ }
   }
 
   async function openShortfallReport() {
@@ -376,7 +394,13 @@ export default function CollectionRequestsPage() {
           <div style={s.pageTitle}>Collection Requests</div>
           <div style={s.pageSub}>{isDriver() ? "Your collection assignments" : "Manage stock collections from suppliers"}</div>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const, alignItems: "center" }}>
+          {lastRefresh && (
+            <span style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap" as const }}>
+              ↻ {lastRefresh.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            </span>
+          )}
+          <button style={s.refreshBtn} onClick={silentRefresh} title="Refresh now">↻</button>
           {!isDriver() && <button style={s.shortfallBtn} onClick={openShortfallReport}>⚠ Shortfall Report</button>}
           {canCreate() && <button style={s.primaryBtn} onClick={() => { setCreateError(""); setShowCreate(true); }}>+ New Collection</button>}
         </div>
@@ -1104,6 +1128,7 @@ const s: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
   shortfallBtn: { padding: "10px 18px", borderRadius: 8, background: "rgba(234,88,12,0.08)", border: "1px solid rgba(234,88,12,0.4)", color: "#9a3412", fontWeight: 700, fontSize: 14, cursor: "pointer" },
+  refreshBtn: { padding: "8px 12px", borderRadius: 8, background: "#f1f5f9", border: "1px solid #cbd5e1", color: "#64748b", fontWeight: 700, fontSize: 15, cursor: "pointer", lineHeight: 1 },
   editAllocBtn: { padding: "2px 10px", borderRadius: 6, background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.35)", color: "#6d28d9", fontWeight: 700, fontSize: 11, cursor: "pointer" },
   allocSlotCard: { background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: 14, marginBottom: 14 },
   allocSection: {
