@@ -95,6 +95,7 @@ export default function NavBar() {
     if (isFinancial) {
       financeItems.push(leaf("Invoices",        "/app/reports",         "invoices"));
       financeItems.push(leaf("Statements",      "/app/reports",         "statement"));
+      financeItems.push(leaf("Recon",           "/app/recon"));
       financeItems.push(leaf("Petty Cash",      "/app/petty-cash"));
       financeItems.push(leaf("Client Accounts", "/app/client-accounts"));
       financeItems.push(leaf("Cost Averages",   "/app/cost-averages"));

@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "gen-icons": "capacitor-assets generate --android",
+    "android:build": "npm run build && npx cap sync && npm run gen-icons && cd android && ./gradlew assembleDebug",
+    "android:release": "npm run build && npx cap sync && npm run gen-icons && cd android && ./gradlew assembleRelease"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.0",
@@ -18,6 +21,7 @@
     "react-router-dom": "^7.13.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",

@@ -73,6 +73,31 @@ export type ReceiptUploadUrlResponse = {
   expiresAt: string;
 };
 
+// ── Recon ──────────────────────────────────────────────────────────────────
+
+export type ReconInvoiceItem = {
+  invoiceId: string;
+  invoiceNumber: string;
+  customerId: string;
+  customerName: string;
+  saleType: string;
+  paymentType: string;
+  paymentStatus: string;
+  grandTotal: number;
+  receiptS3Key: string;
+  createdAt: string;
+  reconReference: string;
+  reconNotes: string;
+  reconciledAt: string | null;
+  daysOutstanding: number;
+};
+
+export type ReconRequest = {
+  referenceNumber?: string;
+  notes?: string;
+  receivedAt?: string; // ISO date string
+};
+
 // ── API ────────────────────────────────────────────────────────────────────
 
 export const invoicesApi = {
@@ -103,4 +128,19 @@ export const invoicesApi = {
       `/api/invoices/${invoiceId}/lines`,
       { lines }
     ),
+
+  /** Finance: list invoices for reconciliation */
+  getReconList: (params?: { paymentType?: string; reconStatus?: string; from?: string; to?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.paymentType) qs.set("paymentType", params.paymentType);
+    if (params?.reconStatus)  qs.set("reconStatus",  params.reconStatus);
+    if (params?.from)         qs.set("from",         params.from);
+    if (params?.to)           qs.set("to",           params.to);
+    const q = qs.toString();
+    return api.get<ReconInvoiceItem[]>(`/api/invoices/recon${q ? `?${q}` : ""}`);
+  },
+
+  /** Finance: mark an invoice as reconciled */
+  recon: (invoiceId: string, req: ReconRequest) =>
+    api.put<void>(`/api/invoices/${invoiceId}/recon`, req),
 };

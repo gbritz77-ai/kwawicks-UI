@@ -1,13 +1,12 @@
 apply plugin: 'com.android.application'
 
-// kotlin-stdlib:1.8+ merged jdk7/jdk8 classes into the main artifact.
-// Cordova pulls in the old jdk7/jdk8 artifacts (1.6.x) which triggers
-// AGP's duplicate-class check. The classes are bytecode-identical so
-// there is no runtime risk — suppress the build-time check.
-afterEvaluate {
-    tasks.matching { it.name.contains('DuplicateClasses') }.configureEach {
-        enabled = false
-    }
+// kotlin-stdlib 1.8+ merged jdk7/jdk8 classes into the main artifact.
+// Cordova/Capacitor may pull in the old separate jdk7/jdk8 artifacts which
+// causes duplicate classes at DEX merge time. Exclude them globally so only
+// the unified stdlib is on the classpath.
+configurations.all {
+    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
 }
 
 android {
