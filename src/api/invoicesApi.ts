@@ -130,12 +130,14 @@ export const invoicesApi = {
     ),
 
   /** Finance: list invoices for reconciliation */
-  getReconList: (params?: { paymentType?: string; reconStatus?: string; from?: string; to?: string }) => {
+  getReconList: (params?: { paymentType?: string; reconStatus?: string; from?: string; to?: string; amount?: number; search?: string }) => {
     const qs = new URLSearchParams();
-    if (params?.paymentType) qs.set("paymentType", params.paymentType);
-    if (params?.reconStatus)  qs.set("reconStatus",  params.reconStatus);
-    if (params?.from)         qs.set("from",         params.from);
-    if (params?.to)           qs.set("to",           params.to);
+    if (params?.paymentType)   qs.set("paymentType", params.paymentType);
+    if (params?.reconStatus)   qs.set("reconStatus",  params.reconStatus);
+    if (params?.from)          qs.set("from",         params.from);
+    if (params?.to)            qs.set("to",           params.to);
+    if (params?.amount != null) qs.set("amount",      String(params.amount));
+    if (params?.search)        qs.set("search",       params.search);
     const q = qs.toString();
     return api.get<ReconInvoiceItem[]>(`/api/invoices/recon${q ? `?${q}` : ""}`);
   },
