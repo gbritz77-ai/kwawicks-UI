@@ -31,17 +31,12 @@ const PAYMENT_TYPES = ["", "Cash", "EFT", "Credit", "CardMachine", "Split"];
 // ── Root ───────────────────────────────────────────────────────────────────
 
 export default function ReconPage() {
-  const [tab, setTab] = useState<"invoices" | "statements">("invoices");
   return (
     <div style={s.page}>
       <div style={s.header}>
         <h1 style={s.title}>Reconciliation</h1>
-        <div style={s.tabRow}>
-          <button style={tab === "invoices"   ? s.tabActive : s.tabBtn} onClick={() => setTab("invoices")}>Invoice Recon</button>
-          <button style={tab === "statements" ? s.tabActive : s.tabBtn} onClick={() => setTab("statements")}>Bank Statements</button>
-        </div>
       </div>
-      {tab === "invoices" ? <InvoiceReconTab /> : <BankStatementsTab />}
+      <BankStatementsTab />
     </div>
   );
 }
