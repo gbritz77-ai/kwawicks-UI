@@ -143,4 +143,8 @@ export const invoicesApi = {
   /** Finance: mark an invoice as reconciled */
   recon: (invoiceId: string, req: ReconRequest) =>
     api.put<void>(`/api/invoices/${invoiceId}/recon`, req),
+
+  /** List all invoices for a specific customer */
+  listByClient: (customerId: string) =>
+    api.get<InvoiceResponse[]>(`/api/invoices?customerId=${encodeURIComponent(customerId)}`),
 };
