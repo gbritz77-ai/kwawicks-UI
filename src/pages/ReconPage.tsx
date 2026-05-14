@@ -11,6 +11,8 @@ import type {
 } from "../api/bankStatementsApi";
 import { clientsApi } from "../api/clientsApi";
 import type { ClientDto } from "../api/clientsApi";
+import { suppliersApi } from "../api/suppliersApi";
+import type { SupplierResponse } from "../api/suppliersApi";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -41,7 +43,7 @@ export default function ReconPage() {
 
 // ── Bank Statements tab ────────────────────────────────────────────────────
 
-type RightMode = "matches" | "browse" | "nonclient";
+type RightMode = "matches" | "browse" | "suppliers" | "nonclient";
 
 function BankStatementsTab() {
   // Statement list
@@ -93,6 +95,13 @@ function BankStatementsTab() {
   // Non-client allocation
   const [ncDescription, setNcDescription] = useState("");
   const [ncAmount,      setNcAmount]      = useState("");
+
+  // Browse suppliers
+  const [suppliers,       setSuppliers]       = useState<SupplierResponse[]>([]);
+  const [suppliersLoaded, setSuppliersLoaded] = useState(false);
+  const [supplierSearch,  setSupplierSearch]  = useState("");
+  const [pickedSupplier,  setPickedSupplier]  = useState<SupplierResponse | null>(null);
+  const [supplierNotes,   setSupplierNotes]   = useState("");
 
   // ── Loaders ──────────────────────────────────────────────────────────────
 
@@ -155,6 +164,7 @@ function BankStatementsTab() {
     setActiveTx(null); setRightMode("matches"); setWarning(null); setAllocError("");
     setMatches([]); setMatchSearch(""); setPickedClient(null); setClientInvoices([]);
     setNcDescription(""); setNcAmount("");
+    setPickedSupplier(null); setSupplierNotes(""); setSupplierSearch("");
   }
 
   async function selectTx(tx: BankTransactionResponse) {
@@ -162,6 +172,7 @@ function BankStatementsTab() {
     setActiveTx(tx); setRightMode("matches"); setWarning(null); setAllocError("");
     setMatches([]); setMatchSearch(""); setPickedClient(null); setClientInvoices([]);
     setNcDescription(""); setNcAmount("");
+    setPickedSupplier(null); setSupplierNotes(""); setSupplierSearch("");
 
     // Load smart matches
     setMatchesLoading(true);
@@ -193,6 +204,19 @@ function BankStatementsTab() {
     finally { setClientInvLoading(false); }
   }
 
+  // ── Browse suppliers ──────────────────────────────────────────────────────
+
+  async function ensureSuppliers() {
+    if (suppliersLoaded) return;
+    try { setSuppliers(await suppliersApi.list()); setSuppliersLoaded(true); }
+    catch { /* ignore */ }
+  }
+
+  async function switchToSuppliers() {
+    setRightMode("suppliers"); setPickedSupplier(null); setSupplierNotes("");
+    await ensureSuppliers();
+  }
+
   // ── Allocate ──────────────────────────────────────────────────────────────
 
   async function allocateToInvoice(invoiceId: string) {
@@ -204,6 +228,22 @@ function BankStatementsTab() {
       setWarning(res.warning ?? null);
       if (!res.warning) resetRightPanel();
       else setActiveTx(null); // keep warning visible but deselect tx
+      await loadStatements();
+    } catch (e: any) { setAllocError(e?.message ?? "Failed to allocate."); }
+    finally { setAllocBusy(null); }
+  }
+
+  async function allocateToSupplier() {
+    if (!selected || !activeTx || !pickedSupplier) return;
+    setAllocBusy(pickedSupplier.supplierId); setAllocError("");
+    try {
+      const res = await bankStatementsApi.allocateSupplier(
+        selected.statementId, activeTx.transactionId,
+        { supplierId: pickedSupplier.supplierId, notes: supplierNotes.trim() || undefined }
+      );
+      setSelected(res.statement);
+      setWarning(res.warning ?? null);
+      resetRightPanel();
       await loadStatements();
     } catch (e: any) { setAllocError(e?.message ?? "Failed to allocate."); }
     finally { setAllocBusy(null); }
@@ -254,6 +294,9 @@ function BankStatementsTab() {
   const visibleClients = clients.filter(c =>
     !clientSearch || c.clientName.toLowerCase().includes(clientSearch.toLowerCase())
   );
+  const visibleSuppliers = suppliers.filter(sup =>
+    !supplierSearch || sup.name.toLowerCase().includes(supplierSearch.toLowerCase())
+  );
   const sortedClientInvoices = [...clientInvoices].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
@@ -295,11 +338,15 @@ function BankStatementsTab() {
                   <td style={s.td}>
                     {r.allocationType === "Invoice"
                       ? <span style={{...s.badge,...s.badgeEFT}}>Invoice</span>
+                      : r.allocationType === "Supplier"
+                      ? <span style={{...s.badge,background:"#fef3c7",color:"#92400e"}}>Supplier</span>
                       : <span style={{...s.badge,background:"#f3e8ff",color:"#7c3aed"}}>Non-Client</span>}
                   </td>
                   <td style={s.td}>
                     {r.allocationType === "Invoice"
                       ? <span style={s.mono}>{r.allocatedInvoiceNumber||r.allocatedInvoiceId.slice(0,8)}</span>
+                      : r.allocationType === "Supplier"
+                      ? <span>{r.allocatedSupplierName || r.allocatedSupplierId}</span>
                       : r.nonClientDescription}
                   </td>
                   <td style={s.td}>{fmtDate(r.allocatedAt)}</td>
@@ -388,6 +435,8 @@ function BankStatementsTab() {
                 const isAllocated = tx.isAllocated;
                 const allocLabel  = tx.allocationType === "Invoice"
                   ? (tx.allocatedInvoiceNumber || tx.allocatedInvoiceId.slice(0,8))
+                  : tx.allocationType === "Supplier"
+                  ? (tx.allocatedSupplierName || tx.allocatedSupplierId)
                   : tx.nonClientDescription || "Non-client";
 
                 return (
@@ -410,8 +459,16 @@ function BankStatementsTab() {
                     {tx.reference && <div style={sp.txRef}>{tx.reference}</div>}
                     {isAllocated ? (
                       <div style={sp.txAllocBadge}>
-                        <span style={{ ...s.badge, ...(tx.allocationType==="Invoice"?s.badgeEFT:{background:"#f3e8ff",color:"#7c3aed"}), fontSize:11 }}>
-                          {tx.allocationType==="Invoice"?"Invoice":"Non-client"}
+                        <span style={{
+                          ...s.badge,
+                          ...(tx.allocationType === "Invoice" ? s.badgeEFT
+                            : tx.allocationType === "Supplier" ? { background:"#fef3c7", color:"#92400e" }
+                            : { background:"#f3e8ff", color:"#7c3aed" }),
+                          fontSize: 11
+                        }}>
+                          {tx.allocationType === "Invoice" ? "Invoice"
+                            : tx.allocationType === "Supplier" ? "Supplier"
+                            : "Non-client"}
                         </span>
                         <span style={{ fontSize:12, color:"#374151" }}>{allocLabel}</span>
                         <button style={sp.unlinkBtn} onClick={e=>{e.stopPropagation();deallocate(tx);}}>✕</button>
@@ -461,6 +518,7 @@ function BankStatementsTab() {
                 <div style={sp.modeTabs}>
                   <button style={rightMode==="matches"   ? sp.modeTabActive : sp.modeTab} onClick={()=>setRightMode("matches")}>Smart Matches</button>
                   <button style={rightMode==="browse"    ? sp.modeTabActive : sp.modeTab} onClick={switchToBrowse}>Browse Clients</button>
+                  <button style={rightMode==="suppliers" ? sp.modeTabActive : sp.modeTab} onClick={switchToSuppliers}>Browse Suppliers</button>
                   <button style={rightMode==="nonclient" ? sp.modeTabActive : sp.modeTab} onClick={()=>setRightMode("nonclient")}>Non-Client</button>
                 </div>
 
@@ -575,6 +633,66 @@ function BankStatementsTab() {
                                 );
                               })}
                         </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* ─ Browse Suppliers ─ */}
+                {rightMode === "suppliers" && (
+                  <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", gap: 6 }}>
+                    {!pickedSupplier ? (
+                      <>
+                        <input
+                          style={{ ...s.input, width: "100%", boxSizing: "border-box" }}
+                          placeholder="Search supplier name…"
+                          value={supplierSearch}
+                          onChange={e => setSupplierSearch(e.target.value)}
+                          autoFocus
+                        />
+                        <div style={sp.clientList}>
+                          {visibleSuppliers.length === 0
+                            ? <div style={{ padding: "20px 0", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No suppliers found.</div>
+                            : visibleSuppliers.map(sup => (
+                              <div key={sup.supplierId} style={sp.clientRow} onClick={() => { setPickedSupplier(sup); setSupplierNotes(""); }}>
+                                <div style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>{sup.name}</div>
+                                <div style={{ fontSize: 12, color: "#6b7280" }}>
+                                  {[sup.address?.city, sup.bankDetails?.bankName].filter(Boolean).join(" · ") || ""}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={sp.selectedClientBar}>
+                          <div>
+                            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#6b7280" }}>Supplier</div>
+                            <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{pickedSupplier.name}</div>
+                            {pickedSupplier.bankDetails?.accountNumber && (
+                              <div style={{ fontSize: 12, color: "#6b7280", fontFamily: "monospace" }}>
+                                {pickedSupplier.bankDetails.bankName} · {pickedSupplier.bankDetails.accountNumber}
+                              </div>
+                            )}
+                          </div>
+                          <button style={sp.changeClientBtn} onClick={() => setPickedSupplier(null)}>Change</button>
+                        </div>
+                        <div style={s.fieldGroup}>
+                          <label style={s.label}>Notes (optional)</label>
+                          <input
+                            style={s.input}
+                            placeholder="e.g. Invoice #, delivery reference…"
+                            value={supplierNotes}
+                            onChange={e => setSupplierNotes(e.target.value)}
+                          />
+                        </div>
+                        <button
+                          style={{ ...sp.allocBtn, padding: "10px 20px", fontSize: 14, background: "#f59e0b", opacity: (allocBusy === pickedSupplier.supplierId) ? 0.6 : 1 }}
+                          disabled={!!allocBusy}
+                          onClick={allocateToSupplier}
+                        >
+                          {allocBusy === pickedSupplier.supplierId ? "Allocating…" : `✔ Allocate to ${pickedSupplier.name}`}
+                        </button>
                       </>
                     )}
                   </div>

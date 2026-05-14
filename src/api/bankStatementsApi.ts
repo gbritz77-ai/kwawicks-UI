@@ -10,10 +10,12 @@ export type BankTransactionResponse = {
   amount: number;
   type: string;                   // "Credit" | "Debit"
   isAllocated: boolean;
-  allocationType: string;         // "Invoice" | "NonClient" | ""
+  allocationType: string;         // "Invoice" | "NonClient" | "Supplier" | ""
   allocatedInvoiceId: string;
   allocatedInvoiceNumber: string;
   nonClientDescription: string;
+  allocatedSupplierId: string;
+  allocatedSupplierName: string;
   allocatedAt: string | null;
 };
 
@@ -70,6 +72,11 @@ export type AllocateNonClientRequest = {
   amount: number;
 };
 
+export type AllocateSupplierRequest = {
+  supplierId: string;
+  notes?: string;
+};
+
 export type BankReconAllocationReportItem = {
   statementId: string;
   fileName: string;
@@ -79,10 +86,12 @@ export type BankReconAllocationReportItem = {
   reference: string;
   amount: number;
   type: string;
-  allocationType: string;         // "Invoice" | "NonClient"
+  allocationType: string;         // "Invoice" | "NonClient" | "Supplier"
   allocatedInvoiceId: string;
   allocatedInvoiceNumber: string;
   nonClientDescription: string;
+  allocatedSupplierId: string;
+  allocatedSupplierName: string;
   allocatedAt: string | null;
 };
 
@@ -131,6 +140,13 @@ export const bankStatementsApi = {
   allocateNonClient: (statementId: string, transactionId: string, req: AllocateNonClientRequest) =>
     api.put<AllocateResponse>(
       `/api/bank-statements/${statementId}/transactions/${transactionId}/allocate-non-client`,
+      req
+    ),
+
+  /** Allocate a bank transaction (debit) to a supplier. Returns updated statement. */
+  allocateSupplier: (statementId: string, transactionId: string, req: AllocateSupplierRequest) =>
+    api.put<AllocateResponse>(
+      `/api/bank-statements/${statementId}/transactions/${transactionId}/allocate-supplier`,
       req
     ),
 

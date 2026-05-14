@@ -1,41 +1,49 @@
 import { api } from "./apiClient";
 
-export type SupplierAddress = { street: string; city: string; province: string; postalCode: string; };
-export type SupplierContact = { name: string; phone: string; };
-export type SupplierContactFinance = { name: string; phone: string; email: string; };
-export type SupplierBankDetails = { bankName: string; accountNumber: string; branchCode: string; accountType: string; };
+// ── Types ──────────────────────────────────────────────────────────────────
 
-export type SupplierDto = {
+export type SupplierAddressDto = {
+  street: string;
+  city: string;
+  province: string;
+  postalCode: string;
+};
+
+export type SupplierContactDto = {
+  name: string;
+  phone: string;
+};
+
+export type SupplierContactFinanceDto = {
+  name: string;
+  phone: string;
+  email: string;
+};
+
+export type SupplierBankDetailsDto = {
+  bankName: string;
+  accountNumber: string;
+  branchCode: string;
+  accountType: string;
+};
+
+export type SupplierResponse = {
   supplierId: string;
   name: string;
-  address: SupplierAddress;
-  contactPerson: SupplierContact;
-  contactFinance: SupplierContactFinance;
-  bankDetails: SupplierBankDetails;
+  address: SupplierAddressDto;
+  contactPerson: SupplierContactDto;
+  contactFinance: SupplierContactFinanceDto;
+  bankDetails: SupplierBankDetailsDto;
   createdAt: string;
   updatedAt: string;
 };
 
-export type CreateSupplierRequest = {
-  name: string;
-  address: SupplierAddress;
-  contactPerson: SupplierContact;
-  contactFinance: SupplierContactFinance;
-  bankDetails: SupplierBankDetails;
-};
-
-export const emptySupplier = (): CreateSupplierRequest => ({
-  name: "",
-  address: { street: "", city: "", province: "", postalCode: "" },
-  contactPerson: { name: "", phone: "" },
-  contactFinance: { name: "", phone: "", email: "" },
-  bankDetails: { bankName: "", accountNumber: "", branchCode: "", accountType: "Current" },
-});
+// ── API ────────────────────────────────────────────────────────────────────
 
 export const suppliersApi = {
-  list: () => api.get<SupplierDto[]>("/api/suppliers"),
-  get: (id: string) => api.get<SupplierDto>(`/api/suppliers/${id}`),
-  create: (req: CreateSupplierRequest) => api.post<SupplierDto>("/api/suppliers", req),
-  update: (id: string, req: CreateSupplierRequest) => api.put<SupplierDto>(`/api/suppliers/${id}`, req),
-  remove: (id: string) => api.del(`/api/suppliers/${id}`),
+  list: () =>
+    api.get<SupplierResponse[]>("/api/suppliers"),
+
+  get: (supplierId: string) =>
+    api.get<SupplierResponse>(`/api/suppliers/${supplierId}`),
 };
