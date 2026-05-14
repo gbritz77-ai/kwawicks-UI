@@ -16,6 +16,8 @@ export type BankTransactionResponse = {
   nonClientDescription: string;
   allocatedSupplierId: string;
   allocatedSupplierName: string;
+  allocatedClientId: string;
+  allocatedClientName: string;
   allocatedAt: string | null;
 };
 
@@ -77,6 +79,11 @@ export type AllocateSupplierRequest = {
   notes?: string;
 };
 
+export type AllocateClientCreditRequest = {
+  clientId: string;
+  notes?: string;
+};
+
 export type BankReconAllocationReportItem = {
   statementId: string;
   fileName: string;
@@ -92,6 +99,8 @@ export type BankReconAllocationReportItem = {
   nonClientDescription: string;
   allocatedSupplierId: string;
   allocatedSupplierName: string;
+  allocatedClientId: string;
+  allocatedClientName: string;
   allocatedAt: string | null;
 };
 
@@ -140,6 +149,13 @@ export const bankStatementsApi = {
   allocateNonClient: (statementId: string, transactionId: string, req: AllocateNonClientRequest) =>
     api.put<AllocateResponse>(
       `/api/bank-statements/${statementId}/transactions/${transactionId}/allocate-non-client`,
+      req
+    ),
+
+  /** Allocate a bank credit transaction to a client's credit account. Returns updated statement. */
+  allocateClientCredit: (statementId: string, transactionId: string, req: AllocateClientCreditRequest) =>
+    api.put<AllocateResponse>(
+      `/api/bank-statements/${statementId}/transactions/${transactionId}/allocate-client-credit`,
       req
     ),
 

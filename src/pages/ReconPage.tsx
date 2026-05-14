@@ -13,6 +13,7 @@ import { clientsApi } from "../api/clientsApi";
 import type { ClientDto } from "../api/clientsApi";
 import { suppliersApi } from "../api/suppliersApi";
 import type { SupplierResponse } from "../api/suppliersApi";
+import { clientCreditApi } from "../api/clientCreditApi";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -43,7 +44,7 @@ export default function ReconPage() {
 
 // ── Bank Statements tab ────────────────────────────────────────────────────
 
-type RightMode = "matches" | "browse" | "suppliers" | "nonclient";
+type RightMode = "matches" | "browse" | "clientcredit" | "suppliers" | "nonclient";
 
 function BankStatementsTab() {
   // Statement list
@@ -95,6 +96,13 @@ function BankStatementsTab() {
   // Non-client allocation
   const [ncDescription, setNcDescription] = useState("");
   const [ncAmount,      setNcAmount]      = useState("");
+
+  // Client credit allocation
+  const [pickedCreditClient,    setPickedCreditClient]    = useState<ClientDto | null>(null);
+  const [creditClientSearch,    setCreditClientSearch]    = useState("");
+  const [creditBalance,         setCreditBalance]         = useState<number | null>(null);
+  const [creditBalanceLoading,  setCreditBalanceLoading]  = useState(false);
+  const [creditNotes,           setCreditNotes]           = useState("");
 
   // Browse suppliers
   const [suppliers,       setSuppliers]       = useState<SupplierResponse[]>([]);
@@ -165,6 +173,7 @@ function BankStatementsTab() {
     setMatches([]); setMatchSearch(""); setPickedClient(null); setClientInvoices([]);
     setNcDescription(""); setNcAmount("");
     setPickedSupplier(null); setSupplierNotes(""); setSupplierSearch("");
+    setPickedCreditClient(null); setCreditClientSearch(""); setCreditBalance(null); setCreditNotes("");
   }
 
   async function selectTx(tx: BankTransactionResponse) {
@@ -173,6 +182,7 @@ function BankStatementsTab() {
     setMatches([]); setMatchSearch(""); setPickedClient(null); setClientInvoices([]);
     setNcDescription(""); setNcAmount("");
     setPickedSupplier(null); setSupplierNotes(""); setSupplierSearch("");
+    setPickedCreditClient(null); setCreditClientSearch(""); setCreditBalance(null); setCreditNotes("");
 
     // Load smart matches
     setMatchesLoading(true);
@@ -202,6 +212,35 @@ function BankStatementsTab() {
     try { setClientInvoices(await invoicesApi.listByClient(client.clientId)); }
     catch { setAllocError("Failed to load invoices for this client."); }
     finally { setClientInvLoading(false); }
+  }
+
+  // ── Client credit ─────────────────────────────────────────────────────────
+
+  async function switchToClientCredit() {
+    setRightMode("clientcredit"); setPickedCreditClient(null); setCreditBalance(null); setCreditNotes("");
+    await ensureClients();
+  }
+
+  async function pickCreditClient(client: ClientDto) {
+    setPickedCreditClient(client); setCreditBalance(null); setCreditBalanceLoading(true);
+    try { const r = await clientCreditApi.getBalance(client.clientId); setCreditBalance(r.balance); }
+    catch { setCreditBalance(null); }
+    finally { setCreditBalanceLoading(false); }
+  }
+
+  async function allocateClientCredit() {
+    if (!selected || !activeTx || !pickedCreditClient) return;
+    setAllocBusy(pickedCreditClient.clientId); setAllocError("");
+    try {
+      const res = await bankStatementsApi.allocateClientCredit(
+        selected.statementId, activeTx.transactionId,
+        { clientId: pickedCreditClient.clientId, notes: creditNotes.trim() || undefined }
+      );
+      setSelected(res.statement);
+      resetRightPanel();
+      await loadStatements();
+    } catch (e: any) { setAllocError(e?.message ?? "Failed to allocate."); }
+    finally { setAllocBusy(null); }
   }
 
   // ── Browse suppliers ──────────────────────────────────────────────────────
@@ -294,6 +333,9 @@ function BankStatementsTab() {
   const visibleClients = clients.filter(c =>
     !clientSearch || c.clientName.toLowerCase().includes(clientSearch.toLowerCase())
   );
+  const visibleCreditClients = clients.filter(c =>
+    !creditClientSearch || c.clientName.toLowerCase().includes(creditClientSearch.toLowerCase())
+  );
   const visibleSuppliers = suppliers.filter(sup =>
     !supplierSearch || sup.name.toLowerCase().includes(supplierSearch.toLowerCase())
   );
@@ -340,6 +382,8 @@ function BankStatementsTab() {
                       ? <span style={{...s.badge,...s.badgeEFT}}>Invoice</span>
                       : r.allocationType === "Supplier"
                       ? <span style={{...s.badge,background:"#fef3c7",color:"#92400e"}}>Supplier</span>
+                      : r.allocationType === "ClientCredit"
+                      ? <span style={{...s.badge,background:"#dcfce7",color:"#166534"}}>Credit Payment</span>
                       : <span style={{...s.badge,background:"#f3e8ff",color:"#7c3aed"}}>Non-Client</span>}
                   </td>
                   <td style={s.td}>
@@ -347,6 +391,8 @@ function BankStatementsTab() {
                       ? <span style={s.mono}>{r.allocatedInvoiceNumber||r.allocatedInvoiceId.slice(0,8)}</span>
                       : r.allocationType === "Supplier"
                       ? <span>{r.allocatedSupplierName || r.allocatedSupplierId}</span>
+                      : r.allocationType === "ClientCredit"
+                      ? <span>{r.allocatedClientName || r.allocatedClientId}</span>
                       : r.nonClientDescription}
                   </td>
                   <td style={s.td}>{fmtDate(r.allocatedAt)}</td>
@@ -437,6 +483,8 @@ function BankStatementsTab() {
                   ? (tx.allocatedInvoiceNumber || tx.allocatedInvoiceId.slice(0,8))
                   : tx.allocationType === "Supplier"
                   ? (tx.allocatedSupplierName || tx.allocatedSupplierId)
+                  : tx.allocationType === "ClientCredit"
+                  ? (tx.allocatedClientName || tx.allocatedClientId)
                   : tx.nonClientDescription || "Non-client";
 
                 return (
@@ -461,13 +509,15 @@ function BankStatementsTab() {
                       <div style={sp.txAllocBadge}>
                         <span style={{
                           ...s.badge,
-                          ...(tx.allocationType === "Invoice" ? s.badgeEFT
-                            : tx.allocationType === "Supplier" ? { background:"#fef3c7", color:"#92400e" }
+                          ...(tx.allocationType === "Invoice"       ? s.badgeEFT
+                            : tx.allocationType === "Supplier"      ? { background:"#fef3c7", color:"#92400e" }
+                            : tx.allocationType === "ClientCredit"  ? { background:"#dcfce7", color:"#166534" }
                             : { background:"#f3e8ff", color:"#7c3aed" }),
                           fontSize: 11
                         }}>
-                          {tx.allocationType === "Invoice" ? "Invoice"
-                            : tx.allocationType === "Supplier" ? "Supplier"
+                          {tx.allocationType === "Invoice"      ? "Invoice"
+                            : tx.allocationType === "Supplier"  ? "Supplier"
+                            : tx.allocationType === "ClientCredit" ? "Credit Payment"
                             : "Non-client"}
                         </span>
                         <span style={{ fontSize:12, color:"#374151" }}>{allocLabel}</span>
@@ -516,10 +566,11 @@ function BankStatementsTab() {
 
                 {/* Mode tabs */}
                 <div style={sp.modeTabs}>
-                  <button style={rightMode==="matches"   ? sp.modeTabActive : sp.modeTab} onClick={()=>setRightMode("matches")}>Smart Matches</button>
-                  <button style={rightMode==="browse"    ? sp.modeTabActive : sp.modeTab} onClick={switchToBrowse}>Browse Clients</button>
-                  <button style={rightMode==="suppliers" ? sp.modeTabActive : sp.modeTab} onClick={switchToSuppliers}>Browse Suppliers</button>
-                  <button style={rightMode==="nonclient" ? sp.modeTabActive : sp.modeTab} onClick={()=>setRightMode("nonclient")}>Non-Client</button>
+                  <button style={rightMode==="matches"     ? sp.modeTabActive : sp.modeTab} onClick={()=>setRightMode("matches")}>Smart Matches</button>
+                  <button style={rightMode==="browse"      ? sp.modeTabActive : sp.modeTab} onClick={switchToBrowse}>Browse Clients</button>
+                  <button style={rightMode==="clientcredit"? sp.modeTabActive : sp.modeTab} onClick={switchToClientCredit}>Client Credit</button>
+                  <button style={rightMode==="suppliers"   ? sp.modeTabActive : sp.modeTab} onClick={switchToSuppliers}>Browse Suppliers</button>
+                  <button style={rightMode==="nonclient"   ? sp.modeTabActive : sp.modeTab} onClick={()=>setRightMode("nonclient")}>Non-Client</button>
                 </div>
 
                 {/* ─ Smart Matches ─ */}
@@ -633,6 +684,86 @@ function BankStatementsTab() {
                                 );
                               })}
                         </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* ─ Client Credit ─ */}
+                {rightMode === "clientcredit" && (
+                  <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", gap: 6 }}>
+                    <div style={{ fontSize: 13, color: "#6b7280", padding: "2px 0 4px" }}>
+                      Allocate this payment to a client's credit account. The amount will be recorded as an EFT deposit against their credit balance.
+                    </div>
+                    {!pickedCreditClient ? (
+                      <>
+                        <input
+                          style={{ ...s.input, width: "100%", boxSizing: "border-box" }}
+                          placeholder="Search client name…"
+                          value={creditClientSearch}
+                          onChange={e => setCreditClientSearch(e.target.value)}
+                          autoFocus
+                        />
+                        <div style={sp.clientList}>
+                          {visibleCreditClients.length === 0
+                            ? <div style={{ padding: "20px 0", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No clients found.</div>
+                            : visibleCreditClients.map(c => (
+                              <div key={c.clientId} style={sp.clientRow} onClick={() => pickCreditClient(c)}>
+                                <div style={{ fontWeight: 600, fontSize: 14, color: "#111827" }}>{c.clientName}</div>
+                                <div style={{ fontSize: 12, color: "#6b7280" }}>{c.clientCity || ""}</div>
+                              </div>
+                            ))}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ ...sp.selectedClientBar, flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
+                          <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#6b7280" }}>Client</div>
+                              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{pickedCreditClient.clientName}</div>
+                            </div>
+                            <button style={sp.changeClientBtn} onClick={() => { setPickedCreditClient(null); setCreditBalance(null); }}>Change</button>
+                          </div>
+                          <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 4, borderTop: "1px solid #e5e7eb" }}>
+                            <span style={{ fontSize: 13, color: "#374151" }}>Current credit balance</span>
+                            {creditBalanceLoading
+                              ? <span style={{ fontSize: 13, color: "#9ca3af" }}>Loading…</span>
+                              : creditBalance === null
+                              ? <span style={{ fontSize: 13, color: "#9ca3af" }}>—</span>
+                              : <span style={{ fontWeight: 700, fontSize: 15, color: creditBalance >= 0 ? "#15803d" : "#dc2626" }}>
+                                  {fmt(creditBalance)}
+                                </span>}
+                          </div>
+                          <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontSize: 13, color: "#374151" }}>Payment to allocate</span>
+                            <span style={{ fontWeight: 700, fontSize: 15, color: "#2563eb" }}>{activeTx ? fmt(activeTx.amount) : "—"}</span>
+                          </div>
+                          {creditBalance !== null && activeTx && (
+                            <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span style={{ fontSize: 13, color: "#374151" }}>Balance after allocation</span>
+                              <span style={{ fontWeight: 700, fontSize: 15, color: "#166534" }}>{fmt(creditBalance + activeTx.amount)}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div style={s.fieldGroup}>
+                          <label style={s.label}>Notes (optional)</label>
+                          <input
+                            style={s.input}
+                            placeholder="e.g. EFT ref, invoice period…"
+                            value={creditNotes}
+                            onChange={e => setCreditNotes(e.target.value)}
+                          />
+                        </div>
+                        <button
+                          style={{ ...sp.allocBtn, padding: "10px 20px", fontSize: 14, background: "#16a34a", opacity: (allocBusy === pickedCreditClient.clientId) ? 0.6 : 1 }}
+                          disabled={!!allocBusy}
+                          onClick={allocateClientCredit}
+                        >
+                          {allocBusy === pickedCreditClient.clientId
+                            ? "Allocating…"
+                            : `✔ Record ${activeTx ? fmt(activeTx.amount) : ""} Credit Payment`}
+                        </button>
                       </>
                     )}
                   </div>
