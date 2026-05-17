@@ -45,6 +45,7 @@ export default function NavBar() {
 
   const isOperational  = hasAnyRole("Owner", "Finance", "Admin", "HubStaff", "Procurement");
   const isFinancial    = hasAnyRole("Owner", "Finance");
+  const canSeePettyCash = hasAnyRole("Owner", "Finance", "Admin");
   const isUserManager  = hasAnyRole("Owner", "Admin");
   const isDriverRole   = hasRole("Driver");
   const isProcurement  = hasAnyRole("Owner", "Admin", "Procurement", "Finance");
@@ -96,9 +97,11 @@ export default function NavBar() {
       financeItems.push(leaf("Invoices",        "/app/reports",         "invoices"));
       financeItems.push(leaf("Statements",      "/app/reports",         "statement"));
       financeItems.push(leaf("Recon",           "/app/recon"));
-      financeItems.push(leaf("Petty Cash",      "/app/petty-cash"));
       financeItems.push(leaf("Client Accounts", "/app/client-accounts"));
       financeItems.push(leaf("Cost Averages",   "/app/cost-averages"));
+    }
+    if (canSeePettyCash) {
+      financeItems.push(leaf("Petty Cash", "/app/petty-cash"));
     }
     if (financeItems.length) entries.push(group("Finance", financeItems));
 
