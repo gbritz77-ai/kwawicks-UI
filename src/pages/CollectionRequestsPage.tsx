@@ -47,7 +47,7 @@ export default function CollectionRequestsPage() {
   // Allocation modal — supports multiple client slots in one session
   type AllocSlot = {
     clientId: string;
-    lines: { speciesId: string; speciesName: string; qty: number; unitPrice: number; orderedQty: number }[];
+    lines: { speciesId: string; speciesName: string; qty: number; unitPrice: number; orderedQty: number; loadedQty: number }[];
   };
   const [allocItem, setAllocItem] = useState<CollectionRequestDto | null>(null);
   const [allocSlots, setAllocSlots] = useState<AllocSlot[]>([]);
@@ -85,7 +85,7 @@ export default function CollectionRequestsPage() {
   const [editAllocCr, setEditAllocCr] = useState<CollectionRequestDto | null>(null);
   const [editAllocDoId, setEditAllocDoId] = useState<string>("");
   const [editAllocClientName, setEditAllocClientName] = useState<string>("");
-  type EditAllocLine = { speciesId: string; speciesName: string; qty: number; unitPrice: number; orderedQty: number; otherClientsQty: number };
+  type EditAllocLine = { speciesId: string; speciesName: string; qty: number; unitPrice: number; orderedQty: number; loadedQty: number; otherClientsQty: number };
   const [editAllocLines, setEditAllocLines] = useState<EditAllocLine[]>([]);
   const [editAllocBusy, setEditAllocBusy] = useState(false);
   const [editAllocError, setEditAllocError] = useState("");
@@ -264,6 +264,7 @@ export default function CollectionRequestsPage() {
         qty: 0,
         unitPrice: 0,
         orderedQty: l.orderedQty,
+        loadedQty: l.loadedQty,
       })),
     };
   }
@@ -274,9 +275,11 @@ export default function CollectionRequestsPage() {
     setAllocError("");
   }
 
-  // How many units of a species are still unallocated, excluding the current slot
+  // How many units of a species are still unallocated, excluding the current slot.
+  // Uses loadedQty as the cap once the driver has loaded (more accurate than orderedQty when there's a shortfall).
   function allocAvailable(cr: CollectionRequestDto, speciesId: string, excludeSlotIdx: number): number {
-    const orderedQty = cr.lines.find(l => l.speciesId === speciesId)?.orderedQty ?? 0;
+    const crLine = cr.lines.find(l => l.speciesId === speciesId);
+    const baseQty = (crLine?.loadedQty ?? 0) > 0 ? (crLine?.loadedQty ?? 0) : (crLine?.orderedQty ?? 0);
     const existingAlloc = (cr.deliveryAllocations ?? [])
       .flatMap(a => a.lines)
       .filter(l => l.speciesId === speciesId)
@@ -284,7 +287,7 @@ export default function CollectionRequestsPage() {
     const otherSlots = allocSlots
       .filter((_, j) => j !== excludeSlotIdx)
       .reduce((sum, slot) => sum + (slot.lines.find(l => l.speciesId === speciesId)?.qty ?? 0), 0);
-    return orderedQty - existingAlloc - otherSlots;
+    return baseQty - existingAlloc - otherSlots;
   }
 
   async function submitAllocation() {
@@ -336,6 +339,7 @@ export default function CollectionRequestsPage() {
         qty: existingLine?.qty ?? 0,
         unitPrice: existingLine?.unitPrice ?? 0,
         orderedQty: l.orderedQty,
+        loadedQty: l.loadedQty,
         otherClientsQty,
       };
     }));
@@ -347,9 +351,11 @@ export default function CollectionRequestsPage() {
     const linesToSend = editAllocLines.filter(l => l.qty > 0);
     if (linesToSend.length === 0) { setEditAllocError("Please enter a qty greater than 0 for at least one item."); return; }
     for (const l of linesToSend) {
-      const maxQty = l.orderedQty - l.otherClientsQty;
+      const effectiveQty = l.loadedQty > 0 ? l.loadedQty : l.orderedQty;
+      const maxQty = effectiveQty - l.otherClientsQty;
       if (l.qty > maxQty) {
-        setEditAllocError(`${l.speciesName}: ${l.qty} entered but only ${maxQty} available (ordered ${l.orderedQty}, other clients have ${l.otherClientsQty}).`);
+        const label = l.loadedQty > 0 ? "loaded" : "ordered";
+        setEditAllocError(`${l.speciesName}: ${l.qty} entered but only ${maxQty} available (${label} ${effectiveQty}, other clients have ${l.otherClientsQty}).`);
         return;
       }
     }
@@ -905,12 +911,14 @@ export default function CollectionRequestsPage() {
                     const existingAlloc = (allocItem.deliveryAllocations ?? [])
                       .flatMap(a => a.lines).filter(x => x.speciesId === l.speciesId)
                       .reduce((s, x) => s + x.qty, 0);
+                    const baseQty   = l.loadedQty > 0 ? l.loadedQty : l.orderedQty;
+                    const baseLabel = l.loadedQty > 0 ? "Loaded" : "Ordered";
                     return (
                       <div key={l.speciesId} style={{ ...s.loadLineCard, marginBottom: 8 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
                           <div style={s.loadLineName}>{l.speciesName}</div>
                           <div style={{ fontSize: 11, color: "#64748b" }}>
-                            Ordered: {l.orderedQty.toLocaleString()}
+                            {baseLabel}: {baseQty.toLocaleString()}
                             {existingAlloc > 0 && <span style={{ color: "#b45309" }}> · Prev.allocated: {existingAlloc.toLocaleString()}</span>}
                             <span style={{ color: available > 0 ? "#16a34a" : "#dc2626", fontWeight: 700 }}> · Available: {available.toLocaleString()}</span>
                           </div>
@@ -1043,14 +1051,16 @@ export default function CollectionRequestsPage() {
             {editAllocError && <div style={s.formError}>{editAllocError}</div>}
 
             {editAllocLines.map((l, i) => {
-              const maxQty = l.orderedQty - l.otherClientsQty;
+              const effectiveQty   = l.loadedQty > 0 ? l.loadedQty : l.orderedQty;
+              const effectiveLabel = l.loadedQty > 0 ? "Loaded" : "Ordered";
+              const maxQty = effectiveQty - l.otherClientsQty;
               const overAllocated = l.qty > maxQty;
               return (
                 <div key={l.speciesId} style={{ ...s.loadLineCard, borderColor: overAllocated ? "#fca5a5" : undefined }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
                     <div style={s.loadLineName}>{l.speciesName}</div>
                     <div style={{ fontSize: 11, color: "#64748b" }}>
-                      Ordered: {l.orderedQty.toLocaleString()}
+                      {effectiveLabel}: {effectiveQty.toLocaleString()}
                       {l.otherClientsQty > 0 && <span style={{ color: "#b45309" }}> · Other clients: {l.otherClientsQty.toLocaleString()}</span>}
                       <span style={{ color: maxQty > 0 ? "#16a34a" : "#dc2626", fontWeight: 700 }}> · Max: {maxQty.toLocaleString()}</span>
                     </div>
