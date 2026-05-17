@@ -8,6 +8,7 @@ import { hasAnyRole } from "../api/auth";
 import { invoicesApi } from "../api/invoicesApi";
 import { deliveryOrdersApi } from "../api/deliveryOrdersApi";
 import type { DriverStockItem } from "../api/deliveryOrdersApi";
+import { NumericInput } from "../components/NumericInput";
 
 const VAT_RATE = 0.15;
 type CustomerMode = "existing" | "walkin";
@@ -361,7 +362,7 @@ export default function DriverSalesPage() {
 
             {!showBypass ? (
               <>
-                <input
+                <NumericInput
                   style={{ fontSize: 28, fontWeight: 800, letterSpacing: 12, textAlign: "center", padding: "10px 16px", border: "2px solid #2563eb", borderRadius: 10, width: 200 }}
                   type="text"
                   inputMode="numeric"
@@ -593,8 +594,10 @@ export default function DriverSalesPage() {
               </div>
               <div>
                 <label style={s.label}>Qty {selectedStockItem ? `(max ${remainingQty})` : ""}</label>
-                <input
-                  style={s.input} type="number" inputMode="decimal" min={1}
+                <NumericInput
+                  style={s.input}
+                  allowDecimal={false}
+                  min={1}
                   max={selectedStockItem ? remainingQty : undefined}
                   placeholder="1"
                   value={addQty}
@@ -603,8 +606,8 @@ export default function DriverSalesPage() {
               </div>
               <div>
                 <label style={s.label}>Unit Price (incl. VAT)</label>
-                <input
-                  style={s.input} type="number" inputMode="decimal" min={0} step={0.01}
+                <NumericInput
+                  style={s.input}  min={0} step={0.01}
                   placeholder="0.00" value={addPrice}
                   onChange={e => setAddPrice(e.target.value)}
                   onFocus={e => e.target.select()}
@@ -654,16 +657,16 @@ export default function DriverSalesPage() {
               <div style={s.lineInputs}>
                 <div>
                   <label style={s.label}>Qty</label>
-                  <input
-                    style={{ ...s.input, width: 70 }} type="number" inputMode="decimal" min={1} value={l.quantity}
+                  <NumericInput
+                    style={{ ...s.input, width: 70 }}  min={1} value={l.quantity}
                     onChange={e => updateLine(l.speciesId, "quantity", Number(e.target.value))}
                     onFocus={e => e.target.select()}
                   />
                 </div>
                 <div>
                   <label style={s.label}>Price (incl. VAT)</label>
-                  <input
-                    style={{ ...s.input, width: 100 }} type="number" inputMode="decimal" min={0} step={0.01} value={l.unitPrice}
+                  <NumericInput
+                    style={{ ...s.input, width: 100 }}  min={0} step={0.01} value={l.unitPrice}
                     onChange={e => updateLine(l.speciesId, "unitPrice", Number(e.target.value))}
                     onFocus={e => e.target.select()}
                   />
@@ -718,9 +721,9 @@ export default function DriverSalesPage() {
                 >
                   {SPLIT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
-                <input
+                <NumericInput
                   style={{ ...s.input, width: 110, textAlign: "right" }}
-                  type="number" inputMode="decimal"
+                  
                   min={0}
                   step={0.01}
                   placeholder="0.00"

@@ -24,6 +24,7 @@ import type {
   SpeciesRevenueResponse,
 } from "../api/reportsApi";
 import type { ClientDto } from "../api/clientsApi";
+import { NumericInput } from "../components/NumericInput";
 
 type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability" | "client-orders";
 
@@ -144,7 +145,7 @@ export default function AdminReportsPage() {
       {tab !== "outstanding" && tab !== "statement" && tab !== "client-orders" && (
         <div style={s.filterRow}>
           <label style={s.label}>From</label>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={s.dateInput} />
+          <NumericInput type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={s.dateInput} />
           <label style={s.label}>To</label>
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={s.dateInput} />
           <button style={s.applyBtn} onClick={load}>Apply</button>
@@ -1288,7 +1289,7 @@ function InvoicesTab({
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <span style={{ fontWeight: 700, color: "#374151" }}>R</span>
                       <input
-                        type="number" inputMode="decimal"
+                        
                         min={0}
                         step={0.01}
                         value={p.unitPriceIncl}

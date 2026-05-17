@@ -9,6 +9,7 @@ import { hubSalesApi } from "../api/hubSalesApi";
 import { clientCreditApi } from "../api/clientCreditApi";
 import { otpApi } from "../api/otpApi";
 import { hasAnyRole } from "../api/auth";
+import { NumericInput } from "../components/NumericInput";
 
 const VAT_RATE = 0.15;
 
@@ -284,7 +285,7 @@ export default function HubSalesPage() {
 
             {!showBypass ? (
               <>
-                <input
+                <NumericInput
                   style={{ fontSize: 28, fontWeight: 800, letterSpacing: 12, textAlign: "center", padding: "10px 16px", border: "2px solid #2563eb", borderRadius: 10, width: 200 }}
                   type="text"
                   inputMode="numeric"
@@ -472,15 +473,13 @@ export default function HubSalesPage() {
             <div style={{ ...s.card, border: "1px solid #bbf7d0", background: "#f0fdf4" }}>
               <div style={s.cardTitle}>💰 Deposit Details</div>
               <label style={s.label}>Amount (R) *</label>
-              <input
+              <NumericInput
                 style={{ ...s.input, fontSize: 20, fontWeight: 700, marginBottom: 14 }}
-                type="number" inputMode="decimal"
                 min={0}
                 step={0.01}
                 placeholder="0.00"
                 value={depositAmount}
                 onChange={e => setDepositAmount(e.target.value)}
-                onFocus={e => e.target.select()}
                 disabled={depositBusy}
               />
               <label style={s.label}>Payment Method *</label>
@@ -498,7 +497,7 @@ export default function HubSalesPage() {
                 ))}
               </div>
               <label style={s.label}>Reference / Notes (optional)</label>
-              <input
+              <NumericInput
                 style={{ ...s.input, marginBottom: 14 }}
                 placeholder="e.g. EFT ref, reason…"
                 value={depositNotes}
@@ -552,11 +551,11 @@ export default function HubSalesPage() {
               </div>
               <div>
                 <label style={s.label}>Qty</label>
-                <input style={{ ...s.input, width: 70 }} type="number" inputMode="decimal" min={1} placeholder="1" value={addQty} onChange={e => setAddQty(e.target.value)} />
+                <NumericInput style={{ ...s.input, width: 70 }} min={1} placeholder="1" value={addQty} onChange={e => setAddQty(e.target.value)} />
               </div>
               <div>
                 <label style={s.label}>Unit Price (incl. VAT)</label>
-                <input style={{ ...s.input, width: 100 }} type="number" inputMode="decimal" min={0} step={0.01} placeholder="0.00" value={addPrice} onChange={e => setAddPrice(e.target.value)} onFocus={e => e.target.select()} />
+                <NumericInput style={{ ...s.input, width: 100 }}  min={0} step={0.01} placeholder="0.00" value={addPrice} onChange={e => setAddPrice(e.target.value)} onFocus={e => e.target.select()} />
               </div>
               <button
                 style={{ ...s.btnPrimary, alignSelf: "flex-end" }}
@@ -619,17 +618,17 @@ export default function HubSalesPage() {
                     <tr key={l.speciesId}>
                       <td style={s.td}>{l.speciesName}</td>
                       <td style={s.td}>
-                        <input
+                        <NumericInput
                           style={{ ...s.input, width: 60, padding: "4px 6px" }}
-                          type="number" inputMode="decimal" min={1} value={l.quantity}
+                           min={1} value={l.quantity}
                           onChange={e => updateLine(l.speciesId, "quantity", Number(e.target.value))}
                           onFocus={e => e.target.select()}
                         />
                       </td>
                       <td style={s.td}>
-                        <input
+                        <NumericInput
                           style={{ ...s.input, width: 90, padding: "4px 6px" }}
-                          type="number" inputMode="decimal" min={0} step={0.01} value={l.unitPrice}
+                           min={0} step={0.01} value={l.unitPrice}
                           onChange={e => updateLine(l.speciesId, "unitPrice", Number(e.target.value))}
                           onFocus={e => e.target.select()}
                         />
@@ -735,9 +734,9 @@ export default function HubSalesPage() {
                         >
                           {SPLIT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
                         </select>
-                        <input
+                        <NumericInput
                           style={{ ...s.input, width: 110, textAlign: "right" }}
-                          type="number" inputMode="decimal"
+                          
                           min={0}
                           step={0.01}
                           placeholder="0.00"

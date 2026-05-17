@@ -14,6 +14,7 @@ import type { ClientDto } from "../api/clientsApi";
 import { suppliersApi } from "../api/suppliersApi";
 import type { SupplierResponse } from "../api/suppliersApi";
 import { clientCreditApi } from "../api/clientCreditApi";
+import { NumericInput } from "../components/NumericInput";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -356,7 +357,7 @@ function BankStatementsTab() {
           <button style={s.backBtn} onClick={() => setShowReport(false)}>← Back</button>
           <span style={{ fontWeight: 700, fontSize: 15, flex: 1 }}>Allocation Report</span>
           <div style={s.filterRow}>
-            <div style={s.filterGroup}><label style={s.filterLabel}>From</label><input type="date" style={s.input} value={reportFrom} onChange={e=>setReportFrom(e.target.value)} /></div>
+            <div style={s.filterGroup}><label style={s.filterLabel}>From</label><NumericInput type="date" style={s.input} value={reportFrom} onChange={e=>setReportFrom(e.target.value)} /></div>
             <div style={s.filterGroup}><label style={s.filterLabel}>To</label><input type="date" style={s.input} value={reportTo} onChange={e=>setReportTo(e.target.value)} /></div>
             <button style={s.applyBtn} onClick={loadReport} disabled={reportLoading}>{reportLoading?"Loading…":"Apply"}</button>
           </div>
@@ -847,9 +848,8 @@ function BankStatementsTab() {
                     </div>
                     <div style={s.fieldGroup}>
                       <label style={s.label}>Amount (optional — leave 0 to use bank transaction amount)</label>
-                      <input
+                      <NumericInput
                         style={s.input}
-                        type="number" inputMode="decimal"
                         min="0"
                         step="0.01"
                         placeholder="0.00"

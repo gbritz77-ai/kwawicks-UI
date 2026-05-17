@@ -5,6 +5,7 @@ import { clientsApi, type ClientDto } from "../api/clientsApi";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
 import { usersApi, type DriverDto } from "../api/usersApi";
 import { hasAnyRole } from "../api/auth";
+import { NumericInput } from "../components/NumericInput";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -348,7 +349,7 @@ export default function DeliveryOrdersPage() {
 
       {/* Filters */}
       <div style={s.filtersRow}>
-        <input
+        <NumericInput
           style={s.search}
           placeholder="Search by order ID, driver, client, city…"
           value={searchQuery}
@@ -561,17 +562,17 @@ export default function DeliveryOrdersPage() {
                 <div style={{ padding: "10px 12px", background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0", fontSize: 14, fontWeight: 700 }}>
                   {getSpeciesName(line.speciesId)}
                 </div>
-                <input
+                <NumericInput
                   style={{ ...s.input, textAlign: "center" as const }}
-                  type="number" inputMode="decimal"
+                  allowDecimal={false}
                   min={1}
                   value={line.quantity}
                   onChange={e => setEditLine(idx, "quantity", e.target.value)}
                   disabled={editBusy}
                 />
-                <input
+                <NumericInput
                   style={{ ...s.input, textAlign: "center" as const }}
-                  type="number" inputMode="decimal"
+                  
                   min={0}
                   step={0.01}
                   value={line.unitPrice}

@@ -6,6 +6,7 @@ import { invoicesApi } from "../api/invoicesApi";
 import { clientsApi } from "../api/clientsApi";
 import { collectionRequestsApi } from "../api/collectionRequestsApi";
 import type { CollectionRequestDto } from "../api/collectionRequestsApi";
+import { NumericInput } from "../components/NumericInput";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -643,7 +644,7 @@ export default function DriverPage() {
                         </span>
                       </div>
                       <div style={s.returnFields}>
-                        <label style={s.returnLabel}>Delivered<input style={s.returnInput} inputMode="numeric" value={rl.deliveredQty} onChange={(e) => updateReturnLine(idx, "deliveredQty", e.target.value)} disabled={completionBusy} /></label>
+                        <label style={s.returnLabel}>Delivered<NumericInput style={s.returnInput} inputMode="numeric" value={rl.deliveredQty} onChange={(e) => updateReturnLine(idx, "deliveredQty", e.target.value)} disabled={completionBusy} /></label>
                         <label style={s.returnLabel}>Dead<input style={s.returnInput} inputMode="numeric" value={rl.returnedDeadQty} onChange={(e) => updateReturnLine(idx, "returnedDeadQty", e.target.value)} disabled={completionBusy} /></label>
                         <label style={s.returnLabel}>Mutilated<input style={s.returnInput} inputMode="numeric" value={rl.returnedMutilatedQty} onChange={(e) => updateReturnLine(idx, "returnedMutilatedQty", e.target.value)} disabled={completionBusy} /></label>
                         <label style={s.returnLabel}>Not Wanted<input style={s.returnInput} inputMode="numeric" value={rl.returnedNotWantedQty} onChange={(e) => updateReturnLine(idx, "returnedNotWantedQty", e.target.value)} disabled={completionBusy} /></label>
@@ -689,9 +690,8 @@ export default function DriverPage() {
                             >
                               {DELIVERY_SPLIT_METHODS.map(m => <option key={m} value={m}>{m === "CardMachine" ? "Card Machine" : m}</option>)}
                             </select>
-                            <input
+                            <NumericInput
                               style={{ width: 110, padding: "10px 8px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)", fontSize: 14, textAlign: "right", boxSizing: "border-box" }}
-                              type="number" inputMode="decimal"
                               min={0}
                               step={0.01}
                               placeholder="0.00"

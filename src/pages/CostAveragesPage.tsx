@@ -3,6 +3,7 @@ import { costAveragesApi } from "../api/costAveragesApi";
 import type { CostAverageRecordDto } from "../api/costAveragesApi";
 import { speciesApi } from "../api/speciesApi";
 import type { SpeciesResponse } from "../api/speciesApi";
+import { NumericInput } from "../components/NumericInput";
 
 const fmt = (n: number) =>
   "R " + n.toLocaleString("en-ZA", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
@@ -143,9 +144,9 @@ export default function CostAveragesPage() {
               </div>
               <div style={s.field}>
                 <label style={s.label}>Year</label>
-                <input
+                <NumericInput
                   style={{ ...s.input, width: 90 }}
-                  type="number" inputMode="decimal"
+                  
                   min={2020}
                   max={2100}
                   value={calcYear}

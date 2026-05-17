@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useState } from "react";
 import { priceApprovalsApi } from "../api/priceApprovalsApi";
 import type { PriceApprovalDto, AmendPriceLine } from "../api/priceApprovalsApi";
+import { NumericInput } from "../components/NumericInput";
 
 const fmt = (n: number) =>
   "R " + n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -169,8 +170,8 @@ export default function PriceApprovalsPage() {
                     <td style={s.td}>{line.speciesName}</td>
                     <td style={{ ...s.td, textAlign: "right", color: "#64748b" }}>{fmt(line.costPrice)}</td>
                     <td style={{ ...s.td, textAlign: "right" }}>
-                      <input
-                        type="number" inputMode="decimal"
+                      <NumericInput
+                        
                         step="0.01"
                         min={0}
                         style={s.priceInput}

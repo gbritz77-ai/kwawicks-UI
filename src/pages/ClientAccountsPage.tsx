@@ -4,6 +4,7 @@ import type { ClientCreditLedgerDto, ClientCreditEntryDto } from "../api/clientC
 import { clientsApi } from "../api/clientsApi";
 import type { ClientDto } from "../api/clientsApi";
 import { whatsappApi } from "../api/whatsappApi";
+import { NumericInput } from "../components/NumericInput";
 
 function todayIso() { return new Date().toISOString().slice(0, 10); }
 function thirtyAgoIso() { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); }
@@ -170,7 +171,7 @@ export default function ClientAccountsPage() {
         </select>
 
         <label style={s.selectorLabel}>From</label>
-        <input type="date" style={{ ...s.select, flex: "none", width: 140 }} value={fromDate} onChange={e => setFromDate(e.target.value)} />
+        <NumericInput type="date" style={{ ...s.select, flex: "none", width: 140 }} value={fromDate} onChange={e => setFromDate(e.target.value)} />
 
         <label style={s.selectorLabel}>To</label>
         <input type="date" style={{ ...s.select, flex: "none", width: 140 }} value={toDate} onChange={e => setToDate(e.target.value)} />
@@ -318,7 +319,7 @@ export default function ClientAccountsPage() {
             {!depositSuccess && (
               <>
                 <label style={s.label}>Amount (R) *
-                  <input style={s.input} type="number" inputMode="decimal" min={0} step={0.01} placeholder="0.00"
+                  <NumericInput style={s.input} min={0} step={0.01} placeholder="0.00"
                     value={depositAmount} onChange={e => setDepositAmount(e.target.value)} disabled={busy} />
                 </label>
                 <label style={s.label}>Payment Method *
