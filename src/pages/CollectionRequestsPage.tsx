@@ -343,9 +343,11 @@ export default function CollectionRequestsPage() {
 
   async function submitEditAlloc() {
     if (!editAllocCr) return;
-    for (const l of editAllocLines) {
+    // Only send lines with qty > 0 — backend rejects zero-qty lines
+    const linesToSend = editAllocLines.filter(l => l.qty > 0);
+    if (linesToSend.length === 0) { setEditAllocError("Please enter a qty greater than 0 for at least one item."); return; }
+    for (const l of linesToSend) {
       const maxQty = l.orderedQty - l.otherClientsQty;
-      if (l.qty < 0) { setEditAllocError(`${l.speciesName}: qty cannot be negative.`); return; }
       if (l.qty > maxQty) {
         setEditAllocError(`${l.speciesName}: ${l.qty} entered but only ${maxQty} available (ordered ${l.orderedQty}, other clients have ${l.otherClientsQty}).`);
         return;
@@ -356,7 +358,7 @@ export default function CollectionRequestsPage() {
       const updated = await collectionRequestsApi.editAllocation(
         editAllocCr.collectionRequestId,
         editAllocDoId,
-        editAllocLines.map(l => ({ speciesId: l.speciesId, qty: l.qty, unitPrice: l.unitPrice })),
+        linesToSend.map(l => ({ speciesId: l.speciesId, qty: l.qty, unitPrice: l.unitPrice })),
       );
       setItems(i => i.map(x => x.collectionRequestId === updated.collectionRequestId ? updated : x));
       setEditAllocCr(null);
