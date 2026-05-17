@@ -79,15 +79,17 @@ export function NumericKeypadProvider({ children }: { children: React.ReactNode 
       <div
         style={{
           position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
+          bottom: 24,
+          left: "50%",
+          transform: cfg
+            ? "translateX(-50%) translateY(0)"
+            : "translateX(-50%) translateY(120%)",
+          width: "min(360px, calc(100vw - 32px))",
           zIndex: 9999,
           background: "#fff",
-          borderRadius: "16px 16px 0 0",
-          boxShadow: "0 -4px 32px rgba(0,0,0,0.2)",
-          padding: "10px 16px calc(env(safe-area-inset-bottom, 0px) + 16px)",
-          transform: cfg ? "translateY(0)" : "translateY(110%)",
+          borderRadius: 20,
+          boxShadow: "0 8px 40px rgba(0,0,0,0.22)",
+          padding: "10px 16px 20px",
           transition: "transform 0.22s cubic-bezier(.4,0,.2,1)",
           userSelect: "none",
           WebkitUserSelect: "none",
