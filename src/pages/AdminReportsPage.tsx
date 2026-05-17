@@ -30,8 +30,8 @@ type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "i
 
 export default function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const isFinancialUser    = hasAnyRole("Owner", "Finance");
-  const isProcurementUser  = hasAnyRole("Owner", "Finance", "Procurement");
+  const isFinancialUser    = hasAnyRole("Owner", "Finance", "Admin");
+  const isProcurementUser  = hasAnyRole("Owner", "Finance", "Admin", "Procurement");
   const defaultTab: Tab = isFinancialUser ? "revenue" : isProcurementUser ? "supplier-spend" : "drivers";
   const tab = (searchParams.get("tab") as Tab) || defaultTab;
 

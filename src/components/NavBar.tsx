@@ -44,7 +44,7 @@ export default function NavBar() {
   const navRef       = useRef<HTMLDivElement>(null);
 
   const isOperational  = hasAnyRole("Owner", "Finance", "Admin", "HubStaff", "Procurement");
-  const isFinancial    = hasAnyRole("Owner", "Finance");
+  const isFinancial    = hasAnyRole("Owner", "Finance", "Admin");
   const canSeePettyCash   = hasAnyRole("Owner", "Finance", "Admin");
   const canSeeSalesReport = hasAnyRole("Owner", "Finance", "Admin");
   const isUserManager  = hasAnyRole("Owner", "Admin");
