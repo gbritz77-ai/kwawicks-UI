@@ -1,13 +1,13 @@
 ﻿import React, { useEffect, useState } from "react";
 import { pettyCashApi, CATEGORIES } from "../api/pettyCashApi";
 import type {
-import { NumericInput } from "../components/NumericInput";
   PettyCashSummaryDto,
   PettyCashEntryDto,
   PettyCashupDto,
   CreatePettyCashEntryRequest,
   CreateCashupRequest,
 } from "../api/pettyCashApi";
+import { NumericInput } from "../components/NumericInput";
 
 type Tab = "cashbook" | "cashup" | "history";
 
