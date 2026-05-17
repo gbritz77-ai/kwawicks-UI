@@ -645,9 +645,9 @@ export default function DriverPage() {
                       </div>
                       <div style={s.returnFields}>
                         <label style={s.returnLabel}>Delivered<NumericInput style={s.returnInput} inputMode="numeric" value={rl.deliveredQty} onChange={(e) => updateReturnLine(idx, "deliveredQty", e.target.value)} disabled={completionBusy} /></label>
-                        <label style={s.returnLabel}>Dead<input style={s.returnInput} inputMode="numeric" value={rl.returnedDeadQty} onChange={(e) => updateReturnLine(idx, "returnedDeadQty", e.target.value)} disabled={completionBusy} /></label>
-                        <label style={s.returnLabel}>Mutilated<input style={s.returnInput} inputMode="numeric" value={rl.returnedMutilatedQty} onChange={(e) => updateReturnLine(idx, "returnedMutilatedQty", e.target.value)} disabled={completionBusy} /></label>
-                        <label style={s.returnLabel}>Not Wanted<input style={s.returnInput} inputMode="numeric" value={rl.returnedNotWantedQty} onChange={(e) => updateReturnLine(idx, "returnedNotWantedQty", e.target.value)} disabled={completionBusy} /></label>
+                        <label style={s.returnLabel}>Dead<NumericInput style={s.returnInput} allowDecimal={false}  value={rl.returnedDeadQty} onChange={(e) => updateReturnLine(idx, "returnedDeadQty", e.target.value)} disabled={completionBusy} /></label>
+                        <label style={s.returnLabel}>Mutilated<NumericInput style={s.returnInput} allowDecimal={false}  value={rl.returnedMutilatedQty} onChange={(e) => updateReturnLine(idx, "returnedMutilatedQty", e.target.value)} disabled={completionBusy} /></label>
+                        <label style={s.returnLabel}>Not Wanted<NumericInput style={s.returnInput} allowDecimal={false}  value={rl.returnedNotWantedQty} onChange={(e) => updateReturnLine(idx, "returnedNotWantedQty", e.target.value)} disabled={completionBusy} /></label>
                       </div>
                     </div>
                   );
@@ -873,9 +873,9 @@ export default function DriverPage() {
                 <div style={s.returnFields}>
                   <label style={s.returnLabel}>
                     Returning
-                    <input
+                    <NumericInput
                       style={s.returnInput}
-                      inputMode="numeric"
+                      allowDecimal={false} 
                       value={returnQtys[l.speciesId] ?? "0"}
                       max={l.returnedNotWantedQty}
                       onChange={e => setReturnQtys(q => ({ ...q, [l.speciesId]: e.target.value }))}
@@ -926,9 +926,9 @@ export default function DriverPage() {
                   <div style={s.returnFields}>
                     <label style={s.returnLabel}>
                       Loaded Qty
-                      <input
+                      <NumericInput
                         style={{ ...s.returnInput, borderColor: isShort ? "#fca5a5" : undefined }}
-                        inputMode="numeric" value={ll.loadedQty}
+                        allowDecimal={false}  value={ll.loadedQty}
                         onChange={e => setLoadLines(ls => ls.map((x, j) => j === i ? { ...x, loadedQty: parseInt(e.target.value) || 0 } : x))}
                         disabled={crBusy}
                         onFocus={e => e.target.select()}

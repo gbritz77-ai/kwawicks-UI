@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { getProfileFromIdToken } from "../api/auth";
 import { deliveryOrdersApi, type DeliveryOrderResponse } from "../api/deliveryOrdersApi";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
@@ -8,6 +8,7 @@ import { collectionRequestsApi } from "../api/collectionRequestsApi";
 import type { CollectionRequestDto } from "../api/collectionRequestsApi";
 import { pettyCashApi } from "../api/pettyCashApi";
 import type { PettyCashEntryDto } from "../api/pettyCashApi";
+import { NumericInput } from "../components/NumericInput";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -655,7 +656,7 @@ export default function DriverDashboardPage() {
                         {(["deliveredQty", "returnedDeadQty", "returnedMutilatedQty", "returnedNotWantedQty"] as const).map((field, fi) => (
                           <label key={field} style={s.returnLabel}>
                             {["Delivered", "Dead", "Mutilated", "Not Wanted"][fi]}
-                            <input style={s.returnInput} inputMode="numeric"
+                            <NumericInput style={s.returnInput} allowDecimal={false} 
                               value={(rl as any)[field]}
                               onChange={e => updateReturnLine(idx, field, e.target.value)}
                               onFocus={e => e.target.select()}
@@ -866,7 +867,7 @@ export default function DriverDashboardPage() {
                   <div style={s.returnFields}>
                     <label style={s.returnLabel}>
                       Loaded Qty
-                      <input style={s.returnInput} inputMode="numeric" value={ll.loadedQty}
+                      <NumericInput style={s.returnInput} allowDecimal={false}  value={ll.loadedQty}
                         onChange={e => setLoadLines(ls => ls.map((x, j) => j === i ? { ...x, loadedQty: parseInt(e.target.value) || 0 } : x))}
                         onFocus={e => e.target.select()}
                         disabled={crBusy}

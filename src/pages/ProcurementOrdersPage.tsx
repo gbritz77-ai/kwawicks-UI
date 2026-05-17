@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { procurementOrdersApi } from "../api/procurementOrdersApi";
 import type { ProcurementOrderDto, CreateProcurementOrderRequest } from "../api/procurementOrdersApi";
 import { suppliersApi } from "../api/suppliersApi";
 import type { SupplierDto } from "../api/suppliersApi";
 import { speciesApi } from "../api/speciesApi";
 import { hasAnyRole } from "../api/auth";
+import { NumericInput } from "../components/NumericInput";
 
 type Tab = "All" | "Draft" | "Submitted" | "CollectionScheduled" | "InTransit" | "DeliveredToHub" | "Completed";
 const TABS: Tab[] = ["All", "Draft", "Submitted", "CollectionScheduled", "InTransit", "DeliveredToHub", "Completed"];
@@ -274,10 +275,10 @@ export default function ProcurementOrdersPage() {
                   <option value="">— Species —</option>
                   {species.map((sp: any) => <option key={sp.speciesId} value={sp.speciesId}>{sp.name}</option>)}
                 </select>
-                <input style={{ ...s.input, flex: 1 }} placeholder="Qty" inputMode="numeric" value={line.orderedQty || ""} onChange={e => setLine(idx, "orderedQty", parseInt(e.target.value) || 0)} disabled={busy} />
+                <NumericInput style={{ ...s.input, flex: 1 }} placeholder="Qty" allowDecimal={false}  value={line.orderedQty || ""} onChange={e => setLine(idx, "orderedQty", parseInt(e.target.value) || 0)} disabled={busy} />
                 <div style={s.unitCostWrap}>
                   <span style={s.unitCostPrefix}>R</span>
-                  <input style={{ ...s.input, ...s.unitCostInput }} placeholder="Unit cost" inputMode="decimal" value={line.unitCost || ""} onChange={e => setLine(idx, "unitCost", parseFloat(e.target.value) || 0)} disabled={busy} />
+                  <NumericInput style={{ ...s.input, ...s.unitCostInput }} placeholder="Unit cost"  value={line.unitCost || ""} onChange={e => setLine(idx, "unitCost", parseFloat(e.target.value) || 0)} disabled={busy} />
                 </div>
                 {form.lines.length > 1 && (
                   <button style={s.removeBtn} onClick={() => removeLine(idx)} disabled={busy}>✕</button>

@@ -1,4 +1,4 @@
-// ✅ HubTasksPage.tsx (FIXED + Sort + Hover)
+﻿// ✅ HubTasksPage.tsx (FIXED + Sort + Hover)
 // Fixes applied:
 // 1) ✅ Clients grid had 6 columns in UI but only 5 in gridTemplateColumns -> FIXED
 // 2) ✅ Added "Sort by" + Asc/Desc toggle for Clients
@@ -9,6 +9,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
 import { clientsApi, type ClientDto, type ClientType } from "../api/clientsApi";
 import { hasAnyRole } from "../api/auth";
+import { NumericInput } from "../components/NumericInput";
 
 type Tab = "species" | "clients";
 
@@ -541,9 +542,9 @@ export default function HubTasksPage() {
 
                 <label style={s.label}>
                   Unit Cost (incl. VAT)
-                  <input
+                  <NumericInput
                     style={s.input}
-                    inputMode="decimal"
+                    
                     value={speciesForm.unitCost}
                     onChange={(e) => setSpeciesForm((p) => ({ ...p, unitCost: e.target.value }))}
                     disabled={busy}
@@ -552,9 +553,9 @@ export default function HubTasksPage() {
 
                 <label style={s.label}>
                   Sell Price (incl. VAT, optional)
-                  <input
+                  <NumericInput
                     style={s.input}
-                    inputMode="decimal"
+                    
                     value={speciesForm.sellPrice}
                     onChange={(e) => setSpeciesForm((p) => ({ ...p, sellPrice: e.target.value }))}
                     disabled={busy}
@@ -563,9 +564,9 @@ export default function HubTasksPage() {
 
                 <label style={s.label}>
                   VAT Rate (e.g. 0.15 for 15%)
-                  <input
+                  <NumericInput
                     style={s.input}
-                    inputMode="decimal"
+                    
                     value={speciesForm.vat}
                     onChange={(e) => setSpeciesForm((p) => ({ ...p, vat: e.target.value }))}
                     disabled={busy}
@@ -575,9 +576,9 @@ export default function HubTasksPage() {
 
                 <label style={s.label}>
                   Qty on hand at Hub
-                  <input
+                  <NumericInput
                     style={s.input}
-                    inputMode="numeric"
+                    allowDecimal={false} 
                     value={speciesForm.qtyOnHandHub}
                     onChange={(e) => setSpeciesForm((p) => ({ ...p, qtyOnHandHub: e.target.value }))}
                     disabled={busy}
@@ -586,9 +587,9 @@ export default function HubTasksPage() {
 
                 <label style={s.label}>
                   Qty booked out for delivery
-                  <input
+                  <NumericInput
                     style={s.input}
-                    inputMode="numeric"
+                    allowDecimal={false} 
                     value={speciesForm.qtyBookedOutForDelivery}
                     onChange={(e) => setSpeciesForm((p) => ({ ...p, qtyBookedOutForDelivery: e.target.value }))}
                     disabled={busy}

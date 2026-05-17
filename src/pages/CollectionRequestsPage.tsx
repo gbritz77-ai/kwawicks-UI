@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { collectionRequestsApi } from "../api/collectionRequestsApi";
 import type { CollectionRequestDto, CollectionRequestLineDto, CollectionShortfallReportItem, CollectionDeliveryAllocationDto } from "../api/collectionRequestsApi";
 import { procurementOrdersApi } from "../api/procurementOrdersApi";
@@ -8,6 +8,7 @@ import type { DriverDto } from "../api/usersApi";
 import { clientsApi } from "../api/clientsApi";
 import type { ClientDto } from "../api/clientsApi";
 import { hasAnyRole, getProfileFromIdToken } from "../api/auth";
+import { NumericInput } from "../components/NumericInput";
 
 function getUsername(): string | undefined {
   return getProfileFromIdToken()?.username;
@@ -804,7 +805,7 @@ export default function CollectionRequestsPage() {
                   <div style={s.loadLineOrdered}>Ordered: {origLine?.orderedQty}</div>
                   <div style={s.loadLineInputs}>
                     <label style={s.label}>Loaded Qty
-                      <input style={{ ...s.input, borderColor: ll.loadedQty < (origLine?.orderedQty ?? 0) ? "#fca5a5" : undefined }} inputMode="numeric" value={ll.loadedQty}
+                      <NumericInput style={{ ...s.input, borderColor: ll.loadedQty < (origLine?.orderedQty ?? 0) ? "#fca5a5" : undefined }} allowDecimal={false}  value={ll.loadedQty}
                         onChange={e => setLoadLines(ls => ls.map((x, j) => j === i ? { ...x, loadedQty: parseInt(e.target.value) || 0 } : x))} disabled={busy} onFocus={e => e.target.select()} />
                     </label>
                     <label style={s.label}>Notes (if short)
@@ -839,7 +840,7 @@ export default function CollectionRequestsPage() {
                   <div style={s.loadLineOrdered}>Loaded: {origLine?.loadedQty} · Ordered: {origLine?.orderedQty}</div>
                   <div style={s.loadLineInputs}>
                     <label style={s.label}>Received Qty
-                      <input style={s.input} inputMode="numeric" value={cl.receivedQty}
+                      <NumericInput style={s.input} allowDecimal={false}  value={cl.receivedQty}
                         onChange={e => setConfirmLines(ls => ls.map((x, j) => j === i ? { ...x, receivedQty: parseInt(e.target.value) || 0 } : x))} disabled={busy} onFocus={e => e.target.select()} />
                     </label>
                     <label style={s.label}>Discrepancy Notes
@@ -914,14 +915,14 @@ export default function CollectionRequestsPage() {
                         </div>
                         <div style={s.loadLineInputs}>
                           <label style={s.label}>Qty to Deliver
-                            <input style={s.input} inputMode="numeric"
+                            <NumericInput style={s.input} allowDecimal={false} 
                               value={l.qty || ""} placeholder="0"
                               onChange={e => setAllocSlots(ss => ss.map((x, j) => j !== si ? x : {
                                 ...x, lines: x.lines.map((ll, k) => k !== li ? ll : { ...ll, qty: parseInt(e.target.value) || 0 })
                               }))} disabled={busy} onFocus={e => e.target.select()} />
                           </label>
                           <label style={s.label}>Unit Price (R, incl. VAT)
-                            <input style={s.input} inputMode="decimal"
+                            <NumericInput style={s.input} 
                               value={l.unitPrice || ""} placeholder="0.00"
                               onChange={e => setAllocSlots(ss => ss.map((x, j) => j !== si ? x : {
                                 ...x, lines: x.lines.map((ll, k) => k !== li ? ll : { ...ll, unitPrice: parseFloat(e.target.value) || 0 })
@@ -1054,9 +1055,9 @@ export default function CollectionRequestsPage() {
                   </div>
                   <div style={s.loadLineInputs}>
                     <label style={s.label}>Qty
-                      <input
+                      <NumericInput
                         style={{ ...s.input, borderColor: overAllocated ? "#fca5a5" : undefined }}
-                        inputMode="numeric"
+                        allowDecimal={false} 
                         value={l.qty}
                         onChange={e => setEditAllocLines(ls => ls.map((x, j) => j === i ? { ...x, qty: parseInt(e.target.value) || 0 } : x))}
                         disabled={editAllocBusy}
@@ -1064,9 +1065,9 @@ export default function CollectionRequestsPage() {
                       />
                     </label>
                     <label style={s.label}>Unit Price (R, incl. VAT)
-                      <input
+                      <NumericInput
                         style={s.input}
-                        inputMode="decimal"
+                        
                         value={l.unitPrice || ""}
                         placeholder="0.00"
                         onChange={e => setEditAllocLines(ls => ls.map((x, j) => j === i ? { ...x, unitPrice: parseFloat(e.target.value) || 0 } : x))}

@@ -684,12 +684,12 @@ export default function DeliveryOrdersPage() {
 
             <label style={s.label}>
               Postal Code
-              <input
+              <NumericInput
                 style={{ ...s.input, maxWidth: 160 }}
                 value={form.postalCode}
                 onChange={(e) => setForm((p) => ({ ...p, postalCode: e.target.value }))}
                 disabled={busy}
-                inputMode="numeric"
+                allowDecimal={false} 
               />
             </label>
 
@@ -731,10 +731,10 @@ export default function DeliveryOrdersPage() {
                   </select>
 
                   <div style={{ flex: 1, display: "grid", gap: 4 }}>
-                    <input
+                    <NumericInput
                       style={{ ...s.input }}
                       placeholder="Qty"
-                      inputMode="numeric"
+                      allowDecimal={false} 
                       value={line.quantity}
                       onChange={(e) => setLine(idx, "quantity", e.target.value)}
                       disabled={busy}
@@ -750,10 +750,10 @@ export default function DeliveryOrdersPage() {
 
                   {canOverridePrice && (
                     <div style={{ flex: 1, display: "grid", gap: 4 }}>
-                      <input
+                      <NumericInput
                         style={{ ...s.input }}
                         placeholder="Unit Price"
-                        inputMode="decimal"
+                        
                         value={line.unitPrice}
                         onChange={(e) => setLine(idx, "unitPrice", e.target.value)}
                         disabled={busy}
