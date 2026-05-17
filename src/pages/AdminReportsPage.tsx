@@ -145,7 +145,7 @@ export default function AdminReportsPage() {
       {tab !== "outstanding" && tab !== "statement" && tab !== "client-orders" && (
         <div style={s.filterRow}>
           <label style={s.label}>From</label>
-          <NumericInput type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={s.dateInput} />
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={s.dateInput} />
           <label style={s.label}>To</label>
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={s.dateInput} />
           <button style={s.applyBtn} onClick={load}>Apply</button>

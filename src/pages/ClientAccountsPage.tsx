@@ -171,7 +171,7 @@ export default function ClientAccountsPage() {
         </select>
 
         <label style={s.selectorLabel}>From</label>
-        <NumericInput type="date" style={{ ...s.select, flex: "none", width: 140 }} value={fromDate} onChange={e => setFromDate(e.target.value)} />
+        <input type="date" style={{ ...s.select, flex: "none", width: 140 }} value={fromDate} onChange={e => setFromDate(e.target.value)} />
 
         <label style={s.selectorLabel}>To</label>
         <input type="date" style={{ ...s.select, flex: "none", width: 140 }} value={toDate} onChange={e => setToDate(e.target.value)} />

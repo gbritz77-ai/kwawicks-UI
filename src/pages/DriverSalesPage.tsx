@@ -362,7 +362,7 @@ export default function DriverSalesPage() {
 
             {!showBypass ? (
               <>
-                <NumericInput
+                <input
                   style={{ fontSize: 28, fontWeight: 800, letterSpacing: 12, textAlign: "center", padding: "10px 16px", border: "2px solid #2563eb", borderRadius: 10, width: 200 }}
                   type="text"
                   inputMode="numeric"

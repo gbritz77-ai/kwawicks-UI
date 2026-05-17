@@ -258,7 +258,7 @@ export default function PettyCashPage() {
                 </label>
                 <label style={s.label}>
                   Date
-                  <NumericInput
+                  <input
                     type="date"
                     style={s.input}
                     value={entry.entryDate}
