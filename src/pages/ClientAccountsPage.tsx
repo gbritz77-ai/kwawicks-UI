@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { clientCreditApi } from "../api/clientCreditApi";
 import type { ClientCreditLedgerDto, ClientCreditEntryDto } from "../api/clientCreditApi";
 import { clientsApi } from "../api/clientsApi";
@@ -318,7 +318,7 @@ export default function ClientAccountsPage() {
             {!depositSuccess && (
               <>
                 <label style={s.label}>Amount (R) *
-                  <input style={s.input} type="number" min={0} step={0.01} placeholder="0.00"
+                  <input style={s.input} type="number" inputMode="decimal" min={0} step={0.01} placeholder="0.00"
                     value={depositAmount} onChange={e => setDepositAmount(e.target.value)} disabled={busy} />
                 </label>
                 <label style={s.label}>Payment Method *

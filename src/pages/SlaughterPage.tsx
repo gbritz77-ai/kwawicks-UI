@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { slaughterApi } from "../api/slaughterApi";
 import type { SlaughterBatchDto, SlaughterYieldLineRequest } from "../api/slaughterApi";
 import { speciesApi } from "../api/speciesApi";
@@ -154,7 +154,7 @@ export default function SlaughterPage() {
               <label style={s.label}>Quantity *</label>
               <input
                 style={s.input}
-                type="number"
+                type="number" inputMode="decimal"
                 min={1}
                 value={sourceQty}
                 onChange={e => setSourceQty(parseInt(e.target.value) || 1)}
@@ -166,7 +166,7 @@ export default function SlaughterPage() {
               <label style={s.label}>Unit Cost (R, ex-VAT)</label>
               <input
                 style={s.input}
-                type="number"
+                type="number" inputMode="decimal"
                 step="0.01"
                 min={0}
                 placeholder={sourceSpecies ? sourceSpecies.unitCost.toFixed(2) : "0.00"}
@@ -227,7 +227,7 @@ export default function SlaughterPage() {
                       <td style={s.td}>
                         <input
                           style={{ ...s.input, width: 70, textAlign: "right" }}
-                          type="number"
+                          type="number" inputMode="decimal"
                           min={1}
                           value={y.qty}
                           onChange={e => setYieldField(y._key, "qty", parseInt(e.target.value) || 1)}
@@ -237,7 +237,7 @@ export default function SlaughterPage() {
                       <td style={s.td}>
                         <input
                           style={{ ...s.input, width: 110, textAlign: "right" }}
-                          type="number"
+                          type="number" inputMode="decimal"
                           step="0.01"
                           min={0}
                           value={y.unitCost}
@@ -248,7 +248,7 @@ export default function SlaughterPage() {
                       <td style={s.td}>
                         <input
                           style={{ ...s.input, width: 110, textAlign: "right" }}
-                          type="number"
+                          type="number" inputMode="decimal"
                           step="0.01"
                           min={0}
                           value={y.unitPrice}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { priceApprovalsApi } from "../api/priceApprovalsApi";
 import type { PriceApprovalDto, AmendPriceLine } from "../api/priceApprovalsApi";
 
@@ -170,7 +170,7 @@ export default function PriceApprovalsPage() {
                     <td style={{ ...s.td, textAlign: "right", color: "#64748b" }}>{fmt(line.costPrice)}</td>
                     <td style={{ ...s.td, textAlign: "right" }}>
                       <input
-                        type="number"
+                        type="number" inputMode="decimal"
                         step="0.01"
                         min={0}
                         style={s.priceInput}

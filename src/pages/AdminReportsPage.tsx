@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import type { CSSProperties } from "react";
 import { useSearchParams } from "react-router-dom";
 import { hasAnyRole } from "../api/auth";
@@ -1288,7 +1288,7 @@ function InvoicesTab({
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <span style={{ fontWeight: 700, color: "#374151" }}>R</span>
                       <input
-                        type="number"
+                        type="number" inputMode="decimal"
                         min={0}
                         step={0.01}
                         value={p.unitPriceIncl}

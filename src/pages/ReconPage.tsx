@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { invoicesApi } from "../api/invoicesApi";
 import type { ReconInvoiceItem, InvoiceResponse } from "../api/invoicesApi";
 import { bankStatementsApi } from "../api/bankStatementsApi";
@@ -849,7 +849,7 @@ function BankStatementsTab() {
                       <label style={s.label}>Amount (optional — leave 0 to use bank transaction amount)</label>
                       <input
                         style={s.input}
-                        type="number"
+                        type="number" inputMode="decimal"
                         min="0"
                         step="0.01"
                         placeholder="0.00"

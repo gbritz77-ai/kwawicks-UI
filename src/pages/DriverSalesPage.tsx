@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { clientsApi } from "../api/clientsApi";
 import type { ClientDto } from "../api/clientsApi";
 import { driverSalesApi } from "../api/driverSalesApi";
@@ -594,7 +594,7 @@ export default function DriverSalesPage() {
               <div>
                 <label style={s.label}>Qty {selectedStockItem ? `(max ${remainingQty})` : ""}</label>
                 <input
-                  style={s.input} type="number" min={1}
+                  style={s.input} type="number" inputMode="decimal" min={1}
                   max={selectedStockItem ? remainingQty : undefined}
                   placeholder="1"
                   value={addQty}
@@ -604,7 +604,7 @@ export default function DriverSalesPage() {
               <div>
                 <label style={s.label}>Unit Price (incl. VAT)</label>
                 <input
-                  style={s.input} type="number" min={0} step={0.01}
+                  style={s.input} type="number" inputMode="decimal" min={0} step={0.01}
                   placeholder="0.00" value={addPrice}
                   onChange={e => setAddPrice(e.target.value)}
                   onFocus={e => e.target.select()}
@@ -655,7 +655,7 @@ export default function DriverSalesPage() {
                 <div>
                   <label style={s.label}>Qty</label>
                   <input
-                    style={{ ...s.input, width: 70 }} type="number" min={1} value={l.quantity}
+                    style={{ ...s.input, width: 70 }} type="number" inputMode="decimal" min={1} value={l.quantity}
                     onChange={e => updateLine(l.speciesId, "quantity", Number(e.target.value))}
                     onFocus={e => e.target.select()}
                   />
@@ -663,7 +663,7 @@ export default function DriverSalesPage() {
                 <div>
                   <label style={s.label}>Price (incl. VAT)</label>
                   <input
-                    style={{ ...s.input, width: 100 }} type="number" min={0} step={0.01} value={l.unitPrice}
+                    style={{ ...s.input, width: 100 }} type="number" inputMode="decimal" min={0} step={0.01} value={l.unitPrice}
                     onChange={e => updateLine(l.speciesId, "unitPrice", Number(e.target.value))}
                     onFocus={e => e.target.select()}
                   />
@@ -720,7 +720,7 @@ export default function DriverSalesPage() {
                 </select>
                 <input
                   style={{ ...s.input, width: 110, textAlign: "right" }}
-                  type="number"
+                  type="number" inputMode="decimal"
                   min={0}
                   step={0.01}
                   placeholder="0.00"

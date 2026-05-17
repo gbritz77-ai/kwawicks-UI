@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { clientsApi } from "../api/clientsApi";
 import type { ClientDto } from "../api/clientsApi";
 import { speciesApi } from "../api/speciesApi";
@@ -474,7 +474,7 @@ export default function HubSalesPage() {
               <label style={s.label}>Amount (R) *</label>
               <input
                 style={{ ...s.input, fontSize: 20, fontWeight: 700, marginBottom: 14 }}
-                type="number"
+                type="number" inputMode="decimal"
                 min={0}
                 step={0.01}
                 placeholder="0.00"
@@ -552,11 +552,11 @@ export default function HubSalesPage() {
               </div>
               <div>
                 <label style={s.label}>Qty</label>
-                <input style={{ ...s.input, width: 70 }} type="number" min={1} placeholder="1" value={addQty} onChange={e => setAddQty(e.target.value)} />
+                <input style={{ ...s.input, width: 70 }} type="number" inputMode="decimal" min={1} placeholder="1" value={addQty} onChange={e => setAddQty(e.target.value)} />
               </div>
               <div>
                 <label style={s.label}>Unit Price (incl. VAT)</label>
-                <input style={{ ...s.input, width: 100 }} type="number" min={0} step={0.01} placeholder="0.00" value={addPrice} onChange={e => setAddPrice(e.target.value)} onFocus={e => e.target.select()} />
+                <input style={{ ...s.input, width: 100 }} type="number" inputMode="decimal" min={0} step={0.01} placeholder="0.00" value={addPrice} onChange={e => setAddPrice(e.target.value)} onFocus={e => e.target.select()} />
               </div>
               <button
                 style={{ ...s.btnPrimary, alignSelf: "flex-end" }}
@@ -621,7 +621,7 @@ export default function HubSalesPage() {
                       <td style={s.td}>
                         <input
                           style={{ ...s.input, width: 60, padding: "4px 6px" }}
-                          type="number" min={1} value={l.quantity}
+                          type="number" inputMode="decimal" min={1} value={l.quantity}
                           onChange={e => updateLine(l.speciesId, "quantity", Number(e.target.value))}
                           onFocus={e => e.target.select()}
                         />
@@ -629,7 +629,7 @@ export default function HubSalesPage() {
                       <td style={s.td}>
                         <input
                           style={{ ...s.input, width: 90, padding: "4px 6px" }}
-                          type="number" min={0} step={0.01} value={l.unitPrice}
+                          type="number" inputMode="decimal" min={0} step={0.01} value={l.unitPrice}
                           onChange={e => updateLine(l.speciesId, "unitPrice", Number(e.target.value))}
                           onFocus={e => e.target.select()}
                         />
@@ -737,7 +737,7 @@ export default function HubSalesPage() {
                         </select>
                         <input
                           style={{ ...s.input, width: 110, textAlign: "right" }}
-                          type="number"
+                          type="number" inputMode="decimal"
                           min={0}
                           step={0.01}
                           placeholder="0.00"

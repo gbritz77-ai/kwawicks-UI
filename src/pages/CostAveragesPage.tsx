@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { costAveragesApi } from "../api/costAveragesApi";
 import type { CostAverageRecordDto } from "../api/costAveragesApi";
 import { speciesApi } from "../api/speciesApi";
@@ -145,7 +145,7 @@ export default function CostAveragesPage() {
                 <label style={s.label}>Year</label>
                 <input
                   style={{ ...s.input, width: 90 }}
-                  type="number"
+                  type="number" inputMode="decimal"
                   min={2020}
                   max={2100}
                   value={calcYear}

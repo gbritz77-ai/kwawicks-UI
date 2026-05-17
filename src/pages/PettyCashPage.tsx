@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { pettyCashApi, CATEGORIES } from "../api/pettyCashApi";
 import type {
   PettyCashSummaryDto,
@@ -237,7 +237,7 @@ export default function PettyCashPage() {
                 <label style={s.label}>
                   Amount (R)
                   <input
-                    type="number"
+                    type="number" inputMode="decimal"
                     min={0}
                     step={0.01}
                     style={s.input}
@@ -474,7 +474,7 @@ export default function PettyCashPage() {
                   <label style={{ ...s.label, marginTop: 20 }}>
                     Actual Cash Count (R) *
                     <input
-                      type="number"
+                      type="number" inputMode="decimal"
                       min={0}
                       step={0.01}
                       style={s.input}

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { getProfileFromIdToken } from "../api/auth";
 import { deliveryOrdersApi, type DeliveryOrderResponse } from "../api/deliveryOrdersApi";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
@@ -691,7 +691,7 @@ export default function DriverPage() {
                             </select>
                             <input
                               style={{ width: 110, padding: "10px 8px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.15)", fontSize: 14, textAlign: "right", boxSizing: "border-box" }}
-                              type="number"
+                              type="number" inputMode="decimal"
                               min={0}
                               step={0.01}
                               placeholder="0.00"

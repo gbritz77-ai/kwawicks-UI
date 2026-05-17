@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { deliveryOrdersApi, type DeliveryOrderResponse, type DeliveryOrderStatus, type EditDeliveryOrderLine } from "../api/deliveryOrdersApi";
 import { clientsApi, type ClientDto } from "../api/clientsApi";
@@ -563,7 +563,7 @@ export default function DeliveryOrdersPage() {
                 </div>
                 <input
                   style={{ ...s.input, textAlign: "center" as const }}
-                  type="number"
+                  type="number" inputMode="decimal"
                   min={1}
                   value={line.quantity}
                   onChange={e => setEditLine(idx, "quantity", e.target.value)}
@@ -571,7 +571,7 @@ export default function DeliveryOrdersPage() {
                 />
                 <input
                   style={{ ...s.input, textAlign: "center" as const }}
-                  type="number"
+                  type="number" inputMode="decimal"
                   min={0}
                   step={0.01}
                   value={line.unitPrice}
