@@ -164,6 +164,29 @@ export type SpeciesRevenueResponse = {
   items: SpeciesRevenueSummary[];
 };
 
+// ── Sales Report ─────────────────────────────────────────────────────────────
+export type SalesReportRow = {
+  invoiceId: string;
+  invoiceNumber: string;
+  date: string;
+  clientId: string;
+  clientName: string;
+  isWalkIn: boolean;
+  speciesId: string;
+  speciesName: string;
+  qty: number;
+  unitPrice: number;
+  lineTotal: number;
+  paymentType: string;
+  saleType: string;
+};
+
+export type SalesReportResponse = {
+  from?: string;
+  to?: string;
+  rows: SalesReportRow[];
+};
+
 // ── Driver types ─────────────────────────────────────────────────────────────
 export type MyDeliveryItem = {
   deliveryOrderId: string;
@@ -225,4 +248,7 @@ export const reportsApi = {
 
   getSpeciesRevenue: (from?: string, to?: string) =>
     api.get<SpeciesRevenueResponse>(`/api/reports/revenue-by-species${dateParams(from, to)}`),
+
+  getSalesReport: (from?: string, to?: string) =>
+    api.get<SalesReportResponse>(`/api/reports/sales${dateParams(from, to)}`),
 };

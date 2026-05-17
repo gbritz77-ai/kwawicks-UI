@@ -45,7 +45,8 @@ export default function NavBar() {
 
   const isOperational  = hasAnyRole("Owner", "Finance", "Admin", "HubStaff", "Procurement");
   const isFinancial    = hasAnyRole("Owner", "Finance");
-  const canSeePettyCash = hasAnyRole("Owner", "Finance", "Admin");
+  const canSeePettyCash   = hasAnyRole("Owner", "Finance", "Admin");
+  const canSeeSalesReport = hasAnyRole("Owner", "Finance", "Admin");
   const isUserManager  = hasAnyRole("Owner", "Admin");
   const isDriverRole   = hasRole("Driver");
   const isProcurement  = hasAnyRole("Owner", "Admin", "Procurement", "Finance");
@@ -89,7 +90,8 @@ export default function NavBar() {
     if (canManageClients) entries.push(leaf("Clients", "/app/hub-tasks", "clients"));
 
     // Reports as a top-level leaf
-    if (isOperational) entries.push(leaf("Reports", "/app/reports"));
+    if (isOperational)     entries.push(leaf("Reports", "/app/reports"));
+    if (canSeeSalesReport) entries.push(leaf("Sales Report", "/app/sales-report"));
 
     // Finance group
     const financeItems: Leaf[] = [];
