@@ -22,11 +22,14 @@ import type {
   DeliveryStatusSummaryResponse,
   InvoiceItem,
   SpeciesRevenueResponse,
+  SalesReportRow,
 } from "../api/reportsApi";
+import { costAveragesApi } from "../api/costAveragesApi";
+import type { CostAverageRecordDto } from "../api/costAveragesApi";
 import type { ClientDto } from "../api/clientsApi";
 import { NumericInput } from "../components/NumericInput";
 
-type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability" | "client-orders";
+type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability" | "client-orders" | "sales";
 
 export default function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -60,6 +63,16 @@ export default function AdminReportsPage() {
   const [crData, setCrData]   = useState<CollectionRequestDto[]  | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // ── Sales tab state ─────────────────────────────────────────────────────────
+  const salesDefaultFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const salesDefaultTo   = new Date().toISOString().slice(0, 10);
+  const [salesFrom,        setSalesFrom]        = useState(salesDefaultFrom);
+  const [salesTo,          setSalesTo]          = useState(salesDefaultTo);
+  const [salesRows,        setSalesRows]        = useState<SalesReportRow[]>([]);
+  const [salesClientId,    setSalesClientId]    = useState("");
+  const [salesView,        setSalesView]        = useState<"client" | "walkin">("client");
+  const [salesCostRecords, setSalesCostRecords] = useState<CostAverageRecordDto[]>([]);
 
   async function load() {
     setLoading(true);
@@ -96,6 +109,16 @@ export default function AdminReportsPage() {
         if (!clients.length) setClients((await clientsApi.list()).filter((c: ClientDto) => !c.isWalkIn));
         if (!allSpecies.length) setAllSpecies(await speciesApi.list());
       }
+      if (tab === "sales") {
+        const [salesData, costData, cls] = await Promise.all([
+          reportsApi.getSalesReport(salesFrom || undefined, salesTo || undefined),
+          costAveragesApi.getHistory(),
+          clients.length ? Promise.resolve(clients) : clientsApi.list(),
+        ]);
+        setSalesRows(salesData.rows);
+        setSalesCostRecords(costData);
+        if (!clients.length) setClients(cls);
+      }
     } catch {
       setError("Failed to load report.");
     } finally {
@@ -114,9 +137,9 @@ export default function AdminReportsPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["revenue", "outstanding", "invoices", "client-orders", "drivers", "returns", "deliveries", "species", "statement", "supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability"] as Tab[])
+        {(["revenue", "outstanding", "invoices", "sales", "client-orders", "drivers", "returns", "deliveries", "species", "statement", "supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability"] as Tab[])
           .filter(t => {
-            const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "statement"];
+            const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "statement", "sales"];
             const procurementTabs: Tab[] = ["supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability"];
             if (procurementTabs.includes(t)) return isProcurementUser;
             return isFinancialUser || !financialTabs.includes(t);
@@ -126,6 +149,7 @@ export default function AdminReportsPage() {
             {t === "revenue"               && "💰 Revenue"}
             {t === "outstanding"           && "⚠️ Outstanding"}
             {t === "invoices"              && "🧾 Invoices"}
+            {t === "sales"                 && "📋 Sales"}
             {t === "drivers"               && "🚚 Driver Performance"}
             {t === "returns"               && "↩️ Returns"}
             {t === "deliveries"            && "📬 Deliveries"}
@@ -141,8 +165,8 @@ export default function AdminReportsPage() {
         ))}
       </div>
 
-      {/* Date filter (not shown for outstanding, statement, or client-orders) */}
-      {tab !== "outstanding" && tab !== "statement" && tab !== "client-orders" && (
+      {/* Date filter (not shown for outstanding, statement, client-orders, or sales — sales has its own) */}
+      {tab !== "outstanding" && tab !== "statement" && tab !== "client-orders" && tab !== "sales" && (
         <div style={s.filterRow}>
           <label style={s.label}>From</label>
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={s.dateInput} />
@@ -849,6 +873,26 @@ export default function AdminReportsPage() {
       {/* Client Orders */}
       {tab === "client-orders" && !loading && (
         <ClientOrdersTab clients={clients} species={allSpecies} fmt={fmt} />
+      )}
+
+      {/* Sales */}
+      {tab === "sales" && (
+        <SalesTab
+          rows={salesRows}
+          allClients={clients}
+          costRecords={salesCostRecords}
+          salesFrom={salesFrom}
+          salesTo={salesTo}
+          setSalesFrom={setSalesFrom}
+          setSalesTo={setSalesTo}
+          salesClientId={salesClientId}
+          setSalesClientId={setSalesClientId}
+          salesView={salesView}
+          setSalesView={setSalesView}
+          loading={loading}
+          onApply={() => load()}
+          fmt={fmt}
+        />
       )}
 
     </div>
@@ -1955,6 +1999,160 @@ function ClientOrdersTab({ clients, species, fmt }: {
     </div>
   );
 }
+
+// ── Sales Tab ──────────────────────────────────────────────────────────────────
+
+function SalesTab({
+  rows, allClients, costRecords,
+  salesFrom, salesTo, setSalesFrom, setSalesTo,
+  salesClientId, setSalesClientId,
+  salesView, setSalesView,
+  loading, onApply, fmt,
+}: {
+  rows: SalesReportRow[];
+  allClients: ClientDto[];
+  costRecords: CostAverageRecordDto[];
+  salesFrom: string; salesTo: string;
+  setSalesFrom: (v: string) => void; setSalesTo: (v: string) => void;
+  salesClientId: string; setSalesClientId: (v: string) => void;
+  salesView: "client" | "walkin"; setSalesView: (v: "client" | "walkin") => void;
+  loading: boolean; onApply: () => void;
+  fmt: (n: number) => string;
+}) {
+  // Build cost lookup: speciesId → month → avgCostIncVat
+  const costMap: Record<string, Record<string, number>> = {};
+  for (const r of costRecords) {
+    if (!costMap[r.speciesId]) costMap[r.speciesId] = {};
+    costMap[r.speciesId][r.month] = r.avgCostIncVat;
+  }
+  function unitCost(speciesId: string, dateIso: string): number | null {
+    const month = dateIso.slice(0, 7);
+    return costMap[speciesId]?.[month] ?? null;
+  }
+
+  // Named clients and walk-in clients for the dropdown
+  const namedClients = allClients.filter(c => !c.isWalkIn).sort((a, b) => a.clientName.localeCompare(b.clientName));
+  const walkInClients = allClients.filter(c => c.isWalkIn);
+
+  // Filter rows by view type and selected client
+  const visible = rows
+    .filter(r => salesView === "client" ? !r.isWalkIn : r.isWalkIn)
+    .filter(r => !salesClientId || r.clientId === salesClientId);
+
+  const totalSale = visible.reduce((s, r) => s + r.lineTotal, 0);
+  const totalCost = visible.reduce((s, r) => {
+    const c = unitCost(r.speciesId, r.date);
+    return s + (c !== null ? c * r.qty : 0);
+  }, 0);
+
+  function fmtDate(iso: string) {
+    return new Date(iso).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" });
+  }
+
+  const clientDropdown = salesView === "client" ? namedClients : walkInClients;
+
+  return (
+    <div>
+      {/* Filter row */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 16, background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: "12px 16px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <span style={s.label}>From</span>
+          <input type="date" value={salesFrom} onChange={e => setSalesFrom(e.target.value)} style={s.dateInput} />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <span style={s.label}>To</span>
+          <input type="date" value={salesTo} onChange={e => setSalesTo(e.target.value)} style={s.dateInput} />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <span style={s.label}>View</span>
+          <select value={salesView} onChange={e => { setSalesView(e.target.value as "client" | "walkin"); setSalesClientId(""); }} style={s.dateInput}>
+            <option value="client">By Client</option>
+            <option value="walkin">By Walk-in</option>
+          </select>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <span style={s.label}>Client</span>
+          <select value={salesClientId} onChange={e => setSalesClientId(e.target.value)} style={{ ...s.dateInput, minWidth: 180 }}>
+            <option value="">All</option>
+            {clientDropdown.map(c => (
+              <option key={c.clientId} value={c.clientId}>{c.clientName}</option>
+            ))}
+          </select>
+        </div>
+        <button style={s.applyBtn} onClick={onApply} disabled={loading}>{loading ? "Loading…" : "Apply"}</button>
+      </div>
+
+      {/* KPI strip */}
+      {!loading && (
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+          <div style={salesKpi}><span style={s.kpiLabel}>Lines</span><strong>{visible.length}</strong></div>
+          <div style={salesKpi}><span style={s.kpiLabel}>Total Sales</span><strong style={{ color: "#166534" }}>{fmt(totalSale)}</strong></div>
+          {totalCost > 0 && <div style={salesKpi}><span style={s.kpiLabel}>Total Cost</span><strong style={{ color: "#b45309" }}>{fmt(totalCost)}</strong></div>}
+          {totalCost > 0 && <div style={salesKpi}><span style={s.kpiLabel}>Gross Margin</span><strong style={{ color: totalSale - totalCost >= 0 ? "#166534" : "#dc2626" }}>{fmt(totalSale - totalCost)}</strong></div>}
+        </div>
+      )}
+
+      {/* Table */}
+      {!loading && visible.length === 0 && (
+        <p style={s.muted}>No sales found for this selection.</p>
+      )}
+      {!loading && visible.length > 0 && (
+        <div style={s.tableWrap}>
+          <table style={s.table}>
+            <thead>
+              <tr>
+                <th style={s.th}>Client</th>
+                <th style={s.th}>Date</th>
+                <th style={s.th}>Product</th>
+                <th style={{ ...s.th, textAlign: "right" }}>Qty</th>
+                <th style={s.th}>Payment</th>
+                <th style={{ ...s.th, textAlign: "right" }}>Unit Sale</th>
+                <th style={{ ...s.th, textAlign: "right" }}>Unit Cost</th>
+                <th style={{ ...s.th, textAlign: "right" }}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((r, i) => {
+                const uc = unitCost(r.speciesId, r.date);
+                return (
+                  <tr key={`${r.invoiceId}-${r.speciesId}-${i}`} style={{ background: i % 2 === 0 ? "#fff" : "#f9fafb" }}>
+                    <td style={s.td}>{r.clientName}</td>
+                    <td style={{ ...s.td, whiteSpace: "nowrap" as const }}>{fmtDate(r.date)}</td>
+                    <td style={s.td}>{r.speciesName}</td>
+                    <td style={{ ...s.td, textAlign: "right" }}>{r.qty.toLocaleString()}</td>
+                    <td style={s.td}>
+                      <span style={{ ...salesBadge, ...(r.paymentType === "Cash" ? badgeCash : r.paymentType === "EFT" ? badgeEFT : r.paymentType === "Credit" ? badgeCredit : badgeOther) }}>
+                        {r.paymentType || "—"}
+                      </span>
+                    </td>
+                    <td style={{ ...s.td, textAlign: "right" }}>{fmt(r.unitPrice)}</td>
+                    <td style={{ ...s.td, textAlign: "right", color: uc !== null ? "#92400e" : "#9ca3af" }}>
+                      {uc !== null ? fmt(uc) : "—"}
+                    </td>
+                    <td style={{ ...s.td, textAlign: "right", fontWeight: 600 }}>{fmt(r.lineTotal)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: "#f0fdf4", borderTop: "2px solid #bbf7d0" }}>
+                <td colSpan={7} style={{ ...s.td, fontWeight: 700 }}>Total</td>
+                <td style={{ ...s.td, textAlign: "right", fontWeight: 700, color: "#166534" }}>{fmt(totalSale)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const salesKpi: CSSProperties = { background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 16px", display: "flex", flexDirection: "column", gap: 2, minWidth: 120 };
+const salesBadge: CSSProperties = { display: "inline-block", padding: "2px 8px", borderRadius: 10, fontSize: 11, fontWeight: 700 };
+const badgeCash:   CSSProperties = { background: "#dcfce7", color: "#166534" };
+const badgeEFT:    CSSProperties = { background: "#dbeafe", color: "#1e40af" };
+const badgeCredit: CSSProperties = { background: "#fef9c3", color: "#854d0e" };
+const badgeOther:  CSSProperties = { background: "#f3f4f6", color: "#374151" };
 
 const s: Record<string, CSSProperties> = {
   page: { padding: "20px 24px" },
