@@ -474,8 +474,7 @@ export default function PettyCashPage() {
                 <>
                   <label style={{ ...s.label, marginTop: 20 }}>
                     Actual Cash Count (R) *
-                    <input
-                      
+                    <NumericInput
                       min={0}
                       step={0.01}
                       style={s.input}

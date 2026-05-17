@@ -1288,8 +1288,7 @@ function InvoicesTab({
                     <label style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>Unit Price (incl. VAT)</label>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <span style={{ fontWeight: 700, color: "#374151" }}>R</span>
-                      <input
-                        
+                      <NumericInput
                         min={0}
                         step={0.01}
                         value={p.unitPriceIncl}
