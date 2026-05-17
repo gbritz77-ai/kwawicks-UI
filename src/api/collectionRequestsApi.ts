@@ -24,6 +24,14 @@ export type CollectionDeliveryAllocationDto = {
   lines: CollectionAllocationLineDto[];
 };
 
+export type CollectionRoadsaleLineDto = {
+  speciesId: string;
+  speciesName: string;
+  qty: number;
+  unitPrice: number;
+  paymentType: string; // Cash | EFT
+};
+
 export type CollectionRequestDto = {
   collectionRequestId: string;
   procurementOrderId: string;
@@ -40,6 +48,7 @@ export type CollectionRequestDto = {
   shortfallFlagged: boolean;
   lines: CollectionRequestLineDto[];
   deliveryAllocations: CollectionDeliveryAllocationDto[];
+  roadsideSales: CollectionRoadsaleLineDto[];
   createdAt: string;
   updatedAt: string;
 };
@@ -108,6 +117,8 @@ export const collectionRequestsApi = {
     api.post<CollectionRequestDto>(`/api/collection-requests/${id}/allocations`, req),
   editAllocation: (id: string, deliveryOrderId: string, lines: EditAllocationLine[]) =>
     api.put<CollectionRequestDto>(`/api/collection-requests/${id}/allocations/${deliveryOrderId}`, { lines }),
+  setRoadsideSales: (id: string, lines: { speciesId: string; qty: number; unitPrice: number; paymentType: string }[]) =>
+    api.put<CollectionRequestDto>(`/api/collection-requests/${id}/roadside-sales`, { lines }),
   shortfallReport: (from?: string, to?: string) => {
     const qs = new URLSearchParams();
     if (from) qs.set("from", from);

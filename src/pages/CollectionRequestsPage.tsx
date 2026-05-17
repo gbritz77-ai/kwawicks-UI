@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useState } from "react";
 import { collectionRequestsApi } from "../api/collectionRequestsApi";
-import type { CollectionRequestDto, CollectionRequestLineDto, CollectionShortfallReportItem, CollectionDeliveryAllocationDto } from "../api/collectionRequestsApi";
+import type { CollectionRequestDto, CollectionRequestLineDto, CollectionShortfallReportItem, CollectionDeliveryAllocationDto, CollectionRoadsaleLineDto } from "../api/collectionRequestsApi";
 import { procurementOrdersApi } from "../api/procurementOrdersApi";
 import type { ProcurementOrderDto } from "../api/procurementOrdersApi";
 import { usersApi } from "../api/usersApi";
@@ -89,6 +89,13 @@ export default function CollectionRequestsPage() {
   const [editAllocLines, setEditAllocLines] = useState<EditAllocLine[]>([]);
   const [editAllocBusy, setEditAllocBusy] = useState(false);
   const [editAllocError, setEditAllocError] = useState("");
+
+  // Roadside sales modal
+  type RoadsaleDraftLine = { speciesId: string; speciesName: string; qty: number; unitPrice: number; paymentType: string };
+  const [roadsaleItem, setRoadsaleItem] = useState<CollectionRequestDto | null>(null);
+  const [roadsaleLines, setRoadsaleLines] = useState<RoadsaleDraftLine[]>([]);
+  const [roadsaleBusy, setRoadsaleBusy] = useState(false);
+  const [roadsaleError, setRoadsaleError] = useState("");
 
   // Per-card delivery note photo (inline view on expanded card)
   const [cardDnUrls, setCardDnUrls] = useState<Record<string, string>>({});
@@ -255,6 +262,57 @@ export default function CollectionRequestsPage() {
     finally { setBusy(false); setAckUploading(false); }
   }
 
+  function openRoadsaleModal(cr: CollectionRequestDto) {
+    setRoadsaleItem(cr);
+    setRoadsaleError("");
+    // Pre-populate from existing roadside sales, or start with one blank row
+    if ((cr.roadsideSales ?? []).length > 0) {
+      setRoadsaleLines(cr.roadsideSales.map(r => ({
+        speciesId: r.speciesId,
+        speciesName: r.speciesName,
+        qty: r.qty,
+        unitPrice: r.unitPrice,
+        paymentType: r.paymentType,
+      })));
+    } else {
+      setRoadsaleLines([{ speciesId: cr.lines[0]?.speciesId ?? "", speciesName: cr.lines[0]?.speciesName ?? "", qty: 0, unitPrice: 0, paymentType: "Cash" }]);
+    }
+  }
+
+  async function submitRoadsale() {
+    if (!roadsaleItem) return;
+    const valid = roadsaleLines.filter(l => l.speciesId && l.qty > 0);
+    if (valid.length === 0) { setRoadsaleError("Please add at least one sale line with a qty greater than 0."); return; }
+
+    // Frontend validation: per-species total <= hub return available
+    const crLines = roadsaleItem.lines;
+    const allocs  = roadsaleItem.deliveryAllocations ?? [];
+    for (const species of [...new Set(valid.map(l => l.speciesId))]) {
+      const crLine = crLines.find(l => l.speciesId === species);
+      if (!crLine) continue;
+      const baseQty = crLine.loadedQty > 0 ? crLine.loadedQty : crLine.orderedQty;
+      const clientAllocated = allocs.flatMap(a => a.lines).filter(l => l.speciesId === species).reduce((s, l) => s + l.qty, 0);
+      const hubReturn = baseQty - clientAllocated;
+      const roadsaleTotal = valid.filter(l => l.speciesId === species).reduce((s, l) => s + l.qty, 0);
+      if (roadsaleTotal > hubReturn) {
+        const name = crLine.speciesName || species;
+        setRoadsaleError(`${name}: roadside sales (${roadsaleTotal}) exceed hub return available (${hubReturn}).`);
+        return;
+      }
+    }
+
+    setRoadsaleBusy(true); setRoadsaleError("");
+    try {
+      const updated = await collectionRequestsApi.setRoadsideSales(
+        roadsaleItem.collectionRequestId,
+        valid.map(l => ({ speciesId: l.speciesId, qty: l.qty, unitPrice: l.unitPrice, paymentType: l.paymentType })),
+      );
+      setItems(i => i.map(x => x.collectionRequestId === updated.collectionRequestId ? updated : x));
+      setRoadsaleItem(null);
+    } catch (e: any) { setRoadsaleError(e?.message ?? "Failed to save roadside sales."); }
+    finally { setRoadsaleBusy(false); }
+  }
+
   function blankSlot(cr: CollectionRequestDto): AllocSlot {
     return {
       clientId: "",
@@ -401,6 +459,8 @@ export default function CollectionRequestsPage() {
     if (allocations.length === 0) return null;
     if (!["InTransit", "ArrivedAtHub", "HubConfirmed", "FinanceAcknowledged"].includes(cr.status)) return null;
 
+    const roadsales = cr.roadsideSales ?? [];
+
     // Per-species rows
     const rows = cr.lines.map(line => {
       const clientQtys = allocations.map(a => ({
@@ -409,9 +469,10 @@ export default function CollectionRequestsPage() {
         qty: a.lines.find(l => l.speciesId === line.speciesId)?.qty ?? 0,
         unitPrice: a.lines.find(l => l.speciesId === line.speciesId)?.unitPrice ?? 0,
       }));
-      const totalDelivered = clientQtys.reduce((s, c) => s + c.qty, 0);
-      const hubReturn = line.loadedQty - totalDelivered;
-      return { line, clientQtys, totalDelivered, hubReturn };
+      const totalDelivered  = clientQtys.reduce((s, c) => s + c.qty, 0);
+      const roadsaleQty     = roadsales.filter(r => r.speciesId === line.speciesId).reduce((s, r) => s + r.qty, 0);
+      const hubReturn       = line.loadedQty - totalDelivered - roadsaleQty;
+      return { line, clientQtys, totalDelivered, roadsaleQty, hubReturn };
     });
 
     // Client column totals
@@ -422,10 +483,20 @@ export default function CollectionRequestsPage() {
       totalValue: a.lines.reduce((s, l) => s + l.qty * l.unitPrice, 0),
     }));
 
-    const totalLoaded = cr.lines.reduce((s, l) => s + l.loadedQty, 0);
+    const totalLoaded       = cr.lines.reduce((s, l) => s + l.loadedQty, 0);
     const totalDeliveredAll = clientTotals.reduce((s, c) => s + c.totalQty, 0);
-    const totalHubReturn = totalLoaded - totalDeliveredAll;
-    const allAccountedFor = totalHubReturn === 0;
+    const totalRoadsale     = roadsales.reduce((s, r) => s + r.qty, 0);
+    const totalHubReturn    = totalLoaded - totalDeliveredAll - totalRoadsale;
+    const allAccountedFor   = totalHubReturn === 0;
+
+    // Roadside detail: group by paymentType for the summary strip
+    const roadsaleByPay = roadsales.reduce<Record<string, { qty: number; value: number }>>((acc, r) => {
+      const key = r.paymentType || "Other";
+      if (!acc[key]) acc[key] = { qty: 0, value: 0 };
+      acc[key].qty   += r.qty;
+      acc[key].value += r.qty * r.unitPrice;
+      return acc;
+    }, {});
 
     return (
       <div style={s.summarySection}>
@@ -453,11 +524,12 @@ export default function CollectionRequestsPage() {
                     <div style={{ fontSize: 10, fontWeight: 500, color: "#94a3b8" }}>DO-{a.deliveryOrderId.split("-")[0].toUpperCase()}</div>
                   </th>
                 ))}
+                {totalRoadsale > 0 && <th style={{ ...s.thRight, color: "#7c3aed" }}>🛣 Roadside</th>}
                 <th style={{ ...s.thRight, color: "#92400e" }}>Hub Return</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ line, clientQtys, hubReturn }) => (
+              {rows.map(({ line, clientQtys, roadsaleQty, hubReturn }) => (
                 <tr key={line.speciesId} style={{ borderBottom: "1px solid #f1f5f9" }}>
                   <td style={{ padding: "7px 8px", fontWeight: 600, color: "#0f172a" }}>{line.speciesName || line.speciesId}</td>
                   <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 600 }}>{line.loadedQty.toLocaleString()}</td>
@@ -469,6 +541,15 @@ export default function CollectionRequestsPage() {
                       )}
                     </td>
                   ))}
+                  {totalRoadsale > 0 && (
+                    <td style={{ padding: "7px 8px", textAlign: "right", color: "#7c3aed", fontWeight: 600 }}>
+                      {roadsaleQty > 0 ? roadsaleQty.toLocaleString() : <span style={{ color: "#cbd5e1" }}>—</span>}
+                      {roadsaleQty > 0 && (() => {
+                        const val = roadsales.filter(r => r.speciesId === line.speciesId).reduce((s, r) => s + r.qty * r.unitPrice, 0);
+                        return val > 0 ? <div style={{ fontSize: 10, color: "#7c3aed" }}>R{val.toFixed(2)}</div> : null;
+                      })()}
+                    </td>
+                  )}
                   <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 700, color: hubReturn > 0 ? "#b45309" : "#16a34a" }}>
                     {hubReturn > 0 ? hubReturn.toLocaleString() : "—"}
                   </td>
@@ -487,6 +568,15 @@ export default function CollectionRequestsPage() {
                     )}
                   </td>
                 ))}
+                {totalRoadsale > 0 && (
+                  <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 800, color: "#7c3aed" }}>
+                    {totalRoadsale.toLocaleString()}
+                    {(() => {
+                      const val = roadsales.reduce((s, r) => s + r.qty * r.unitPrice, 0);
+                      return val > 0 ? <div style={{ fontSize: 10, fontWeight: 700, color: "#7c3aed" }}>R{val.toFixed(2)}</div> : null;
+                    })()}
+                  </td>
+                )}
                 <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 800, color: totalHubReturn > 0 ? "#b45309" : "#16a34a" }}>
                   {totalHubReturn > 0 ? totalHubReturn.toLocaleString() : "—"}
                 </td>
@@ -494,6 +584,35 @@ export default function CollectionRequestsPage() {
             </tfoot>
           </table>
         </div>
+
+        {/* Roadside sales breakdown by payment type */}
+        {roadsales.length > 0 && (
+          <div style={{ marginTop: 10, padding: "8px 10px", background: "rgba(124,58,237,0.05)", border: "1px solid rgba(124,58,237,0.2)", borderRadius: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#6d28d9", textTransform: "uppercase" as const, letterSpacing: "0.05em", marginBottom: 6 }}>
+              🛣 Roadside Sales Detail
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 6 }}>
+              {roadsales.map((r, i) => (
+                <span key={i} style={{ fontSize: 12, padding: "2px 10px", borderRadius: 20, fontWeight: 600,
+                  background: r.paymentType === "Cash" ? "rgba(22,163,74,0.1)" : "rgba(37,99,235,0.1)",
+                  color: r.paymentType === "Cash" ? "#15803d" : "#1d4ed8",
+                  border: `1px solid ${r.paymentType === "Cash" ? "rgba(22,163,74,0.3)" : "rgba(37,99,235,0.3)"}`,
+                }}>
+                  {r.speciesName}: {r.qty.toLocaleString()} × R{r.unitPrice.toFixed(2)} {r.paymentType}
+                  {" "}= <strong>R{(r.qty * r.unitPrice).toFixed(2)}</strong>
+                </span>
+              ))}
+            </div>
+            <div style={{ marginTop: 6, fontSize: 12, color: "#6d28d9", fontWeight: 700 }}>
+              Total Roadside: R{roadsales.reduce((s, r) => s + r.qty * r.unitPrice, 0).toFixed(2)}
+              {Object.entries(roadsaleByPay).map(([pt, v]) => (
+                <span key={pt} style={{ marginLeft: 12, fontWeight: 600, color: "#64748b" }}>
+                  {pt}: R{v.value.toFixed(2)} ({v.qty} units)
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -696,6 +815,12 @@ export default function CollectionRequestsPage() {
                     {/* Hub admin actions */}
                     {isAdmin() && (cr.status === "ArrivedAtHub" || cr.status === "InTransit") && (
                       <button style={s.primaryBtn} onClick={() => openConfirm(cr)}>Confirm Receipt</button>
+                    )}
+                    {/* Roadside sales — Admin records stock sold by driver before returning */}
+                    {canAllocate() && ["InTransit", "ArrivedAtHub", "HubConfirmed"].includes(cr.status) && (
+                      <button style={s.roadsaleBtn} onClick={() => openRoadsaleModal(cr)}>
+                        🛣 {(cr.roadsideSales ?? []).length > 0 ? "Edit Roadside Sales" : "Record Roadside Sales"}
+                      </button>
                     )}
                     {/* Finance actions */}
                     {isFinance() && cr.status === "HubConfirmed" && (
@@ -1107,6 +1232,101 @@ export default function CollectionRequestsPage() {
         </div>
       )}
 
+      {/* Roadside sales modal */}
+      {roadsaleItem && (
+        <div style={s.backdrop} onClick={() => !roadsaleBusy && setRoadsaleItem(null)}>
+          <div style={{ ...s.modal, maxWidth: 600 }} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>🛣 Roadside Sales</div>
+            <div style={s.modalSub}>
+              {roadsaleItem.assignedDriverName} · {roadsaleItem.supplierName} — record stock the driver sold before returning to hub
+            </div>
+
+            {/* Hub return reference strip */}
+            <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 8, marginBottom: 14, padding: "8px 10px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+              {roadsaleItem.lines.map(l => {
+                const baseQty = l.loadedQty > 0 ? l.loadedQty : l.orderedQty;
+                const clientAllocated = (roadsaleItem.deliveryAllocations ?? []).flatMap(a => a.lines).filter(x => x.speciesId === l.speciesId).reduce((s, x) => s + x.qty, 0);
+                const hubReturn = baseQty - clientAllocated;
+                return hubReturn > 0 ? (
+                  <span key={l.speciesId} style={{ fontSize: 12, color: "#374151" }}>
+                    <strong>{l.speciesName || l.speciesId}</strong>: {hubReturn} available to record
+                  </span>
+                ) : null;
+              })}
+            </div>
+
+            {roadsaleError && <div style={s.formError}>{roadsaleError}</div>}
+
+            {roadsaleLines.map((line, i) => (
+              <div key={i} style={{ ...s.loadLineCard, marginBottom: 8, display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr auto", gap: 8, alignItems: "end" }}>
+                <label style={s.label}>Species
+                  <select style={s.input} value={line.speciesId} disabled={roadsaleBusy}
+                    onChange={e => {
+                      const sp = roadsaleItem.lines.find(l => l.speciesId === e.target.value);
+                      setRoadsaleLines(ls => ls.map((x, j) => j !== i ? x : { ...x, speciesId: e.target.value, speciesName: sp?.speciesName ?? e.target.value }));
+                    }}>
+                    <option value="">— Select —</option>
+                    {roadsaleItem.lines.map(l => <option key={l.speciesId} value={l.speciesId}>{l.speciesName || l.speciesId}</option>)}
+                  </select>
+                </label>
+                <label style={s.label}>Qty
+                  <NumericInput style={s.input} allowDecimal={false} value={line.qty || ""} placeholder="0" disabled={roadsaleBusy}
+                    onChange={e => setRoadsaleLines(ls => ls.map((x, j) => j !== i ? x : { ...x, qty: parseInt(e.target.value) || 0 }))}
+                    onFocus={e => e.target.select()} />
+                </label>
+                <label style={s.label}>Unit Price (R)
+                  <NumericInput style={s.input} value={line.unitPrice || ""} placeholder="0.00" disabled={roadsaleBusy}
+                    onChange={e => setRoadsaleLines(ls => ls.map((x, j) => j !== i ? x : { ...x, unitPrice: parseFloat(e.target.value) || 0 }))}
+                    onFocus={e => e.target.select()} />
+                </label>
+                <label style={s.label}>Payment
+                  <select style={s.input} value={line.paymentType} disabled={roadsaleBusy}
+                    onChange={e => setRoadsaleLines(ls => ls.map((x, j) => j !== i ? x : { ...x, paymentType: e.target.value }))}>
+                    <option value="Cash">Cash</option>
+                    <option value="EFT">EFT</option>
+                  </select>
+                </label>
+                <button
+                  style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 16, padding: "0 4px", alignSelf: "center" as const, marginTop: 18 }}
+                  onClick={() => setRoadsaleLines(ls => ls.filter((_, j) => j !== i))}
+                  disabled={roadsaleBusy}
+                >✕</button>
+              </div>
+            ))}
+
+            <button
+              style={{ ...s.secondaryBtn, width: "100%", marginBottom: 4, color: "#7c3aed", borderColor: "#7c3aed", borderStyle: "dashed" }}
+              onClick={() => setRoadsaleLines(ls => [...ls, { speciesId: roadsaleItem.lines[0]?.speciesId ?? "", speciesName: roadsaleItem.lines[0]?.speciesName ?? "", qty: 0, unitPrice: 0, paymentType: "Cash" }])}
+              disabled={roadsaleBusy}
+            >+ Add Sale Line</button>
+
+            {/* Running total */}
+            {roadsaleLines.filter(l => l.qty > 0 && l.unitPrice > 0).length > 0 && (
+              <div style={{ fontSize: 13, color: "#374151", marginTop: 8, marginBottom: 4 }}>
+                Total:{" "}
+                {["Cash", "EFT"].map(pt => {
+                  const v = roadsaleLines.filter(l => l.paymentType === pt && l.qty > 0).reduce((s, l) => s + l.qty * l.unitPrice, 0);
+                  return v > 0 ? (
+                    <span key={pt} style={{ marginRight: 12, fontWeight: 700,
+                      color: pt === "Cash" ? "#15803d" : "#1d4ed8",
+                    }}>
+                      {pt}: R{v.toFixed(2)}
+                    </span>
+                  ) : null;
+                })}
+              </div>
+            )}
+
+            <div style={s.modalBtns}>
+              <button style={s.secondaryBtn} onClick={() => setRoadsaleItem(null)} disabled={roadsaleBusy}>Cancel</button>
+              <button style={s.primaryBtn} onClick={submitRoadsale} disabled={roadsaleBusy}>
+                {roadsaleBusy ? "Saving…" : "Save Roadside Sales ✓"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Finance acknowledge modal */}
       {ackItem && (
         <div style={s.backdrop} onClick={() => !busy && setAckItem(null)}>
@@ -1245,6 +1465,7 @@ const s: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
   shortfallBtn: { padding: "10px 18px", borderRadius: 8, background: "rgba(234,88,12,0.08)", border: "1px solid rgba(234,88,12,0.4)", color: "#9a3412", fontWeight: 700, fontSize: 14, cursor: "pointer" },
+  roadsaleBtn: { padding: "10px 18px", borderRadius: 8, background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.4)", color: "#6d28d9", fontWeight: 700, fontSize: 13, cursor: "pointer" },
   refreshBtn: { padding: "8px 12px", borderRadius: 8, background: "#f1f5f9", border: "1px solid #cbd5e1", color: "#64748b", fontWeight: 700, fontSize: 15, cursor: "pointer", lineHeight: 1 },
   editAllocBtn: { padding: "2px 10px", borderRadius: 6, background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.35)", color: "#6d28d9", fontWeight: 700, fontSize: 11, cursor: "pointer" },
   summarySection: { marginTop: 14, padding: "12px 14px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10 },
