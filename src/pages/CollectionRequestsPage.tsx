@@ -290,7 +290,7 @@ export default function CollectionRequestsPage() {
     for (const species of [...new Set(valid.map(l => l.speciesId))]) {
       const crLine = crLines.find(l => l.speciesId === species);
       if (!crLine) continue;
-      const baseQty = crLine.loadedQty > 0 ? crLine.loadedQty : crLine.orderedQty;
+      const baseQty = (crLine.loadedQty > 0 ? crLine.loadedQty : crLine.orderedQty);
       const clientAllocated = allocs.flatMap(a => a.lines).filter(l => l.speciesId === species).reduce((s, l) => s + l.qty, 0);
       const hubReturn = baseQty - clientAllocated;
       const roadsaleTotal = valid.filter(l => l.speciesId === species).reduce((s, l) => s + l.qty, 0);
@@ -461,6 +461,10 @@ export default function CollectionRequestsPage() {
 
     const roadsales = cr.roadsideSales ?? [];
 
+    // Helper: use loadedQty when it has been recorded, fall back to orderedQty before loading
+    const effectiveQty = (line: { loadedQty: number; orderedQty: number }) =>
+      line.loadedQty > 0 ? line.loadedQty : line.orderedQty;
+
     // Per-species rows
     const rows = cr.lines.map(line => {
       const clientQtys = allocations.map(a => ({
@@ -469,10 +473,11 @@ export default function CollectionRequestsPage() {
         qty: a.lines.find(l => l.speciesId === line.speciesId)?.qty ?? 0,
         unitPrice: a.lines.find(l => l.speciesId === line.speciesId)?.unitPrice ?? 0,
       }));
-      const totalDelivered  = clientQtys.reduce((s, c) => s + c.qty, 0);
-      const roadsaleQty     = roadsales.filter(r => r.speciesId === line.speciesId).reduce((s, r) => s + r.qty, 0);
-      const hubReturn       = line.loadedQty - totalDelivered - roadsaleQty;
-      return { line, clientQtys, totalDelivered, roadsaleQty, hubReturn };
+      const effQty         = effectiveQty(line);
+      const totalDelivered = clientQtys.reduce((s, c) => s + c.qty, 0);
+      const roadsaleQty    = roadsales.filter(r => r.speciesId === line.speciesId).reduce((s, r) => s + r.qty, 0);
+      const hubReturn      = effQty - totalDelivered - roadsaleQty;
+      return { line, effQty, clientQtys, totalDelivered, roadsaleQty, hubReturn };
     });
 
     // Client column totals
@@ -483,7 +488,8 @@ export default function CollectionRequestsPage() {
       totalValue: a.lines.reduce((s, l) => s + l.qty * l.unitPrice, 0),
     }));
 
-    const totalLoaded       = cr.lines.reduce((s, l) => s + l.loadedQty, 0);
+    const totalLoaded       = cr.lines.reduce((s, l) => s + effectiveQty(l), 0);
+    const loadedLabel       = cr.lines.every(l => l.loadedQty > 0) ? "Loaded" : "Loaded / Ordered";
     const totalDeliveredAll = clientTotals.reduce((s, c) => s + c.totalQty, 0);
     const totalRoadsale     = roadsales.reduce((s, r) => s + r.qty, 0);
     const totalHubReturn    = totalLoaded - totalDeliveredAll - totalRoadsale;
@@ -508,7 +514,11 @@ export default function CollectionRequestsPage() {
             color: allAccountedFor ? "#15803d" : "#92400e",
             border: `1px solid ${allAccountedFor ? "rgba(22,163,74,0.3)" : "rgba(180,83,9,0.3)"}`,
           }}>
-            {allAccountedFor ? "✓ All stock accounted for" : `⚠ ${totalHubReturn.toLocaleString()} units returned to hub`}
+            {allAccountedFor
+              ? "✓ All stock accounted for"
+              : totalHubReturn < 0
+                ? `⚠ Over-allocated by ${Math.abs(totalHubReturn).toLocaleString()} units`
+                : `⚠ ${totalHubReturn.toLocaleString()} units returned to hub`}
           </div>
         </div>
 
@@ -517,7 +527,7 @@ export default function CollectionRequestsPage() {
             <thead>
               <tr style={{ background: "#f1f5f9", borderRadius: 6 }}>
                 <th style={s.thLeft}>Species</th>
-                <th style={s.thRight}>Loaded</th>
+                <th style={s.thRight}>{loadedLabel}</th>
                 {allocations.map(a => (
                   <th key={a.deliveryOrderId} style={s.thRight}>
                     {a.clientName}
@@ -529,10 +539,13 @@ export default function CollectionRequestsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ line, clientQtys, roadsaleQty, hubReturn }) => (
+              {rows.map(({ line, effQty, clientQtys, roadsaleQty, hubReturn }) => (
                 <tr key={line.speciesId} style={{ borderBottom: "1px solid #f1f5f9" }}>
                   <td style={{ padding: "7px 8px", fontWeight: 600, color: "#0f172a" }}>{line.speciesName || line.speciesId}</td>
-                  <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 600 }}>{line.loadedQty.toLocaleString()}</td>
+                  <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 600 }}>
+                    {effQty.toLocaleString()}
+                    {line.loadedQty === 0 && <div style={{ fontSize: 10, color: "#94a3b8" }}>ordered</div>}
+                  </td>
                   {clientQtys.map(cq => (
                     <td key={cq.doId} style={{ padding: "7px 8px", textAlign: "right" }}>
                       {cq.qty > 0 ? cq.qty.toLocaleString() : <span style={{ color: "#cbd5e1" }}>—</span>}
@@ -1247,9 +1260,10 @@ export default function CollectionRequestsPage() {
                 const baseQty = l.loadedQty > 0 ? l.loadedQty : l.orderedQty;
                 const clientAllocated = (roadsaleItem.deliveryAllocations ?? []).flatMap(a => a.lines).filter(x => x.speciesId === l.speciesId).reduce((s, x) => s + x.qty, 0);
                 const hubReturn = baseQty - clientAllocated;
+                const label = l.loadedQty > 0 ? "loaded" : "ordered";
                 return hubReturn > 0 ? (
                   <span key={l.speciesId} style={{ fontSize: 12, color: "#374151" }}>
-                    <strong>{l.speciesName || l.speciesId}</strong>: {hubReturn} available to record
+                    <strong>{l.speciesName || l.speciesId}</strong>: {hubReturn} available ({label})
                   </span>
                 ) : null;
               })}
