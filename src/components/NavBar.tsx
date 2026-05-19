@@ -67,6 +67,7 @@ export default function NavBar() {
   if (isDriverRole) {
     entries.push(leaf("Dashboard",        "/driver"));
     entries.push(leaf("Sales",            "/driver/sales"));
+    entries.push(leaf("Stock Sales",      "/driver/stock-sales"));
     entries.push(leaf("Delivery History", "/driver/reports"));
     entries.push(leaf("Help",             "/driver/help"));
   } else {
@@ -74,12 +75,13 @@ export default function NavBar() {
 
     // Sales group
     const salesItems: Leaf[] = [];
-    if (canSeeHubSales)    salesItems.push(leaf("Hub Sales",        "/app/hub-sales"));
-    if (canSeeHubSales)    salesItems.push(leaf("Client Accounts",  "/app/client-accounts"));
-    if (canSeeHubRequests) salesItems.push(leaf("Hub Requests",     "/app/hub-requests"));
-    if (isOperational)     salesItems.push(leaf("Deliveries",       "/app/delivery-orders"));
-    if (canSeeCollections) salesItems.push(leaf("Collections",      "/app/collection-requests"));
-    if (isOperational)     salesItems.push(leaf("Slaughter",        "/app/slaughter"));
+    if (canSeeHubSales)    salesItems.push(leaf("Hub Sales",           "/app/hub-sales"));
+    if (canSeeHubSales)    salesItems.push(leaf("Client Accounts",    "/app/client-accounts"));
+    if (canSeeHubRequests) salesItems.push(leaf("Hub Requests",       "/app/hub-requests"));
+    if (isOperational)     salesItems.push(leaf("Deliveries",         "/app/delivery-orders"));
+    if (canSeeCollections) salesItems.push(leaf("Collections",        "/app/collection-requests"));
+    if (isOperational)     salesItems.push(leaf("Driver Allocations", "/app/driver-allocations"));
+    if (isOperational)     salesItems.push(leaf("Slaughter",          "/app/slaughter"));
     if (salesItems.length) entries.push(group("Sales", salesItems));
 
     // Stock — Species as a top-level leaf (no longer a group)

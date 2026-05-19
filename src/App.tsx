@@ -23,6 +23,8 @@ import HubRequestsPage from "./pages/HubRequestsPage";
 import SettingsPage from "./pages/SettingsPage";
 import ClientAccountsPage from "./pages/ClientAccountsPage";
 import DriverSalesPage from "./pages/DriverSalesPage";
+import DriverAllocationsPage from "./pages/DriverAllocationsPage";
+import DriverSalePage from "./pages/DriverSalePage";
 import PriceApprovalsPage from "./pages/PriceApprovalsPage";
 import SlaughterPage from "./pages/SlaughterPage";
 import CostAveragesPage from "./pages/CostAveragesPage";
@@ -64,10 +66,12 @@ export default function App() {
       <Route path="/app/otp-report"          element={<AuthLayout><OtpReportPage /></AuthLayout>} />
       <Route path="/app/recon"               element={<AuthLayout><ReconPage /></AuthLayout>} />
       <Route path="/app/sales-report"        element={<AuthLayout><SalesReportPage /></AuthLayout>} />
+      <Route path="/app/driver-allocations"  element={<AuthLayout><DriverAllocationsPage /></AuthLayout>} />
       <Route path="/driver"              element={<AuthLayout><DriverDashboardPage /></AuthLayout>} />
       <Route path="/driver/work"         element={<AuthLayout><DriverPage /></AuthLayout>} />
       <Route path="/driver/reports"      element={<AuthLayout><DriverReportsPage /></AuthLayout>} />
       <Route path="/driver/sales"        element={<AuthLayout><DriverSalesPage /></AuthLayout>} />
+      <Route path="/driver/stock-sales"  element={<AuthLayout><DriverSalePage /></AuthLayout>} />
 
       <Route path="/app/help" element={<AuthLayout><HelpPage /></AuthLayout>} />
       <Route path="/driver/help" element={<AuthLayout><HelpPage /></AuthLayout>} />
