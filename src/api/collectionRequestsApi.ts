@@ -15,17 +15,20 @@ export type CollectionAllocationLineDto = {
   speciesName: string;
   qty: number;        // allocated qty (planned)
   unitPrice: number;
-  deliveredQty: number; // actual delivered (0 = not yet delivered)
+  deliveredQty: number; // actual delivered (0 = not yet invoiced)
+  acceptedQty: number;  // for HUB allocations: qty hub staff counted (0 = not yet accepted)
 };
 
 export type CollectionDeliveryAllocationDto = {
   deliveryOrderId: string;
   clientId: string;
   clientName: string;
-  /** Status of the linked delivery order e.g. OutForDelivery / Delivered */
+  /** Status of the linked delivery order e.g. OutForDelivery / Delivered / HubDirect */
   deliveryStatus: string;
   /** Payment type from the linked invoice once invoiced (Cash / EFT / Credit / "") */
   paymentType: string;
+  /** For HUB allocations: "" or "Accepted" once hub staff have verified the stock */
+  hubAcceptanceStatus: string;
   lines: CollectionAllocationLineDto[];
 };
 
@@ -129,6 +132,8 @@ export const collectionRequestsApi = {
     deliveryOrderId: string,
     req: { lines: { speciesId: string; deliveredQty: number; unitPrice: number }[]; paymentType: string },
   ) => api.post<CollectionRequestDto>(`/api/collection-requests/${crId}/allocations/${deliveryOrderId}/confirm-delivery`, req),
+  hubAccept: (id: string, lines: { speciesId: string; acceptedQty: number }[]) =>
+    api.put<CollectionRequestDto>(`/api/collection-requests/${id}/allocations/HUB/accept`, { lines }),
   shortfallReport: (from?: string, to?: string) => {
     const qs = new URLSearchParams();
     if (from) qs.set("from", from);

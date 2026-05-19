@@ -107,6 +107,13 @@ export default function CollectionRequestsPage() {
   const [confirmDeliveryBusy, setConfirmDeliveryBusy]     = useState(false);
   const [confirmDeliveryError, setConfirmDeliveryError]   = useState("");
 
+  // Hub accept modal — hub staff physically verifies and checks in HUB-allocated stock
+  type HubAcceptLine = { speciesId: string; speciesName: string; allocatedQty: number; acceptedQty: number };
+  const [hubAcceptCr, setHubAcceptCr]       = useState<CollectionRequestDto | null>(null);
+  const [hubAcceptLines, setHubAcceptLines] = useState<HubAcceptLine[]>([]);
+  const [hubAcceptBusy, setHubAcceptBusy]   = useState(false);
+  const [hubAcceptError, setHubAcceptError] = useState("");
+
   // Per-card delivery note photo (inline view on expanded card)
   const [cardDnUrls, setCardDnUrls] = useState<Record<string, string>>({});
   const [cardDnLoading, setCardDnLoading] = useState<string | null>(null);
@@ -361,6 +368,35 @@ export default function CollectionRequestsPage() {
     finally { setConfirmDeliveryBusy(false); }
   }
 
+  function openHubAccept(cr: CollectionRequestDto, a: CollectionDeliveryAllocationDto) {
+    setHubAcceptCr(cr);
+    setHubAcceptError("");
+    setHubAcceptLines(a.lines.map(l => ({
+      speciesId:    l.speciesId,
+      speciesName:  l.speciesName || l.speciesId,
+      allocatedQty: l.qty,
+      acceptedQty:  l.acceptedQty > 0 ? l.acceptedQty : l.qty, // default = full allocation
+    })));
+  }
+
+  async function submitHubAccept() {
+    if (!hubAcceptCr) return;
+    for (const l of hubAcceptLines) {
+      if (l.acceptedQty < 0) { setHubAcceptError(`${l.speciesName}: qty cannot be negative.`); return; }
+      if (l.acceptedQty > l.allocatedQty) { setHubAcceptError(`${l.speciesName}: accepted (${l.acceptedQty}) cannot exceed allocated (${l.allocatedQty}).`); return; }
+    }
+    setHubAcceptBusy(true); setHubAcceptError("");
+    try {
+      const updated = await collectionRequestsApi.hubAccept(
+        hubAcceptCr.collectionRequestId,
+        hubAcceptLines.map(l => ({ speciesId: l.speciesId, acceptedQty: l.acceptedQty })),
+      );
+      setItems(i => i.map(x => x.collectionRequestId === updated.collectionRequestId ? updated : x));
+      setHubAcceptCr(null);
+    } catch (e: any) { setHubAcceptError(e?.message ?? "Failed to accept hub stock."); }
+    finally { setHubAcceptBusy(false); }
+  }
+
   function blankSlot(cr: CollectionRequestDto): AllocSlot {
     return {
       clientId: "",
@@ -522,13 +558,15 @@ export default function CollectionRequestsPage() {
       const clientQtys = allocations.map(a => {
         const allocLine = a.lines.find(l => l.speciesId === line.speciesId);
         return {
-          doId:          a.deliveryOrderId,
-          clientName:    a.clientName,
-          paymentType:   a.paymentType ?? "",
-          deliveryStatus: a.deliveryStatus ?? "",
-          qty:           allocLine?.qty          ?? 0,  // allocated (planned)
-          deliveredQty:  allocLine?.deliveredQty ?? 0,  // actual (0 = not yet invoiced)
-          unitPrice:     allocLine?.unitPrice    ?? 0,
+          doId:                a.deliveryOrderId,
+          clientName:          a.clientName,
+          paymentType:         a.paymentType ?? "",
+          deliveryStatus:      a.deliveryStatus ?? "",
+          hubAcceptanceStatus: a.hubAcceptanceStatus ?? "",
+          qty:                 allocLine?.qty          ?? 0,  // allocated (planned)
+          deliveredQty:        allocLine?.deliveredQty ?? 0,  // actual (0 = not yet invoiced)
+          acceptedQty:         allocLine?.acceptedQty  ?? 0,  // hub accepted (0 = not yet accepted)
+          unitPrice:           allocLine?.unitPrice    ?? 0,
         };
       });
       const effQty         = effectiveQty(line);
@@ -617,10 +655,30 @@ export default function CollectionRequestsPage() {
                 {allocations.map(a => {
                   const isHub = a.clientId === "HUB" || a.deliveryOrderId === "HUB";
                   if (isHub) {
+                    const accepted = a.hubAcceptanceStatus === "Accepted";
+                    const canAccept = isAdmin() && !accepted;
                     return (
                       <th key="HUB" style={{ ...s.thRight, color: "#15803d" }}>
                         🏠 Hub Stock
-                        <div style={{ fontSize: 10, fontWeight: 500, color: "#86efac" }}>Direct to hub</div>
+                        {accepted ? (
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "#15803d",
+                            background: "rgba(22,163,74,0.1)", borderRadius: 10, padding: "0px 6px",
+                            display: "inline-block", marginTop: 2 }}>
+                            ✓ Accepted
+                          </div>
+                        ) : canAccept ? (
+                          <div>
+                            <button
+                              onClick={() => openHubAccept(cr, a)}
+                              style={{ fontSize: 10, fontWeight: 700, color: "#15803d",
+                                background: "rgba(22,163,74,0.1)", border: "1px solid rgba(22,163,74,0.4)",
+                                borderRadius: 10, padding: "0px 6px", cursor: "pointer", marginTop: 2 }}>
+                              ✓ Accept
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 10, fontWeight: 500, color: "#86efac" }}>Pending acceptance</div>
+                        )}
                       </th>
                     );
                   }
@@ -673,15 +731,20 @@ export default function CollectionRequestsPage() {
                   </td>
                   {clientQtys.map(cq => {
                     const hubCell = cq.doId === "HUB";
-                    const shownQty = cq.deliveredQty > 0 ? cq.deliveredQty : cq.qty;
-                    const hasReturn = cq.deliveredQty > 0 && cq.deliveredQty !== cq.qty;
+                    // For HUB: show acceptedQty once accepted, else allocated qty
+                    const shownQty = hubCell
+                      ? (cq.acceptedQty > 0 ? cq.acceptedQty : cq.qty)
+                      : (cq.deliveredQty > 0 ? cq.deliveredQty : cq.qty);
+                    const hasDiscrepancy = hubCell
+                      ? (cq.acceptedQty > 0 && cq.acceptedQty !== cq.qty)
+                      : (cq.deliveredQty > 0 && cq.deliveredQty !== cq.qty);
                     return (
                       <td key={cq.doId} style={{ padding: "7px 8px", textAlign: "right",
                         ...(hubCell ? { color: "#15803d", fontWeight: 700, background: "rgba(22,163,74,0.04)" } : {}) }}>
                         {shownQty > 0
                           ? <>
                               <span>{shownQty.toLocaleString()}</span>
-                              {hasReturn && (
+                              {hasDiscrepancy && (
                                 <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 600 }}>
                                   alloc: {cq.qty.toLocaleString()}
                                 </div>
@@ -1598,6 +1661,67 @@ export default function CollectionRequestsPage() {
               <button style={s.secondaryBtn} onClick={() => setConfirmDeliveryCr(null)} disabled={confirmDeliveryBusy}>Cancel</button>
               <button style={s.primaryBtn} onClick={submitConfirmDelivery} disabled={confirmDeliveryBusy}>
                 {confirmDeliveryBusy ? "Saving…" : "Confirm Delivery ✓"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hub accept modal — hub staff verifies and checks in HUB-allocated stock */}
+      {hubAcceptCr && (
+        <div style={s.backdrop} onClick={() => !hubAcceptBusy && setHubAcceptCr(null)}>
+          <div style={{ ...s.modal, maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>🏠 Accept Hub Stock</div>
+            <div style={s.modalSub}>{hubAcceptCr.supplierName} · {hubAcceptCr.assignedDriverName}</div>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>
+              Verify the quantity physically received at the hub. Stock will be added to inventory.
+            </div>
+
+            <div style={{ overflowX: "auto", marginBottom: 12 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: "#f1f5f9" }}>
+                    <th style={s.thLeft}>Species</th>
+                    <th style={{ ...s.thRight, minWidth: 70 }}>Allocated</th>
+                    <th style={{ ...s.thRight, minWidth: 90 }}>Received ✎</th>
+                    <th style={{ ...s.thRight, minWidth: 70 }}>Variance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {hubAcceptLines.map((l, i) => (
+                    <tr key={l.speciesId} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                      <td style={{ padding: "7px 8px", fontWeight: 600 }}>{l.speciesName}</td>
+                      <td style={{ padding: "7px 8px", textAlign: "right", color: "#64748b" }}>{l.allocatedQty.toLocaleString()}</td>
+                      <td style={{ padding: "4px 8px", textAlign: "right" }}>
+                        <NumericInput
+                          style={{ ...s.input, width: 80, textAlign: "right" as const, margin: 0, padding: "4px 6px" }}
+                          allowDecimal={false}
+                          value={l.acceptedQty}
+                          onFocus={e => e.target.select()}
+                          onChange={e => setHubAcceptLines(ls => ls.map((x, j) =>
+                            j === i ? { ...x, acceptedQty: parseInt(e.target.value) || 0 } : x
+                          ))}
+                          disabled={hubAcceptBusy}
+                        />
+                      </td>
+                      <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 600,
+                        color: l.allocatedQty - l.acceptedQty !== 0 ? "#b45309" : "#15803d" }}>
+                        {l.allocatedQty - l.acceptedQty !== 0
+                          ? (l.allocatedQty - l.acceptedQty > 0 ? "-" : "+") + Math.abs(l.allocatedQty - l.acceptedQty).toLocaleString()
+                          : "✓"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {hubAcceptError && <div style={s.errorText}>{hubAcceptError}</div>}
+
+            <div style={s.modalBtns}>
+              <button style={s.secondaryBtn} onClick={() => setHubAcceptCr(null)} disabled={hubAcceptBusy}>Cancel</button>
+              <button style={{ ...s.primaryBtn, background: "#15803d" }} onClick={submitHubAccept} disabled={hubAcceptBusy}>
+                {hubAcceptBusy ? "Saving…" : "✓ Confirm Receipt"}
               </button>
             </div>
           </div>
