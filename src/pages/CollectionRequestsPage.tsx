@@ -615,6 +615,15 @@ export default function CollectionRequestsPage() {
                 <th style={s.thLeft}>Species</th>
                 <th style={s.thRight}>{loadedLabel}</th>
                 {allocations.map(a => {
+                  const isHub = a.clientId === "HUB" || a.deliveryOrderId === "HUB";
+                  if (isHub) {
+                    return (
+                      <th key="HUB" style={{ ...s.thRight, color: "#15803d" }}>
+                        🏠 Hub Stock
+                        <div style={{ fontSize: 10, fontWeight: 500, color: "#86efac" }}>Direct to hub</div>
+                      </th>
+                    );
+                  }
                   const ptColor =
                     a.paymentType === "Cash"   ? "#15803d" :
                     a.paymentType === "EFT"    ? "#1d4ed8" :
@@ -663,10 +672,12 @@ export default function CollectionRequestsPage() {
                     {line.loadedQty === 0 && <div style={{ fontSize: 10, color: "#94a3b8" }}>ordered</div>}
                   </td>
                   {clientQtys.map(cq => {
+                    const hubCell = cq.doId === "HUB";
                     const shownQty = cq.deliveredQty > 0 ? cq.deliveredQty : cq.qty;
                     const hasReturn = cq.deliveredQty > 0 && cq.deliveredQty !== cq.qty;
                     return (
-                      <td key={cq.doId} style={{ padding: "7px 8px", textAlign: "right" }}>
+                      <td key={cq.doId} style={{ padding: "7px 8px", textAlign: "right",
+                        ...(hubCell ? { color: "#15803d", fontWeight: 700, background: "rgba(22,163,74,0.04)" } : {}) }}>
                         {shownQty > 0
                           ? <>
                               <span>{shownQty.toLocaleString()}</span>
@@ -675,7 +686,7 @@ export default function CollectionRequestsPage() {
                                   alloc: {cq.qty.toLocaleString()}
                                 </div>
                               )}
-                              {shownQty > 0 && cq.unitPrice > 0 && (
+                              {!hubCell && shownQty > 0 && cq.unitPrice > 0 && (
                                 <div style={{ fontSize: 10, color: "#64748b" }}>R{(shownQty * cq.unitPrice).toFixed(2)}</div>
                               )}
                             </>
@@ -704,12 +715,13 @@ export default function CollectionRequestsPage() {
                 <td style={{ padding: "7px 8px", fontWeight: 800, fontSize: 12, color: "#374151", textTransform: "uppercase", letterSpacing: "0.03em" }}>Total</td>
                 <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 800 }}>{totalLoaded.toLocaleString()}</td>
                 {clientTotals.map(ct => (
-                  <td key={ct.doId} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 800 }}>
+                  <td key={ct.doId} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 800,
+                    ...(ct.doId === "HUB" ? { color: "#15803d", background: "rgba(22,163,74,0.04)" } : {}) }}>
                     {ct.totalQty.toLocaleString()}
                     {ct.allocQty !== ct.totalQty && (
                       <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 600 }}>alloc: {ct.allocQty.toLocaleString()}</div>
                     )}
-                    {ct.totalValue > 0 && (
+                    {ct.doId !== "HUB" && ct.totalValue > 0 && (
                       <div style={{ fontSize: 10, fontWeight: 700, color: "#15803d" }}>R{ct.totalValue.toFixed(2)}</div>
                     )}
                   </td>
@@ -947,30 +959,39 @@ export default function CollectionRequestsPage() {
                   {(cr.deliveryAllocations ?? []).length > 0 && (
                     <div style={s.allocSection}>
                       <div style={s.allocSectionTitle}>🚚 En-Route Delivery Allocations</div>
-                      {(cr.deliveryAllocations ?? []).map(a => (
-                        <div key={a.deliveryOrderId} style={s.allocCard}>
-                          <div style={s.allocClientRow}>
-                            <span style={s.allocClientName}>{a.clientName}</span>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <span style={s.allocDoId}>DO-{a.deliveryOrderId.split("-")[0].toUpperCase()}</span>
-                              {canAllocate() && cr.status !== "FinanceAcknowledged" && (
-                                <button
-                                  style={s.editAllocBtn}
-                                  onClick={() => openEditAllocModal(cr, a)}
-                                >✏️ Edit</button>
-                              )}
+                      {(cr.deliveryAllocations ?? []).map(a => {
+                        const isHubAlloc = a.clientId === "HUB" || a.deliveryOrderId === "HUB";
+                        return (
+                          <div key={a.deliveryOrderId}
+                            style={{ ...s.allocCard, ...(isHubAlloc ? { borderColor: "rgba(22,163,74,0.4)", background: "rgba(22,163,74,0.04)" } : {}) }}>
+                            <div style={s.allocClientRow}>
+                              <span style={{ ...s.allocClientName, ...(isHubAlloc ? { color: "#15803d" } : {}) }}>
+                                {isHubAlloc ? "🏠 " : ""}{a.clientName}
+                              </span>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                {isHubAlloc
+                                  ? <span style={{ fontSize: 11, color: "#15803d", fontWeight: 600 }}>Hub Direct</span>
+                                  : <span style={s.allocDoId}>DO-{a.deliveryOrderId.split("-")[0].toUpperCase()}</span>
+                                }
+                                {canAllocate() && cr.status !== "FinanceAcknowledged" && (
+                                  <button
+                                    style={s.editAllocBtn}
+                                    onClick={() => openEditAllocModal(cr, a)}
+                                  >✏️ Edit</button>
+                                )}
+                              </div>
+                            </div>
+                            <div style={s.allocLines}>
+                              {a.lines.map(l => (
+                                <span key={l.speciesId} style={s.allocLinePill}>
+                                  {l.speciesName || l.speciesId}: <strong>{l.qty.toLocaleString()}</strong>
+                                  {!isHubAlloc && l.unitPrice > 0 && <span style={{ color: "#64748b" }}> @ R{l.unitPrice.toFixed(2)}</span>}
+                                </span>
+                              ))}
                             </div>
                           </div>
-                          <div style={s.allocLines}>
-                            {a.lines.map(l => (
-                              <span key={l.speciesId} style={s.allocLinePill}>
-                                {l.speciesName || l.speciesId}: <strong>{l.qty.toLocaleString()}</strong>
-                                {l.unitPrice > 0 && <span style={{ color: "#64748b" }}> @ R{l.unitPrice.toFixed(2)}</span>}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
 
@@ -1198,11 +1219,13 @@ export default function CollectionRequestsPage() {
                     )}
                   </div>
 
-                  <label style={s.label}>Deliver To (Client) *
+                  <label style={s.label}>Allocate To *
                     <select style={s.input} value={slot.clientId}
                       onChange={e => setAllocSlots(ss => ss.map((x, j) => j === si ? { ...x, clientId: e.target.value } : x))}
                       disabled={busy}>
-                      <option value="">— Select client —</option>
+                      <option value="">— Select destination —</option>
+                      <option value="HUB">🏠 Hub Stock (stays at hub)</option>
+                      <option disabled>──────────────</option>
                       {clients.map(c => (
                         <option key={c.clientId} value={c.clientId}>{c.clientName}{c.clientCity ? ` · ${c.clientCity}` : ""}</option>
                       ))}
@@ -1227,20 +1250,22 @@ export default function CollectionRequestsPage() {
                           </div>
                         </div>
                         <div style={s.loadLineInputs}>
-                          <label style={s.label}>Qty to Deliver
-                            <NumericInput style={s.input} allowDecimal={false} 
+                          <label style={s.label}>{slot.clientId === "HUB" ? "Qty for Hub" : "Qty to Deliver"}
+                            <NumericInput style={s.input} allowDecimal={false}
                               value={l.qty || ""} placeholder="0"
                               onChange={e => setAllocSlots(ss => ss.map((x, j) => j !== si ? x : {
                                 ...x, lines: x.lines.map((ll, k) => k !== li ? ll : { ...ll, qty: parseInt(e.target.value) || 0 })
                               }))} disabled={busy} onFocus={e => e.target.select()} />
                           </label>
-                          <label style={s.label}>Unit Price (R, incl. VAT)
-                            <NumericInput style={s.input} 
-                              value={l.unitPrice || ""} placeholder="0.00"
-                              onChange={e => setAllocSlots(ss => ss.map((x, j) => j !== si ? x : {
-                                ...x, lines: x.lines.map((ll, k) => k !== li ? ll : { ...ll, unitPrice: parseFloat(e.target.value) || 0 })
-                              }))} disabled={busy} onFocus={e => e.target.select()} />
-                          </label>
+                          {slot.clientId !== "HUB" && (
+                            <label style={s.label}>Unit Price (R, incl. VAT)
+                              <NumericInput style={s.input}
+                                value={l.unitPrice || ""} placeholder="0.00"
+                                onChange={e => setAllocSlots(ss => ss.map((x, j) => j !== si ? x : {
+                                  ...x, lines: x.lines.map((ll, k) => k !== li ? ll : { ...ll, unitPrice: parseFloat(e.target.value) || 0 })
+                                }))} disabled={busy} onFocus={e => e.target.select()} />
+                            </label>
+                          )}
                         </div>
                       </div>
                     );
@@ -1262,7 +1287,14 @@ export default function CollectionRequestsPage() {
             <div style={s.modalBtns}>
               <button style={s.secondaryBtn} onClick={() => setAllocItem(null)} disabled={busy}>Cancel</button>
               <button style={s.primaryBtn} onClick={submitAllocation} disabled={busy}>
-                {busy ? "Creating…" : `Create ${allocSlots.filter(s => s.clientId && s.lines.some(l => l.qty > 0)).length || ""} Delivery Order${allocSlots.filter(s => s.clientId && s.lines.some(l => l.qty > 0)).length === 1 ? "" : "s"} 🚚`}
+                {busy ? "Saving…" : (() => {
+                  const active = allocSlots.filter(s => s.clientId && s.lines.some(l => l.qty > 0));
+                  const hubSlots = active.filter(s => s.clientId === "HUB").length;
+                  const clientSlots = active.filter(s => s.clientId !== "HUB").length;
+                  if (clientSlots > 0 && hubSlots > 0) return `Save Allocations (${clientSlots} delivery + Hub) ✓`;
+                  if (hubSlots > 0) return "Allocate to Hub 🏠";
+                  return `Create ${clientSlots || ""} Delivery Order${clientSlots === 1 ? "" : "s"} 🚚`;
+                })()}
               </button>
             </div>
           </div>
