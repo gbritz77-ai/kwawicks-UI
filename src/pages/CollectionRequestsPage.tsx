@@ -97,6 +97,16 @@ export default function CollectionRequestsPage() {
   const [roadsaleBusy, setRoadsaleBusy] = useState(false);
   const [roadsaleError, setRoadsaleError] = useState("");
 
+  // Confirm delivery modal — admin records actual qty delivered to a client
+  type ConfirmDeliveryLine = { speciesId: string; speciesName: string; allocatedQty: number; deliveredQty: number; unitPrice: number };
+  const [confirmDeliveryCr, setConfirmDeliveryCr]         = useState<CollectionRequestDto | null>(null);
+  const [confirmDeliveryDoId, setConfirmDeliveryDoId]     = useState<string>("");
+  const [confirmDeliveryClient, setConfirmDeliveryClient] = useState<string>("");
+  const [confirmDeliveryLines, setConfirmDeliveryLines]   = useState<ConfirmDeliveryLine[]>([]);
+  const [confirmDeliveryPayment, setConfirmDeliveryPayment] = useState<string>("Cash");
+  const [confirmDeliveryBusy, setConfirmDeliveryBusy]     = useState(false);
+  const [confirmDeliveryError, setConfirmDeliveryError]   = useState("");
+
   // Per-card delivery note photo (inline view on expanded card)
   const [cardDnUrls, setCardDnUrls] = useState<Record<string, string>>({});
   const [cardDnLoading, setCardDnLoading] = useState<string | null>(null);
@@ -311,6 +321,44 @@ export default function CollectionRequestsPage() {
       setRoadsaleItem(null);
     } catch (e: any) { setRoadsaleError(e?.message ?? "Failed to save roadside sales."); }
     finally { setRoadsaleBusy(false); }
+  }
+
+  function openConfirmDelivery(cr: CollectionRequestDto, a: CollectionDeliveryAllocationDto) {
+    setConfirmDeliveryCr(cr);
+    setConfirmDeliveryDoId(a.deliveryOrderId);
+    setConfirmDeliveryClient(a.clientName);
+    setConfirmDeliveryPayment("Cash");
+    setConfirmDeliveryError("");
+    setConfirmDeliveryLines(a.lines.map(l => ({
+      speciesId:    l.speciesId,
+      speciesName:  l.speciesName || l.speciesId,
+      allocatedQty: l.qty,
+      deliveredQty: l.deliveredQty > 0 ? l.deliveredQty : l.qty, // default = full allocation
+      unitPrice:    l.unitPrice,
+    })));
+  }
+
+  async function submitConfirmDelivery() {
+    if (!confirmDeliveryCr) return;
+    for (const l of confirmDeliveryLines) {
+      if (l.deliveredQty < 0) { setConfirmDeliveryError(`${l.speciesName}: qty cannot be negative.`); return; }
+      if (l.deliveredQty > l.allocatedQty) { setConfirmDeliveryError(`${l.speciesName}: delivered (${l.deliveredQty}) cannot exceed allocated (${l.allocatedQty}).`); return; }
+    }
+    if (!confirmDeliveryPayment) { setConfirmDeliveryError("Please select a payment type."); return; }
+    setConfirmDeliveryBusy(true); setConfirmDeliveryError("");
+    try {
+      const updated = await collectionRequestsApi.confirmDelivery(
+        confirmDeliveryCr.collectionRequestId,
+        confirmDeliveryDoId,
+        {
+          lines: confirmDeliveryLines.map(l => ({ speciesId: l.speciesId, deliveredQty: l.deliveredQty, unitPrice: l.unitPrice })),
+          paymentType: confirmDeliveryPayment,
+        },
+      );
+      setItems(i => i.map(x => x.collectionRequestId === updated.collectionRequestId ? updated : x));
+      setConfirmDeliveryCr(null);
+    } catch (e: any) { setConfirmDeliveryError(e?.message ?? "Failed to confirm delivery."); }
+    finally { setConfirmDeliveryBusy(false); }
   }
 
   function blankSlot(cr: CollectionRequestDto): AllocSlot {
@@ -575,6 +623,7 @@ export default function CollectionRequestsPage() {
                     a.paymentType === "Cash"   ? "rgba(22,163,74,0.1)"   :
                     a.paymentType === "EFT"    ? "rgba(37,99,235,0.1)"   :
                     a.paymentType === "Credit" ? "rgba(124,58,237,0.1)"  : "rgba(100,116,139,0.1)";
+                  const canRecord = canAllocate() && a.deliveryStatus !== "Delivered" && a.deliveryStatus !== "MarkedAtHub";
                   return (
                     <th key={a.deliveryOrderId} style={s.thRight}>
                       {a.clientName}
@@ -582,7 +631,17 @@ export default function CollectionRequestsPage() {
                         <div style={{ fontSize: 10, fontWeight: 700, color: ptColor,
                           background: ptBg, borderRadius: 10, padding: "0px 6px",
                           display: "inline-block", marginTop: 2 }}>
-                          {a.paymentType}
+                          ✓ {a.paymentType}
+                        </div>
+                      ) : canRecord ? (
+                        <div>
+                          <button
+                            onClick={() => openConfirmDelivery(cr, a)}
+                            style={{ fontSize: 10, fontWeight: 700, color: "#15803d", background: "rgba(22,163,74,0.1)",
+                              border: "1px solid rgba(22,163,74,0.4)", borderRadius: 10, padding: "0px 6px",
+                              cursor: "pointer", marginTop: 2 }}>
+                            ✓ Record
+                          </button>
                         </div>
                       ) : a.deliveryStatus ? (
                         <div style={{ fontSize: 10, fontWeight: 500, color: "#94a3b8" }}>{a.deliveryStatus}</div>
@@ -1441,6 +1500,72 @@ export default function CollectionRequestsPage() {
               <button style={s.secondaryBtn} onClick={() => setRoadsaleItem(null)} disabled={roadsaleBusy}>Cancel</button>
               <button style={s.primaryBtn} onClick={submitRoadsale} disabled={roadsaleBusy}>
                 {roadsaleBusy ? "Saving…" : "Save Roadside Sales ✓"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm delivery modal — admin records actual qty + payment type */}
+      {confirmDeliveryCr && (
+        <div style={s.backdrop} onClick={() => !confirmDeliveryBusy && setConfirmDeliveryCr(null)}>
+          <div style={{ ...s.modal, maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>Confirm Delivery</div>
+            <div style={s.modalSub}>{confirmDeliveryClient}</div>
+
+            <div style={{ overflowX: "auto", marginBottom: 12 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: "#f1f5f9" }}>
+                    <th style={s.thLeft}>Species</th>
+                    <th style={{ ...s.thRight, minWidth: 70 }}>Allocated</th>
+                    <th style={{ ...s.thRight, minWidth: 90 }}>Delivered ✎</th>
+                    <th style={{ ...s.thRight, minWidth: 70 }}>Returns</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {confirmDeliveryLines.map((l, i) => (
+                    <tr key={l.speciesId} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                      <td style={{ padding: "7px 8px", fontWeight: 600 }}>{l.speciesName}</td>
+                      <td style={{ padding: "7px 8px", textAlign: "right", color: "#64748b" }}>{l.allocatedQty.toLocaleString()}</td>
+                      <td style={{ padding: "4px 8px", textAlign: "right" }}>
+                        <NumericInput
+                          style={{ ...s.input, width: 80, textAlign: "right" as const, margin: 0, padding: "4px 6px" }}
+                          allowDecimal={false}
+                          value={l.deliveredQty}
+                          onFocus={e => e.target.select()}
+                          onChange={e => setConfirmDeliveryLines(ls => ls.map((x, j) =>
+                            j === i ? { ...x, deliveredQty: parseInt(e.target.value) || 0 } : x
+                          ))}
+                          disabled={confirmDeliveryBusy}
+                        />
+                      </td>
+                      <td style={{ padding: "7px 8px", textAlign: "right",
+                        color: l.allocatedQty - l.deliveredQty > 0 ? "#b45309" : "#64748b", fontWeight: 600 }}>
+                        {(l.allocatedQty - l.deliveredQty).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <label style={s.label}>Payment Type *
+              <select style={s.input} value={confirmDeliveryPayment}
+                onChange={e => setConfirmDeliveryPayment(e.target.value)}
+                disabled={confirmDeliveryBusy}>
+                <option value="Cash">Cash</option>
+                <option value="EFT">EFT</option>
+                <option value="Credit">Credit</option>
+              </select>
+            </label>
+
+            {confirmDeliveryError && <div style={s.errorText}>{confirmDeliveryError}</div>}
+
+            <div style={s.modalBtns}>
+              <button style={s.secondaryBtn} onClick={() => setConfirmDeliveryCr(null)} disabled={confirmDeliveryBusy}>Cancel</button>
+              <button style={s.primaryBtn} onClick={submitConfirmDelivery} disabled={confirmDeliveryBusy}>
+                {confirmDeliveryBusy ? "Saving…" : "Confirm Delivery ✓"}
               </button>
             </div>
           </div>

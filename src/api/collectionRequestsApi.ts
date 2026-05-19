@@ -124,6 +124,11 @@ export const collectionRequestsApi = {
     api.put<CollectionRequestDto>(`/api/collection-requests/${id}/allocations/${deliveryOrderId}`, { lines }),
   setRoadsideSales: (id: string, lines: { speciesId: string; qty: number; unitPrice: number; paymentType: string }[]) =>
     api.put<CollectionRequestDto>(`/api/collection-requests/${id}/roadside-sales`, { lines }),
+  confirmDelivery: (
+    crId: string,
+    deliveryOrderId: string,
+    req: { lines: { speciesId: string; deliveredQty: number; unitPrice: number }[]; paymentType: string },
+  ) => api.post<CollectionRequestDto>(`/api/collection-requests/${crId}/allocations/${deliveryOrderId}/confirm-delivery`, req),
   shortfallReport: (from?: string, to?: string) => {
     const qs = new URLSearchParams();
     if (from) qs.set("from", from);
