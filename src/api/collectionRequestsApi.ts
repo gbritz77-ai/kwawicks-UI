@@ -13,14 +13,19 @@ export type CollectionRequestLineDto = {
 export type CollectionAllocationLineDto = {
   speciesId: string;
   speciesName: string;
-  qty: number;
+  qty: number;        // allocated qty (planned)
   unitPrice: number;
+  deliveredQty: number; // actual delivered (0 = not yet delivered)
 };
 
 export type CollectionDeliveryAllocationDto = {
   deliveryOrderId: string;
   clientId: string;
   clientName: string;
+  /** Status of the linked delivery order e.g. OutForDelivery / Delivered */
+  deliveryStatus: string;
+  /** Payment type from the linked invoice once invoiced (Cash / EFT / Credit / "") */
+  paymentType: string;
   lines: CollectionAllocationLineDto[];
 };
 

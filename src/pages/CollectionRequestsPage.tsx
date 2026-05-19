@@ -465,16 +465,26 @@ export default function CollectionRequestsPage() {
     const effectiveQty = (line: { loadedQty: number; orderedQty: number }) =>
       line.loadedQty > 0 ? line.loadedQty : line.orderedQty;
 
+    // Helper: use delivered qty when the driver has invoiced, else allocated qty
+    const effectiveDelivered = (l: { qty: number; deliveredQty: number }) =>
+      l.deliveredQty > 0 ? l.deliveredQty : l.qty;
+
     // Per-species rows
     const rows = cr.lines.map(line => {
-      const clientQtys = allocations.map(a => ({
-        doId: a.deliveryOrderId,
-        clientName: a.clientName,
-        qty: a.lines.find(l => l.speciesId === line.speciesId)?.qty ?? 0,
-        unitPrice: a.lines.find(l => l.speciesId === line.speciesId)?.unitPrice ?? 0,
-      }));
+      const clientQtys = allocations.map(a => {
+        const allocLine = a.lines.find(l => l.speciesId === line.speciesId);
+        return {
+          doId:          a.deliveryOrderId,
+          clientName:    a.clientName,
+          paymentType:   a.paymentType ?? "",
+          deliveryStatus: a.deliveryStatus ?? "",
+          qty:           allocLine?.qty          ?? 0,  // allocated (planned)
+          deliveredQty:  allocLine?.deliveredQty ?? 0,  // actual (0 = not yet invoiced)
+          unitPrice:     allocLine?.unitPrice    ?? 0,
+        };
+      });
       const effQty         = effectiveQty(line);
-      const totalDelivered = clientQtys.reduce((s, c) => s + c.qty, 0);
+      const totalDelivered = clientQtys.reduce((s, c) => s + effectiveDelivered(c), 0);
       const roadsaleQty    = roadsales.filter(r => r.speciesId === line.speciesId).reduce((s, r) => s + r.qty, 0);
       const hubReturn      = effQty - totalDelivered - roadsaleQty;
       return { line, effQty, clientQtys, totalDelivered, roadsaleQty, hubReturn };
@@ -482,10 +492,13 @@ export default function CollectionRequestsPage() {
 
     // Client column totals
     const clientTotals = allocations.map(a => ({
-      doId: a.deliveryOrderId,
-      clientName: a.clientName,
-      totalQty: a.lines.reduce((s, l) => s + l.qty, 0),
-      totalValue: a.lines.reduce((s, l) => s + l.qty * l.unitPrice, 0),
+      doId:           a.deliveryOrderId,
+      clientName:     a.clientName,
+      paymentType:    a.paymentType ?? "",
+      deliveryStatus: a.deliveryStatus ?? "",
+      totalQty:       a.lines.reduce((s, l) => s + effectiveDelivered(l), 0),
+      allocQty:       a.lines.reduce((s, l) => s + l.qty, 0),
+      totalValue:     a.lines.reduce((s, l) => s + effectiveDelivered(l) * l.unitPrice, 0),
     }));
 
     const totalLoaded       = cr.lines.reduce((s, l) => s + effectiveQty(l), 0);
@@ -503,6 +516,31 @@ export default function CollectionRequestsPage() {
       acc[key].value += r.qty * r.unitPrice;
       return acc;
     }, {});
+
+    // Combined payment summary: client invoices + roadside sales grouped by payment type
+    const paymentSummary = (() => {
+      const map: Record<string, { qty: number; value: number }> = {};
+      // Client invoices (only when paymentType is set, i.e. invoice exists)
+      allocations.forEach(a => {
+        if (!a.paymentType) return;
+        const pt = a.paymentType;
+        if (!map[pt]) map[pt] = { qty: 0, value: 0 };
+        a.lines.forEach(l => {
+          const dQty = l.deliveredQty > 0 ? l.deliveredQty : l.qty;
+          map[pt].qty   += dQty;
+          map[pt].value += dQty * l.unitPrice;
+        });
+      });
+      // Roadside sales
+      roadsales.forEach(r => {
+        const pt = r.paymentType || "Other";
+        if (!map[pt]) map[pt] = { qty: 0, value: 0 };
+        map[pt].qty   += r.qty;
+        map[pt].value += r.qty * r.unitPrice;
+      });
+      return map;
+    })();
+    const hasPaymentSummary = Object.keys(paymentSummary).length > 0;
 
     return (
       <div style={s.summarySection}>
@@ -528,12 +566,31 @@ export default function CollectionRequestsPage() {
               <tr style={{ background: "#f1f5f9", borderRadius: 6 }}>
                 <th style={s.thLeft}>Species</th>
                 <th style={s.thRight}>{loadedLabel}</th>
-                {allocations.map(a => (
-                  <th key={a.deliveryOrderId} style={s.thRight}>
-                    {a.clientName}
-                    <div style={{ fontSize: 10, fontWeight: 500, color: "#94a3b8" }}>DO-{a.deliveryOrderId.split("-")[0].toUpperCase()}</div>
-                  </th>
-                ))}
+                {allocations.map(a => {
+                  const ptColor =
+                    a.paymentType === "Cash"   ? "#15803d" :
+                    a.paymentType === "EFT"    ? "#1d4ed8" :
+                    a.paymentType === "Credit" ? "#7c3aed" : "#64748b";
+                  const ptBg =
+                    a.paymentType === "Cash"   ? "rgba(22,163,74,0.1)"   :
+                    a.paymentType === "EFT"    ? "rgba(37,99,235,0.1)"   :
+                    a.paymentType === "Credit" ? "rgba(124,58,237,0.1)"  : "rgba(100,116,139,0.1)";
+                  return (
+                    <th key={a.deliveryOrderId} style={s.thRight}>
+                      {a.clientName}
+                      {a.paymentType ? (
+                        <div style={{ fontSize: 10, fontWeight: 700, color: ptColor,
+                          background: ptBg, borderRadius: 10, padding: "0px 6px",
+                          display: "inline-block", marginTop: 2 }}>
+                          {a.paymentType}
+                        </div>
+                      ) : a.deliveryStatus ? (
+                        <div style={{ fontSize: 10, fontWeight: 500, color: "#94a3b8" }}>{a.deliveryStatus}</div>
+                      ) : null}
+                      <div style={{ fontSize: 10, fontWeight: 500, color: "#94a3b8" }}>DO-{a.deliveryOrderId.split("-")[0].toUpperCase()}</div>
+                    </th>
+                  );
+                })}
                 {totalRoadsale > 0 && <th style={{ ...s.thRight, color: "#7c3aed" }}>🛣 Roadside</th>}
                 <th style={{ ...s.thRight, color: "#92400e" }}>Hub Return</th>
               </tr>
@@ -546,14 +603,28 @@ export default function CollectionRequestsPage() {
                     {effQty.toLocaleString()}
                     {line.loadedQty === 0 && <div style={{ fontSize: 10, color: "#94a3b8" }}>ordered</div>}
                   </td>
-                  {clientQtys.map(cq => (
-                    <td key={cq.doId} style={{ padding: "7px 8px", textAlign: "right" }}>
-                      {cq.qty > 0 ? cq.qty.toLocaleString() : <span style={{ color: "#cbd5e1" }}>—</span>}
-                      {cq.qty > 0 && cq.unitPrice > 0 && (
-                        <div style={{ fontSize: 10, color: "#64748b" }}>R{(cq.qty * cq.unitPrice).toFixed(2)}</div>
-                      )}
-                    </td>
-                  ))}
+                  {clientQtys.map(cq => {
+                    const shownQty = cq.deliveredQty > 0 ? cq.deliveredQty : cq.qty;
+                    const hasReturn = cq.deliveredQty > 0 && cq.deliveredQty !== cq.qty;
+                    return (
+                      <td key={cq.doId} style={{ padding: "7px 8px", textAlign: "right" }}>
+                        {shownQty > 0
+                          ? <>
+                              <span>{shownQty.toLocaleString()}</span>
+                              {hasReturn && (
+                                <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 600 }}>
+                                  alloc: {cq.qty.toLocaleString()}
+                                </div>
+                              )}
+                              {shownQty > 0 && cq.unitPrice > 0 && (
+                                <div style={{ fontSize: 10, color: "#64748b" }}>R{(shownQty * cq.unitPrice).toFixed(2)}</div>
+                              )}
+                            </>
+                          : <span style={{ color: "#cbd5e1" }}>—</span>
+                        }
+                      </td>
+                    );
+                  })}
                   {totalRoadsale > 0 && (
                     <td style={{ padding: "7px 8px", textAlign: "right", color: "#7c3aed", fontWeight: 600 }}>
                       {roadsaleQty > 0 ? roadsaleQty.toLocaleString() : <span style={{ color: "#cbd5e1" }}>—</span>}
@@ -576,6 +647,9 @@ export default function CollectionRequestsPage() {
                 {clientTotals.map(ct => (
                   <td key={ct.doId} style={{ padding: "7px 8px", textAlign: "right", fontWeight: 800 }}>
                     {ct.totalQty.toLocaleString()}
+                    {ct.allocQty !== ct.totalQty && (
+                      <div style={{ fontSize: 10, color: "#f59e0b", fontWeight: 600 }}>alloc: {ct.allocQty.toLocaleString()}</div>
+                    )}
                     {ct.totalValue > 0 && (
                       <div style={{ fontSize: 10, fontWeight: 700, color: "#15803d" }}>R{ct.totalValue.toFixed(2)}</div>
                     )}
@@ -623,6 +697,38 @@ export default function CollectionRequestsPage() {
                   {pt}: R{v.value.toFixed(2)} ({v.qty} units)
                 </span>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Combined payment type summary (client invoices + roadside) */}
+        {hasPaymentSummary && (
+          <div style={{ marginTop: 10, padding: "8px 12px", background: "rgba(15,23,42,0.03)", border: "1px solid #e2e8f0", borderRadius: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#374151", textTransform: "uppercase" as const, letterSpacing: "0.05em", marginBottom: 8 }}>
+              💳 Payment Summary
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 8 }}>
+              {Object.entries(paymentSummary).map(([pt, v]) => {
+                const color = pt === "Cash" ? "#15803d" : pt === "EFT" ? "#1d4ed8" : pt === "Credit" ? "#7c3aed" : "#64748b";
+                const bg    = pt === "Cash" ? "rgba(22,163,74,0.08)" : pt === "EFT" ? "rgba(37,99,235,0.08)" : pt === "Credit" ? "rgba(124,58,237,0.08)" : "rgba(100,116,139,0.08)";
+                const bdr   = pt === "Cash" ? "rgba(22,163,74,0.3)"  : pt === "EFT" ? "rgba(37,99,235,0.3)"  : pt === "Credit" ? "rgba(124,58,237,0.3)"  : "rgba(100,116,139,0.3)";
+                return (
+                  <div key={pt} style={{ padding: "6px 14px", borderRadius: 10, background: bg, border: `1px solid ${bdr}` }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>{pt}</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color }}>R{v.value.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <div style={{ fontSize: 10, color: "#64748b" }}>{v.qty.toLocaleString()} units</div>
+                  </div>
+                );
+              })}
+              <div style={{ padding: "6px 14px", borderRadius: 10, background: "rgba(15,23,42,0.04)", border: "1px solid #e2e8f0" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#374151", textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Total</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>
+                  R{Object.values(paymentSummary).reduce((s, v) => s + v.value, 0).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div style={{ fontSize: 10, color: "#64748b" }}>
+                  {Object.values(paymentSummary).reduce((s, v) => s + v.qty, 0).toLocaleString()} units
+                </div>
+              </div>
             </div>
           </div>
         )}

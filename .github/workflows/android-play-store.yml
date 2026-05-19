@@ -94,11 +94,11 @@ jobs:
           path: android/app/build/outputs/bundle/release/*.aab
           retention-days: 30
 
-      - name: Publish to Play Store (internal track)
+      - name: Publish to Play Store (production)
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_CREDENTIALS }}
           packageName: co.za.outsec.kwawicks
           releaseFiles: android/app/build/outputs/bundle/release/*.aab
-          track: internal
-          status: draft
+          track: production
+          status: completed
