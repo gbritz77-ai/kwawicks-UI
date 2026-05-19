@@ -95,6 +95,22 @@ const ALL_GUIDES: Guide[] = [
     ],
   },
 
+  // ── Delivery Actual Quantities ─────────────────────────────────────────────
+  {
+    id: "delivery-actual-qty",
+    title: "How the Delivery Summary Shows Actual Quantities",
+    icon: "📊",
+    roles: ["Owner", "Finance", "Admin", "HubStaff", "Procurement"],
+    steps: [
+      { text: "When a driver completes a delivery and submits the 'Complete Delivery' form, the system records the exact quantity the client actually received — which may be less than what was originally ordered." },
+      { text: "The Delivery Summary table on the collection request card immediately updates to show the actual delivered quantity for that client, replacing the originally planned figure." },
+      { text: "Example: if 500 units were planned but the client accepted only 450, the Delivery Summary column for that client will show 450 once the driver submits." },
+      { text: "To see the updated figures, open 'Collections' in the nav bar, find the collection request, and expand the card to view the Delivery Allocations table." },
+      { tip: "If a driver has not yet submitted their 'Complete Delivery' form, the summary still shows the originally planned quantity. It updates automatically the moment they confirm." },
+      { text: "Admin and Finance can also use the '✓ Record Delivery' button directly on a delivery order to manually record the actual quantities — useful if the driver completed the delivery offline." },
+    ],
+  },
+
   // ── Hub Tasks ──────────────────────────────────────────────────────────────
   {
     id: "hub-tasks",
@@ -147,6 +163,24 @@ const ALL_GUIDES: Guide[] = [
       { text: 'Tap "Upload & Finish" to submit the receipt. The delivery is then marked as complete.' },
       { text: 'If the client pays by Cash, no receipt is required — the delivery is completed immediately after confirmation.', tip: "Credit orders are invoiced to the client's account. No immediate payment is required." },
       { text: 'You can also skip the receipt upload by tapping "Skip". The Hub can follow up with the receipt later.' },
+    ],
+  },
+  {
+    id: "driver-stock-sales",
+    title: "How to Record Walk-in Sales (Stock Sales)",
+    icon: "🛍️",
+    roles: ["Driver"],
+    steps: [
+      { text: "If admin has allocated a batch of hub stock to you for walk-in sales, a 'Stock Sales' option will appear in your nav bar." },
+      { text: "Tap 'Stock Sales'. Your active allocation is displayed showing each species, the quantity originally allocated, and how many units you still have available to sell." },
+      { text: "To record a sale, select the species from the dropdown — only species with remaining stock are shown." },
+      { text: "Enter the quantity sold. You cannot enter more than the remaining qty for that species." },
+      { text: "The unit price pre-fills with the price set by admin — edit it only if you sold at a different price." },
+      { text: "Select the payment method: Cash or EFT." },
+      { text: "Optionally enter the customer's name for your records." },
+      { text: 'Tap "Record Sale". The sale is saved and the remaining quantity for that species decreases immediately.' },
+      { text: "All your sales for this allocation are listed in the Sales History at the bottom of the page.", tip: "Once the admin marks the allocation as Complete or Cancelled, this page will no longer show an active allocation." },
+      { text: "When you have finished selling, inform the admin so they can click 'Complete' to close the allocation. Any unsold stock is automatically returned to hub inventory." },
     ],
   },
   {
@@ -339,6 +373,21 @@ const ALL_GUIDES: Guide[] = [
     ],
   },
   {
+    id: "hub-stock-accept",
+    title: "How to Accept HUB-Allocated Stock (Hub Staff)",
+    icon: "🏠",
+    roles: ["Owner", "Finance", "Admin", "HubStaff", "Procurement"],
+    steps: [
+      { text: "When a collection request includes stock earmarked for the HUB (staying at the hub rather than going out on delivery), hub staff must physically verify and count that stock before it is added to the hub's inventory." },
+      { text: "Open 'Collections' in the nav bar and find the collection request. The Delivery Summary table inside the card will include a HUB column." },
+      { text: "If the stock has not yet been accepted, you will see a green '✓ Accept' button in the HUB column header." },
+      { text: "Click '✓ Accept' to open the acceptance modal. It shows each species allocated to the hub and the planned quantity." },
+      { text: "Physically count the stock at the hub. Then, for each species, enter the quantity you actually counted in the 'Received Qty' field." },
+      { text: "The Variance column shows the difference between what was allocated and what you counted. A zero variance means the count matches perfectly.", tip: "If there is a discrepancy, investigate before confirming. The quantity you enter here — not the allocated quantity — is what will be added to hub stock." },
+      { text: "'Click 'Confirm Receipt'. The accepted quantities are immediately added to Qty on Hand for each species. The HUB column now shows a green '✓ Accepted' badge with the accepted quantities.", tip: "Once accepted, the HUB allocation cannot be accepted again. If a correction is needed, contact your system administrator." },
+    ],
+  },
+  {
     id: "roadside-sales",
     title: "How to Record Roadside Sales",
     icon: "🛣️",
@@ -366,6 +415,24 @@ const ALL_GUIDES: Guide[] = [
       { text: 'Click "Upload Invoice & Acknowledge".' },
       { text: "Upload the supplier PDF invoice received for this collection." },
       { text: 'Click "Acknowledge" — the collection status changes to FinanceAcknowledged and the procurement order is automatically marked Completed.', tip: "The uploaded invoice PDF is stored securely and linked to the procurement order for auditing." },
+    ],
+  },
+
+  // ── Driver Stock Allocations ────────────────────────────────────────────────
+  {
+    id: "driver-allocation-create",
+    title: "How to Create a Driver Stock Allocation",
+    icon: "🧳",
+    roles: ["Owner", "Finance", "Admin"],
+    steps: [
+      { text: "Driver Stock Allocations let you assign a batch of hub stock to a specific driver for walk-in / roadside sales to customers who are not registered clients in the system." },
+      { text: "Navigate to 'Driver Allocations' in the Sales section of the nav bar (visible to Admin and Owner only)." },
+      { text: 'Click "+ New Allocation".' },
+      { text: "Select the driver from the dropdown." },
+      { text: 'Click "+ Add Line" for each species to include. Select the species, enter the quantity to allocate, and set the unit price (R per unit). The current Qty on Hand at the hub is shown as a hint.', tip: "Stock is deducted from Qty on Hand immediately when you create the allocation — it physically leaves the hub with the driver. Make sure the driver has physically taken the stock before creating the allocation." },
+      { text: 'Click "Create Allocation". The allocation is saved with status Active and the driver can now access the Stock Sales page.' },
+      { text: "The allocation card on the Driver Allocations page shows each species with Allocated, Sold, and Remaining quantities. Expand the card to see the full sales history." },
+      { text: "When the driver returns and has sold all stock (or you want to close out early), click 'Complete'. Any remaining unsold qty is automatically returned to hub inventory.", tip: "Click 'Cancel' instead if the allocation should be voided entirely — all stock (sold and unsold) will be reviewed and unsold stock returned to inventory." },
     ],
   },
 
