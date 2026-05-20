@@ -344,7 +344,8 @@ export default function HubTasksPage() {
         setClients((prev) => [created, ...prev]);
       } else {
         const updated = await clientsApi.update(clientForm.clientId, payload);
-        setClients((prev) => prev.map((x) => (x.clientId === updated.clientId ? updated : x)));
+        // Use clientForm.clientId (known-good) not updated.clientId (could be undefined on edge cases)
+        setClients((prev) => prev.map((x) => (x.clientId === clientForm.clientId ? updated : x)));
       }
 
       setShowClientForm(false);
@@ -669,8 +670,11 @@ export default function HubTasksPage() {
                       {c.clientAddress || "—"}
                     </div>
 
-                    <div style={s.gridCell} title={c.clientPhone || c.clientContactDetails || ""}>
-                      {c.clientPhone || c.clientContactDetails || "—"}
+                    <div style={s.gridCell}>
+                      {c.clientPhone || "—"}
+                      {c.clientContactDetails && c.clientContactDetails !== c.clientPhone && (
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{c.clientContactDetails}</div>
+                      )}
                     </div>
 
                     <div style={s.gridCell}>
