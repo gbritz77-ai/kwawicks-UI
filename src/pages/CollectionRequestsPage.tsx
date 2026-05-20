@@ -114,6 +114,11 @@ export default function CollectionRequestsPage() {
   const [hubAcceptBusy, setHubAcceptBusy]   = useState(false);
   const [hubAcceptError, setHubAcceptError] = useState("");
 
+  // Remove allocation confirm
+  const [removeAllocTarget, setRemoveAllocTarget] = useState<{ cr: CollectionRequestDto; deliveryOrderId: string; clientName: string } | null>(null);
+  const [removeAllocBusy, setRemoveAllocBusy]   = useState(false);
+  const [removeAllocError, setRemoveAllocError] = useState("");
+
   // Per-card delivery note photo (inline view on expanded card)
   const [cardDnUrls, setCardDnUrls] = useState<Record<string, string>>({});
   const [cardDnLoading, setCardDnLoading] = useState<string | null>(null);
@@ -512,6 +517,20 @@ export default function CollectionRequestsPage() {
       setEditAllocCr(null);
     } catch (e: any) { setEditAllocError(e?.message ?? "Failed to update allocation."); }
     finally { setEditAllocBusy(false); }
+  }
+
+  async function submitRemoveAlloc() {
+    if (!removeAllocTarget) return;
+    setRemoveAllocBusy(true); setRemoveAllocError("");
+    try {
+      const updated = await collectionRequestsApi.removeAllocation(
+        removeAllocTarget.cr.collectionRequestId,
+        removeAllocTarget.deliveryOrderId,
+      );
+      setItems(i => i.map(x => x.collectionRequestId === updated.collectionRequestId ? updated : x));
+      setRemoveAllocTarget(null);
+    } catch (e: any) { setRemoveAllocError(e?.message ?? "Failed to remove allocation."); }
+    finally { setRemoveAllocBusy(false); }
   }
 
   const shortId = (id: string) => id.split("-")[0].toUpperCase();
@@ -1041,6 +1060,15 @@ export default function CollectionRequestsPage() {
                                     style={s.editAllocBtn}
                                     onClick={() => openEditAllocModal(cr, a)}
                                   >✏️ Edit</button>
+                                )}
+                                {canAllocate() && cr.status !== "FinanceAcknowledged" &&
+                                  !(a.hubAcceptanceStatus === "Accepted") &&
+                                  !(a.deliveryStatus === "Delivered" || a.deliveryStatus === "MarkedAtHub") &&
+                                  !a.paymentType && (
+                                  <button
+                                    style={s.removeAllocBtn}
+                                    onClick={() => setRemoveAllocTarget({ cr, deliveryOrderId: a.deliveryOrderId, clientName: a.clientName })}
+                                  >🗑 Remove</button>
                                 )}
                               </div>
                             </div>
@@ -1777,6 +1805,31 @@ export default function CollectionRequestsPage() {
           </div>
         </div>
       )}
+
+      {/* Remove allocation confirm modal */}
+      {removeAllocTarget && (
+        <div style={s.backdrop} onClick={() => !removeAllocBusy && setRemoveAllocTarget(null)}>
+          <div style={s.modal} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>Remove Allocation?</div>
+            <div style={s.modalSub}>
+              {removeAllocTarget.deliveryOrderId === "HUB"
+                ? "Remove the HUB stock allocation?"
+                : `Remove delivery allocation for ${removeAllocTarget.clientName}?`}
+            </div>
+            <p style={{ fontSize: 13, color: "#374151", marginBottom: 16 }}>
+              This will reverse all stock bookings and permanently delete the delivery order.
+              This action cannot be undone.
+            </p>
+            {removeAllocError && <div style={s.formError}>{removeAllocError}</div>}
+            <div style={s.modalBtns}>
+              <button style={s.secondaryBtn} onClick={() => { setRemoveAllocTarget(null); setRemoveAllocError(""); }} disabled={removeAllocBusy}>Cancel</button>
+              <button style={{ ...s.primaryBtn, background: "#dc2626" }} onClick={submitRemoveAlloc} disabled={removeAllocBusy}>
+                {removeAllocBusy ? "Removing…" : "🗑 Yes, Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1869,6 +1922,7 @@ const s: Record<string, React.CSSProperties> = {
   roadsaleBtn: { padding: "10px 18px", borderRadius: 8, background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.4)", color: "#6d28d9", fontWeight: 700, fontSize: 13, cursor: "pointer" },
   refreshBtn: { padding: "8px 12px", borderRadius: 8, background: "#f1f5f9", border: "1px solid #cbd5e1", color: "#64748b", fontWeight: 700, fontSize: 15, cursor: "pointer", lineHeight: 1 },
   editAllocBtn: { padding: "2px 10px", borderRadius: 6, background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.35)", color: "#6d28d9", fontWeight: 700, fontSize: 11, cursor: "pointer" },
+  removeAllocBtn: { padding: "2px 10px", borderRadius: 6, background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.35)", color: "#dc2626", fontWeight: 700, fontSize: 11, cursor: "pointer" },
   summarySection: { marginTop: 14, padding: "12px 14px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10 },
   summarySectionTitle: { fontSize: 12, fontWeight: 800, color: "#334155", textTransform: "uppercase" as const, letterSpacing: "0.05em" },
   thLeft: { padding: "6px 8px", textAlign: "left" as const, color: "#64748b", fontWeight: 700, fontSize: 11, textTransform: "uppercase" as const, letterSpacing: "0.04em" },

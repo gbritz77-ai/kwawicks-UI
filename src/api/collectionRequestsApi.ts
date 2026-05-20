@@ -134,6 +134,8 @@ export const collectionRequestsApi = {
   ) => api.post<CollectionRequestDto>(`/api/collection-requests/${crId}/allocations/${deliveryOrderId}/confirm-delivery`, req),
   hubAccept: (id: string, lines: { speciesId: string; acceptedQty: number }[]) =>
     api.put<CollectionRequestDto>(`/api/collection-requests/${id}/allocations/HUB/accept`, { lines }),
+  removeAllocation: (id: string, deliveryOrderId: string) =>
+    api.del<CollectionRequestDto>(`/api/collection-requests/${id}/allocations/${deliveryOrderId}`),
   shortfallReport: (from?: string, to?: string) => {
     const qs = new URLSearchParams();
     if (from) qs.set("from", from);
