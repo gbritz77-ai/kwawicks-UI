@@ -60,7 +60,7 @@ const emptyClientForm: ClientFormState = {
   clientPostalCode: "",
   clientContactDetails: "",
   clientPhone: "",
-  clientType: 0,
+  clientType: 0, // 0=COD Cash, 1=COD EFT, 2=Credit
 };
 
 // ✅ Sort + Hover types/state (Clients)
@@ -673,7 +673,9 @@ export default function HubTasksPage() {
                       {c.clientPhone || c.clientContactDetails || "—"}
                     </div>
 
-                    <div style={s.gridCell}>{c.clientType === 0 ? "COD" : "Credit"}</div>
+                    <div style={s.gridCell}>
+                      {c.clientType === 0 ? "COD Cash" : c.clientType === 1 ? "COD EFT" : "Credit"}
+                    </div>
 
                     <div style={s.gridActions}>
                       <button style={s.gridEditBtn} onClick={() => openEditClient(c)} disabled={busy}>
@@ -782,13 +784,16 @@ export default function HubTasksPage() {
                     }
                     disabled={busy}
                   >
-                    <option value={0}>COD</option>
-                    <option value={1}>Credit</option>
+                    <option value={0}>COD Cash</option>
+                    <option value={1}>COD EFT</option>
+                    <option value={2}>Credit</option>
                   </select>
                 </label>
 
+                {error && <div style={s.modalError}>{error}</div>}
+
                 <div style={s.modalBtns}>
-                  <button style={s.secondaryBtn} onClick={() => setShowClientForm(false)} disabled={busy}>
+                  <button style={s.secondaryBtn} onClick={() => { setShowClientForm(false); setError(null); }} disabled={busy}>
                     Cancel
                   </button>
                   <button style={s.primaryBtn} onClick={saveClient} disabled={busy || !canManageClients}>
@@ -1089,6 +1094,15 @@ const s: Record<string, React.CSSProperties> = {
     fontSize: 15,
     fontWeight: 700,
     cursor: "pointer",
+  },
+  modalError: {
+    marginTop: 12,
+    padding: "10px 12px",
+    borderRadius: 10,
+    border: "1px solid rgba(239,68,68,0.35)",
+    background: "rgba(239,68,68,0.08)",
+    color: "#7f1d1d",
+    fontSize: 13,
   },
   label: { display: "grid", gap: 6, fontWeight: 800, marginTop: 10 },
   input: {

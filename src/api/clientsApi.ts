@@ -1,6 +1,6 @@
 import { api } from "./apiClient";
 
-export type ClientType = 0 | 1; // 0=COD, 1=Credit
+export type ClientType = 0 | 1 | 2; // 0=CODCASH, 1=CODEFT, 2=Credit
 
 export type ClientDto = {
   clientId: string;
