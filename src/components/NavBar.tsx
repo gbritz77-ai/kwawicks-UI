@@ -79,6 +79,7 @@ export default function NavBar() {
     if (canSeeHubSales)    salesItems.push(leaf("Client Accounts",    "/app/client-accounts"));
     if (canSeeHubRequests) salesItems.push(leaf("Hub Requests",       "/app/hub-requests"));
     if (isOperational)     salesItems.push(leaf("Deliveries",         "/app/delivery-orders"));
+    if (isOperational)     salesItems.push(leaf("Delivery Runs",      "/app/delivery-runs"));
     if (canSeeCollections) salesItems.push(leaf("Collections",        "/app/collection-requests"));
     if (isOperational)     salesItems.push(leaf("Driver Allocations", "/app/driver-allocations"));
     if (isOperational)     salesItems.push(leaf("Slaughter",          "/app/slaughter"));

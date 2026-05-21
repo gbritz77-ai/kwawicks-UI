@@ -16,6 +16,7 @@ import HelpPage from "./pages/HelpPage";
 import SuppliersPage from "./pages/SuppliersPage";
 import ProcurementOrdersPage from "./pages/ProcurementOrdersPage";
 import CollectionRequestsPage from "./pages/CollectionRequestsPage";
+import DeliveryRunsPage from "./pages/DeliveryRunsPage";
 import HubSalesPage from "./pages/HubSalesPage";
 import StaffMembersPage from "./pages/StaffMembersPage";
 import PettyCashPage from "./pages/PettyCashPage";
@@ -54,6 +55,7 @@ export default function App() {
       <Route path="/app/suppliers"          element={<AuthLayout><SuppliersPage /></AuthLayout>} />
       <Route path="/app/procurement-orders" element={<AuthLayout><ProcurementOrdersPage /></AuthLayout>} />
       <Route path="/app/collection-requests" element={<AuthLayout><CollectionRequestsPage /></AuthLayout>} />
+      <Route path="/app/delivery-runs"       element={<AuthLayout><DeliveryRunsPage /></AuthLayout>} />
       <Route path="/app/hub-sales"    element={<AuthLayout><HubSalesPage /></AuthLayout>} />
       <Route path="/app/staff-members" element={<AuthLayout><StaffMembersPage /></AuthLayout>} />
       <Route path="/app/petty-cash"    element={<AuthLayout><PettyCashPage /></AuthLayout>} />
