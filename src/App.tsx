@@ -32,6 +32,7 @@ import CostAveragesPage from "./pages/CostAveragesPage";
 import OtpReportPage from "./pages/OtpReportPage";
 import ReconPage from "./pages/ReconPage";
 import SalesReportPage from "./pages/SalesReportPage";
+import StockLossPage from "./pages/StockLossPage";
 
 function AuthLayout({ children }: { children: React.ReactElement }) {
   return (
@@ -68,6 +69,7 @@ export default function App() {
       <Route path="/app/otp-report"          element={<AuthLayout><OtpReportPage /></AuthLayout>} />
       <Route path="/app/recon"               element={<AuthLayout><ReconPage /></AuthLayout>} />
       <Route path="/app/sales-report"        element={<AuthLayout><SalesReportPage /></AuthLayout>} />
+      <Route path="/app/stock-losses"         element={<AuthLayout><StockLossPage /></AuthLayout>} />
       <Route path="/app/driver-allocations"  element={<AuthLayout><DriverAllocationsPage /></AuthLayout>} />
       <Route path="/driver"              element={<AuthLayout><DriverDashboardPage /></AuthLayout>} />
       <Route path="/driver/work"         element={<AuthLayout><DriverPage /></AuthLayout>} />
