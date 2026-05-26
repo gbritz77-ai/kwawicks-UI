@@ -136,6 +136,13 @@ export const collectionRequestsApi = {
     api.put<CollectionRequestDto>(`/api/collection-requests/${id}/allocations/HUB/accept`, { lines }),
   removeAllocation: (id: string, deliveryOrderId: string) =>
     api.del<CollectionRequestDto>(`/api/collection-requests/${id}/allocations/${deliveryOrderId}`),
+  patchAllocationPayment: (
+    crId: string,
+    deliveryOrderId: string,
+    req: { paymentType: string; receiptS3Key?: string },
+  ) => api.patch<CollectionRequestDto>(`/api/collection-requests/${crId}/allocations/${deliveryOrderId}/payment`, req),
+  getAllocationPopUploadUrl: (crId: string, deliveryOrderId: string) =>
+    api.get<{ uploadUrl: string; s3Key: string }>(`/api/collection-requests/${crId}/allocations/${deliveryOrderId}/pop-upload-url`),
   shortfallReport: (from?: string, to?: string) => {
     const qs = new URLSearchParams();
     if (from) qs.set("from", from);

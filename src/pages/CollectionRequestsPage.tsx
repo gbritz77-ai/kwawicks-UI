@@ -119,6 +119,14 @@ export default function CollectionRequestsPage() {
   const [removeAllocBusy, setRemoveAllocBusy]   = useState(false);
   const [removeAllocError, setRemoveAllocError] = useState("");
 
+  // Change payment type modal (admin/owner correction after delivery)
+  type PatchPaymentTarget = { cr: CollectionRequestDto; deliveryOrderId: string; clientName: string; currentPaymentType: string };
+  const [patchPaymentTarget, setPatchPaymentTarget] = useState<PatchPaymentTarget | null>(null);
+  const [patchPaymentType, setPatchPaymentType]     = useState("Cash");
+  const [patchPaymentFile, setPatchPaymentFile]     = useState<File | null>(null);
+  const [patchPaymentBusy, setPatchPaymentBusy]     = useState(false);
+  const [patchPaymentError, setPatchPaymentError]   = useState("");
+
   // Per-card delivery note photo (inline view on expanded card)
   const [cardDnUrls, setCardDnUrls] = useState<Record<string, string>>({});
   const [cardDnLoading, setCardDnLoading] = useState<string | null>(null);
@@ -533,6 +541,37 @@ export default function CollectionRequestsPage() {
     finally { setRemoveAllocBusy(false); }
   }
 
+  async function submitPatchPayment() {
+    if (!patchPaymentTarget) return;
+    setPatchPaymentBusy(true); setPatchPaymentError("");
+    try {
+      let receiptS3Key: string | undefined;
+
+      if (patchPaymentFile) {
+        const urlRes = await collectionRequestsApi.getAllocationPopUploadUrl(
+          patchPaymentTarget.cr.collectionRequestId,
+          patchPaymentTarget.deliveryOrderId,
+        );
+        await fetch(urlRes.uploadUrl, {
+          method: "PUT",
+          body: patchPaymentFile,
+          headers: { "Content-Type": patchPaymentFile.type || "application/octet-stream" },
+        });
+        receiptS3Key = urlRes.s3Key;
+      }
+
+      const updated = await collectionRequestsApi.patchAllocationPayment(
+        patchPaymentTarget.cr.collectionRequestId,
+        patchPaymentTarget.deliveryOrderId,
+        { paymentType: patchPaymentType, receiptS3Key },
+      );
+      setItems(i => i.map(x => x.collectionRequestId === updated.collectionRequestId ? updated : x));
+      setPatchPaymentTarget(null);
+      setPatchPaymentFile(null);
+    } catch (e: any) { setPatchPaymentError(e?.message ?? "Failed to update payment type."); }
+    finally { setPatchPaymentBusy(false); }
+  }
+
   const shortId = (id: string) => id.split("-")[0].toUpperCase();
 
   function renderLine(line: CollectionRequestLineDto, cr: CollectionRequestDto) {
@@ -714,11 +753,27 @@ export default function CollectionRequestsPage() {
                     <th key={a.deliveryOrderId} style={s.thRight}>
                       {a.clientName}
                       {a.paymentType ? (
-                        <div style={{ fontSize: 10, fontWeight: 700, color: ptColor,
-                          background: ptBg, borderRadius: 10, padding: "0px 6px",
-                          display: "inline-block", marginTop: 2 }}>
-                          ✓ {a.paymentType}
-                        </div>
+                        canAllocate() ? (
+                          <button
+                            title="Click to change payment type"
+                            onClick={() => {
+                              setPatchPaymentTarget({ cr, deliveryOrderId: a.deliveryOrderId, clientName: a.clientName, currentPaymentType: a.paymentType });
+                              setPatchPaymentType(a.paymentType);
+                              setPatchPaymentError("");
+                              setPatchPaymentFile(null);
+                            }}
+                            style={{ fontSize: 10, fontWeight: 700, color: ptColor, background: ptBg,
+                              borderRadius: 10, padding: "1px 8px", display: "inline-block", marginTop: 2,
+                              border: `1px solid ${ptColor}`, cursor: "pointer" }}>
+                            ✎ {a.paymentType}
+                          </button>
+                        ) : (
+                          <div style={{ fontSize: 10, fontWeight: 700, color: ptColor,
+                            background: ptBg, borderRadius: 10, padding: "0px 6px",
+                            display: "inline-block", marginTop: 2 }}>
+                            ✓ {a.paymentType}
+                          </div>
+                        )
                       ) : canRecord ? (
                         <div>
                           <button
@@ -1801,6 +1856,55 @@ export default function CollectionRequestsPage() {
             <div style={s.modalBtns}>
               <button style={s.secondaryBtn} onClick={() => setAckItem(null)} disabled={busy}>Cancel</button>
               <button style={s.primaryBtn} onClick={submitAck} disabled={busy || ackUploading}>{ackUploading ? "Uploading…" : "Upload & Acknowledge"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change payment type modal */}
+      {patchPaymentTarget && (
+        <div style={s.backdrop} onClick={() => !patchPaymentBusy && (setPatchPaymentTarget(null), setPatchPaymentFile(null), setPatchPaymentError(""))}>
+          <div style={s.modal} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>Change Payment Type</div>
+            <div style={s.modalSub}>
+              {patchPaymentTarget.clientName} — currently <strong>{patchPaymentTarget.currentPaymentType}</strong>
+            </div>
+            {patchPaymentError && <div style={s.formError}>{patchPaymentError}</div>}
+            <label style={s.label}>
+              Payment Type
+              <select
+                value={patchPaymentType}
+                onChange={e => setPatchPaymentType(e.target.value)}
+                style={s.input}
+                disabled={patchPaymentBusy}>
+                <option value="Cash">Cash</option>
+                <option value="EFT">EFT</option>
+                <option value="Credit">Credit</option>
+                <option value="CardMachine">Card Machine</option>
+              </select>
+            </label>
+            <label style={s.label}>
+              Proof of Payment (optional)
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={e => setPatchPaymentFile(e.target.files?.[0] ?? null)}
+                disabled={patchPaymentBusy}
+                style={{ fontSize: 13, color: "#374151" }} />
+            </label>
+            {patchPaymentFile && (
+              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>📎 {patchPaymentFile.name}</div>
+            )}
+            <div style={s.modalBtns}>
+              <button
+                style={s.secondaryBtn}
+                onClick={() => { setPatchPaymentTarget(null); setPatchPaymentFile(null); setPatchPaymentError(""); }}
+                disabled={patchPaymentBusy}>
+                Cancel
+              </button>
+              <button style={s.primaryBtn} onClick={submitPatchPayment} disabled={patchPaymentBusy}>
+                {patchPaymentBusy ? "Saving…" : "💾 Save Changes"}
+              </button>
             </div>
           </div>
         </div>
