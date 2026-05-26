@@ -29,6 +29,13 @@ export default function ClientAccountsPage() {
   const [depositError, setDepositError] = useState("");
   const [depositSuccess, setDepositSuccess] = useState("");
 
+  // Manual charge modal
+  const [showManualCharge, setShowManualCharge] = useState(false);
+  const [manualChargeAmount, setManualChargeAmount] = useState("");
+  const [manualChargeNotes, setManualChargeNotes] = useState("");
+  const [manualChargeError, setManualChargeError] = useState("");
+  const [manualChargeBusy, setManualChargeBusy] = useState(false);
+
   // Proof of payment file
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState<"idle" | "uploading" | "done" | "error">("idle");
@@ -106,6 +113,29 @@ export default function ClientAccountsPage() {
     setShowDeposit(false);
     setDepositAmount(""); setDepositNotes(""); setDepositError(""); setDepositSuccess("");
     setProofFile(null); setUploadProgress("idle");
+  }
+
+  async function handleManualCharge() {
+    const amount = parseFloat(manualChargeAmount);
+    if (!amount || amount <= 0) { setManualChargeError("Enter a valid amount greater than zero."); return; }
+    setManualChargeBusy(true); setManualChargeError("");
+    try {
+      await clientCreditApi.addManualCharge(selectedClientId, amount, manualChargeNotes.trim());
+      const updated = await clientCreditApi.getLedger(selectedClientId);
+      setLedger(updated);
+      setShowManualCharge(false);
+      setManualChargeAmount(""); setManualChargeNotes("");
+    } catch (e: any) { setManualChargeError(e?.message ?? "Failed to add manual charge."); }
+    finally { setManualChargeBusy(false); }
+  }
+
+  async function handleDeleteEntry(entryId: string) {
+    if (!window.confirm("Delete this entry? This cannot be undone.")) return;
+    try {
+      await clientCreditApi.deleteEntry(selectedClientId, entryId);
+      const updated = await clientCreditApi.getLedger(selectedClientId);
+      setLedger(updated);
+    } catch (e: any) { setError(e?.message ?? "Failed to delete entry."); }
   }
 
   const fmt = (n: number) =>
@@ -199,9 +229,14 @@ export default function ClientAccountsPage() {
                     {balance < 0 ? "−" : ""}{fmt(balance)}
                   </div>
                 </div>
-                <button style={s.addCreditBtn} onClick={() => { setShowDeposit(true); setDepositSuccess(""); }}>
-                  + Add Credit
-                </button>
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  <button style={s.addCreditBtn} onClick={() => { setShowDeposit(true); setDepositSuccess(""); }}>
+                    + Record Payment
+                  </button>
+                  <button style={{ ...s.addCreditBtn, background: "#7c3aed" }} onClick={() => { setShowManualCharge(true); setManualChargeError(""); }}>
+                    ➕ Manual Charge
+                  </button>
+                </div>
               </div>
 
               {/* KPI row */}
@@ -257,6 +292,7 @@ export default function ClientAccountsPage() {
                         <th style={s.th}>Reference / Notes</th>
                         <th style={{ ...s.th, textAlign: "right" as const }}>Amount</th>
                         <th style={{ ...s.th, textAlign: "right" as const }}>Running Balance</th>
+                        <th style={s.th}></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -295,6 +331,13 @@ export default function ClientAccountsPage() {
                             </td>
                             <td style={{ ...s.td, textAlign: "right" as const, fontWeight: 700, color: row.runningBalance >= 0 ? "#0f172a" : "#dc2626" }}>
                               {row.runningBalance < 0 ? "−" : ""}{fmt(row.runningBalance)}
+                            </td>
+                            <td style={s.td}>
+                              <button
+                                title="Delete this entry"
+                                style={s.deleteEntryBtn}
+                                onClick={() => handleDeleteEntry(row.entryId)}
+                              >✕</button>
                             </td>
                           </tr>
                         );
@@ -367,6 +410,34 @@ export default function ClientAccountsPage() {
             <div style={s.modalBtns}>
               <button style={s.cancelBtn} onClick={closeDeposit} disabled={busy}>{depositSuccess ? "Close" : "Cancel"}</button>
               {!depositSuccess && <button style={s.primaryBtn} onClick={handleDeposit} disabled={busy}>{busy ? "Adding…" : "Add Credit"}</button>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Charge modal */}
+      {showManualCharge && (
+        <div style={s.backdrop} onClick={() => !manualChargeBusy && setShowManualCharge(false)}>
+          <div style={s.modal} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>Manual Charge</div>
+            <div style={s.modalSub}>{ledger?.clientName} — add a charge to correct the ledger</div>
+            {manualChargeError && <div style={s.formError}>{manualChargeError}</div>}
+            <label style={s.label}>Amount (R) *
+              <NumericInput style={s.input} min={0} step={0.01} placeholder="0.00"
+                value={manualChargeAmount} onChange={e => setManualChargeAmount(e.target.value)} disabled={manualChargeBusy} />
+            </label>
+            <label style={s.label}>Notes (optional)
+              <input style={s.input} placeholder="e.g. Prior credit extended, correction"
+                value={manualChargeNotes} onChange={e => setManualChargeNotes(e.target.value)} disabled={manualChargeBusy} />
+            </label>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>
+              A negative charge entry will be added to the ledger, increasing the outstanding balance.
+            </div>
+            <div style={s.modalBtns}>
+              <button style={s.cancelBtn} onClick={() => setShowManualCharge(false)} disabled={manualChargeBusy}>Cancel</button>
+              <button style={{ ...s.primaryBtn, background: "#7c3aed" }} onClick={handleManualCharge} disabled={manualChargeBusy}>
+                {manualChargeBusy ? "Adding…" : "Add Charge"}
+              </button>
             </div>
           </div>
         </div>
@@ -482,4 +553,5 @@ const s: Record<string, React.CSSProperties> = {
   removeFileBtn:       { background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 16, padding: "0 4px", flexShrink: 0 },
   uploadingBanner:     { background: "#fef9c3", border: "1px solid #fde047", borderRadius: 6, padding: "8px 12px", fontSize: 13, color: "#854d0e" },
   proofBadge:          { display: "inline-block", fontSize: 11, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "1px 7px", color: "#1d4ed8", marginTop: 3 },
+  deleteEntryBtn:      { background: "none", border: "1px solid rgba(220,38,38,0.3)", borderRadius: 6, color: "#dc2626", cursor: "pointer", fontSize: 12, padding: "2px 7px", fontWeight: 700 },
 };

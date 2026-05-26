@@ -42,6 +42,12 @@ export const clientCreditApi = {
   addDeposit: (clientId: string, req: AddCreditDepositRequest) =>
     api.post<ClientCreditEntryDto>(`/api/clients/${clientId}/credit`, req),
 
+  addManualCharge: (clientId: string, amount: number, notes: string) =>
+    api.post<ClientCreditEntryDto>(`/api/clients/${clientId}/credit/charges`, { amount, notes }),
+
+  deleteEntry: (clientId: string, entryId: string) =>
+    api.del<void>(`/api/clients/${clientId}/credit/entries/${entryId}`),
+
   getProofUploadUrl: (clientId: string, contentType: string) =>
     api.get<CreditProofUploadUrlResponse>(
       `/api/clients/${clientId}/credit/proof-upload-url?contentType=${encodeURIComponent(contentType)}`
