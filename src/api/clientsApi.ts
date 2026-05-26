@@ -13,7 +13,6 @@ export type ClientDto = {
   clientPhone: string;
   clientType: ClientType;
   isWalkIn: boolean;
-  creditBalance: number;
   createdAtUtc: string;
   updatedAtUtc: string;
 };
