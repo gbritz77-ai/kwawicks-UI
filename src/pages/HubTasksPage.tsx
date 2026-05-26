@@ -679,6 +679,11 @@ export default function HubTasksPage() {
 
                     <div style={s.gridCell}>
                       {c.clientType === 0 ? "COD Cash" : c.clientType === 1 ? "COD EFT" : "Credit"}
+                      {c.clientType === 2 && (c.creditBalance ?? 0) > 0 && (
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#dc2626", marginTop: 2 }}>
+                          Outstanding: R{(c.creditBalance ?? 0).toFixed(2)}
+                        </div>
+                      )}
                     </div>
 
                     <div style={s.gridActions}>
