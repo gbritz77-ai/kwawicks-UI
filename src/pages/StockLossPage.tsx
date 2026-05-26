@@ -215,7 +215,9 @@ export default function StockLossPage() {
               Number Dead
               <NumericInput
                 value={modalQty}
-                onChange={setModalQty}
+                onChange={e => setModalQty(Math.max(0, parseInt(e.target.value) || 0))}
+                allowDecimal={false}
+                label="Number Dead"
                 min={1}
                 max={selectedSpecies?.qtyOnHandHub ?? 99999}
                 style={s.input}
