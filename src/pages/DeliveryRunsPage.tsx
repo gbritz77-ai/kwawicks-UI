@@ -465,7 +465,7 @@ export default function DeliveryRunsPage() {
                     <option value="">— Species —</option>
                     {(species as any[]).map((sp: any) => (
                       <option key={sp.speciesId} value={sp.speciesId}>
-                        {sp.name} (avail: {Math.max(0, (sp.qtyOnHandHub ?? 0) - (sp.qtyBookedOutForDelivery ?? 0))})
+                        {sp.name} (avail: {sp.qtyAvailable ?? sp.qtyOnHandHub})
                       </option>
                     ))}
                   </select>
