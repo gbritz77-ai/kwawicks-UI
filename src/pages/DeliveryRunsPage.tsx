@@ -340,10 +340,16 @@ export default function DeliveryRunsPage() {
                             {alloc.lines.map(l => (
                               <span key={l.speciesId} style={s.allocPill}>
                                 {l.speciesName || l.speciesId}:{" "}
-                                {alloc.deliveryStatus === "Delivered"
-                                  ? <><strong>{l.deliveredQty}</strong><span style={{ color: "#94a3b8" }}>/{l.qty}</span></>
-                                  : <strong>{l.qty}</strong>
-                                }
+                                {alloc.deliveryStatus === "Delivered" ? (
+                                  <>
+                                    <span style={{ color: "#15803d", fontWeight: 700 }}>✓ {l.deliveredQty} delivered</span>
+                                    {l.deliveredQty !== l.qty && (
+                                      <span style={{ color: "#94a3b8", fontSize: 11 }}> (of {l.qty} ordered)</span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <><strong>{l.qty}</strong><span style={{ color: "#94a3b8", fontSize: 11 }}> ordered</span></>
+                                )}
                                 {l.unitPrice > 0 && <span style={{ color: "#64748b" }}> @ R{l.unitPrice.toFixed(2)}</span>}
                               </span>
                             ))}
