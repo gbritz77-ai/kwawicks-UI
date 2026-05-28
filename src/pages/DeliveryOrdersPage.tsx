@@ -236,7 +236,7 @@ export default function DeliveryOrdersPage() {
       if (!Number.isInteger(qty) || qty <= 0) return setError(`Line ${i + 1}: quantity must be a positive whole number.`);
 
       const sp = (species as any[]).find((x: any) => x.speciesId === l.speciesId);
-      const available = sp ? (sp.qtyOnHandHub ?? 0) - (sp.qtyBookedOutForDelivery ?? 0) : null;
+      const available = sp ? (sp.qtyOnHandHub ?? 0) : null; // qtyOnHandHub is already net of booked
       if (available !== null && qty > available)
         return setError(`Line ${i + 1} (${sp?.name}): only ${available} available, requested ${qty}.`);
     }
@@ -321,7 +321,7 @@ export default function DeliveryOrdersPage() {
   function getAvailable(speciesId: string): number | null {
     const sp = (species as any[]).find((s: any) => s.speciesId === speciesId);
     if (!sp) return null;
-    return (sp.qtyOnHandHub ?? 0) - (sp.qtyBookedOutForDelivery ?? 0);
+    return sp.qtyOnHandHub ?? 0; // qtyOnHandHub is already net of booked
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────

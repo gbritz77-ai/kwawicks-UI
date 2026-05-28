@@ -394,9 +394,9 @@ export default function AppShell() {
           {loadingStock ? <SkeletonCards n={4} /> : (
             <div style={{ ...s.panelRow, flexDirection: isMobile ? "column" : "row" }}>
               <div style={{ ...s.kpiGrid, gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(150px, 1fr))" }}>
-                <StatCard compact={isMobile} icon="📦" label="Total On Hand"     value={totalOnHand}               color="#22c55e" to="/app/hub-tasks?tab=species" />
+                <StatCard compact={isMobile} icon="📦" label="Total On Hand"     value={totalOnHand + totalBooked} color="#22c55e" to="/app/hub-tasks?tab=species" />
                 <StatCard compact={isMobile} icon="🔒" label="Booked Out"        value={totalBooked}               color="#2563eb" to="/app/hub-tasks?tab=species" />
-                <StatCard compact={isMobile} icon="✅" label="Available"          value={totalOnHand - totalBooked} color="#8b5cf6" to="/app/hub-tasks?tab=species" />
+                <StatCard compact={isMobile} icon="✅" label="Available"          value={totalOnHand}               color="#8b5cf6" to="/app/hub-tasks?tab=species" />
                 <StatCard compact={isMobile} icon="🐔" label="Active Species"    value={activeSpecies.length}      color="#f59e0b" to="/app/hub-tasks?tab=species" />
               </div>
 

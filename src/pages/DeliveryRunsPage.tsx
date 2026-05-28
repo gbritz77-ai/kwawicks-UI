@@ -105,7 +105,7 @@ export default function DeliveryRunsPage() {
   function getAvailable(speciesId: string): number {
     const sp = (species as any[]).find((x: any) => x.speciesId === speciesId);
     if (!sp) return 0;
-    return Math.max(0, (sp.qtyOnHandHub ?? 0) - (sp.qtyBookedOutForDelivery ?? 0));
+    return Math.max(0, sp.qtyOnHandHub ?? 0); // qtyOnHandHub is already net of booked
   }
 
   // ── Create run ────────────────────────────────────────────────────────────

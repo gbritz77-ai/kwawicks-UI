@@ -508,7 +508,7 @@ export default function HubTasksPage() {
                     <div style={s.gridCell}>{x.vat}</div>
                     <div style={s.gridCell}>{x.qtyOnHandHub}</div>
                     <div style={s.gridCell}>{x.qtyBookedOutForDelivery}</div>
-                    <div style={s.gridCell}>{x.qtyAvailable ?? x.qtyOnHandHub - x.qtyBookedOutForDelivery}</div>
+                    <div style={s.gridCell}>{x.qtyAvailable ?? x.qtyOnHandHub}</div>
                     <div style={s.gridCell}>{x.isActive ? "Active" : "Inactive"}</div>
                     {canManageSpecies && (
                       <div style={s.gridActions}>
