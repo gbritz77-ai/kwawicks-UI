@@ -6,6 +6,7 @@ import type { SpeciesResponse } from "../api/speciesApi";
 import { staffMembersApi } from "../api/staffMembersApi";
 import type { StaffMemberDto } from "../api/staffMembersApi";
 import { hubSalesApi } from "../api/hubSalesApi";
+import { invoicesApi } from "../api/invoicesApi";
 import { clientCreditApi } from "../api/clientCreditApi";
 import { otpApi } from "../api/otpApi";
 import { hasAnyRole } from "../api/auth";
@@ -54,6 +55,10 @@ export default function HubSalesPage() {
   // Payment
   const [paymentType, setPaymentType] = useState("Cash");
   const [splitLines, setSplitLines] = useState<SplitLine[]>([{ method: "Cash", amount: "" }, { method: "Card", amount: "" }]);
+
+  // EFT proof of payment
+  const [eftProof, setEftProof] = useState<File | null>(null);
+  const [eftUploading, setEftUploading] = useState(false);
 
   // Submission
   const [busy, setBusy] = useState(false);
@@ -156,6 +161,7 @@ export default function HubSalesPage() {
     setCreditBalance(null);
     setError("");
     setSuccess(null);
+    setEftProof(null); setEftUploading(false);
     setDepositAmount(""); setDepositMethod("Cash"); setDepositNotes(""); setDepositProof(null); setDepositUpload("idle");
   }
 
@@ -206,6 +212,21 @@ export default function HubSalesPage() {
               .map(l => ({ method: l.method, amount: parseFloat(l.amount) }))
           : undefined,
       });
+
+      // Upload EFT proof of payment if provided
+      if (eftProof && result.invoiceId) {
+        try {
+          setEftUploading(true);
+          const { presignedUrl } = await invoicesApi.getReceiptUploadUrl(result.invoiceId);
+          await fetch(presignedUrl, {
+            method: "PUT",
+            body: eftProof,
+            headers: { "Content-Type": eftProof.type || "image/jpeg" },
+          });
+        } catch { /* non-fatal — sale was recorded, POP upload failure is logged silently */ }
+        finally { setEftUploading(false); }
+      }
+
       setSuccess({ invoiceId: result.invoiceId, awaitingOtp: result.awaitingOtp ?? false, otpSent: result.otpSent ?? false, creditCharged: result.creditCharged, newCreditBalance: result.newCreditBalance });
     } catch (e: any) {
       setError(e?.message ?? "Failed to create sale.");
@@ -773,6 +794,55 @@ export default function HubSalesPage() {
               <div style={s.infoBanner}>On Account (salary deduction at month-end)</div>
             )}
 
+            {/* EFT proof of payment prompt */}
+            {(paymentType === "EFT" || (paymentType === "Split" && splitLines.some(l => l.method === "EFT"))) && (
+              <div style={s.eftProofBox}>
+                <div style={s.eftProofTitle}>📎 EFT Proof of Payment</div>
+                <div
+                  style={{
+                    border: `2px dashed ${eftProof ? "#16a34a" : "#2563eb"}`,
+                    borderRadius: 8,
+                    padding: "12px 14px",
+                    background: eftProof ? "#f0fdf4" : "#eff6ff",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    fontSize: 13,
+                    color: eftProof ? "#15803d" : "#2563eb",
+                  }}
+                  onClick={() => !busy && (document.getElementById("eft-proof-input") as HTMLInputElement)?.click()}
+                >
+                  {eftProof ? (
+                    <>
+                      <span>{eftProof.type === "application/pdf" ? "📄" : "🖼️"}</span>
+                      <span style={{ fontWeight: 600, flex: 1 }}>{eftProof.name}</span>
+                      <button
+                        style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 16, padding: 0 }}
+                        onClick={e => { e.stopPropagation(); setEftProof(null); }}
+                      >✕</button>
+                    </>
+                  ) : (
+                    <>
+                      <span>📷</span>
+                      <span>Attach EFT screenshot or bank slip</span>
+                    </>
+                  )}
+                </div>
+                <input
+                  id="eft-proof-input"
+                  type="file"
+                  accept="image/jpeg,image/png,image/heic,application/pdf"
+                  style={{ display: "none" }}
+                  onChange={e => { setEftProof(e.target.files?.[0] ?? null); e.target.value = ""; }}
+                  disabled={busy}
+                />
+                {!eftProof && (
+                  <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Optional — you can skip and attach later via Recon</div>
+                )}
+              </div>
+            )}
+
             <div style={s.summaryBox}>
               <div style={s.summaryRow}><span>Subtotal</span><span>{fmt(subTotal)}</span></div>
               <div style={s.summaryRow}><span>VAT (15%)</span><span>{fmt(vatTotal)}</span></div>
@@ -786,7 +856,9 @@ export default function HubSalesPage() {
               onClick={handleSubmit}
               disabled={busy || lines.length === 0}
             >
-              {busy ? "Processing…" : "Complete Sale"}
+              {busy
+                ? eftUploading ? "Uploading proof…" : "Processing…"
+                : "Complete Sale"}
             </button>
           </div>}
 
@@ -833,6 +905,8 @@ const s: Record<string, React.CSSProperties> = {
   creditInfo:    { fontSize: 12, color: "#64748b", marginTop: 4, padding: "7px 10px", background: "#f8fafc", borderRadius: 6, border: "1px solid #e2e8f0" },
   creditWarning: { background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 6, padding: "8px 10px", fontSize: 12, color: "#92400e", marginTop: 4 },
   creditOk:      { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 10px", fontSize: 12, color: "#166534", marginTop: 4 },
+  eftProofBox:    { background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "12px 14px", marginTop: 12 },
+  eftProofTitle:  { fontSize: 12, fontWeight: 700, color: "#1d4ed8", marginBottom: 8 },
   splitPanel:     { background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", marginTop: 10 },
   splitPanelTitle:{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 10 },
   splitRow:       { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 },
