@@ -91,12 +91,18 @@ export default function DeliveryOrdersPage() {
   const canMarkAtHub = hasAnyRole("Owner", "Admin", "HubStaff");
   const canCheckIn = hasAnyRole("Owner", "Admin", "HubStaff");
   const canEditLines = hasAnyRole("Owner", "Finance", "Admin");
+  const canDelete = hasAnyRole("Owner", "Admin");
 
   // Edit lines modal state
   const [editOrder, setEditOrder] = useState<DeliveryOrderResponse | null>(null);
   const [editLines, setEditLines] = useState<EditDeliveryOrderLine[]>([]);
   const [editBusy, setEditBusy] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+
+  // Delete confirmation state
+  const [deleteTarget, setDeleteTarget] = useState<DeliveryOrderResponse | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // ── Loaders ──────────────────────────────────────────────────────────────
 
@@ -163,6 +169,20 @@ export default function DeliveryOrdersPage() {
       setError(e?.message || "Could not mark order at hub.");
     } finally {
       setMarkingAtHubId(null);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleteBusy(true); setDeleteError(null);
+    try {
+      await deliveryOrdersApi.delete(deleteTarget.deliveryOrderId);
+      setOrders(prev => prev.filter(o => o.deliveryOrderId !== deleteTarget.deliveryOrderId));
+      setDeleteTarget(null);
+    } catch (e: any) {
+      setDeleteError(e?.message ?? "Could not delete order.");
+    } finally {
+      setDeleteBusy(false);
     }
   }
 
@@ -500,6 +520,14 @@ export default function DeliveryOrdersPage() {
                     {checkInError && <div style={{ ...s.error, marginTop: 8 }}>{checkInError}</div>}
 
                     <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
+                      {canDelete && order.status === "Open" && (
+                        <button
+                          style={{ ...s.markAtHubBtn, background: "#dc2626", borderColor: "#dc2626", color: "#fff" }}
+                          onClick={() => { setDeleteTarget(order); setDeleteError(null); }}
+                        >
+                          🗑 Delete
+                        </button>
+                      )}
                       {canEditLines && order.status === "Open" && (
                         <button
                           style={{ ...s.markAtHubBtn, background: "#7c3aed", borderColor: "#7c3aed" }}
@@ -532,6 +560,36 @@ export default function DeliveryOrdersPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── Delete Confirmation Modal ── */}
+      {deleteTarget && (
+        <div style={s.backdrop} onClick={() => !deleteBusy && setDeleteTarget(null)}>
+          <div style={{ ...s.modal, maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div style={{ ...s.modalTitle, color: "#dc2626" }}>🗑 Delete Delivery Order</div>
+            <div style={{ fontSize: 14, color: "#374151", marginBottom: 16, lineHeight: 1.6 }}>
+              Are you sure you want to delete this order?
+              <br />
+              <strong>{getClientName(deleteTarget.customerId)}</strong>
+              {" · "}{deleteTarget.assignedDriverName}
+              {" · "}{deleteTarget.lines.reduce((s, l) => s + l.quantity, 0)} items
+            </div>
+            <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#7f1d1d", marginBottom: 16 }}>
+              ⚠ Stock will be returned to hub inventory. This cannot be undone.
+            </div>
+            {deleteError && <div style={{ ...s.error, marginBottom: 12 }}>{deleteError}</div>}
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button style={s.secondaryBtn} onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>Cancel</button>
+              <button
+                style={{ ...s.markAtHubBtn, background: "#dc2626", borderColor: "#dc2626", color: "#fff", padding: "9px 20px" }}
+                onClick={confirmDelete}
+                disabled={deleteBusy}
+              >
+                {deleteBusy ? "Deleting…" : "Delete Order"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

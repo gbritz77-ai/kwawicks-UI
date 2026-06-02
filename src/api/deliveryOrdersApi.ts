@@ -85,4 +85,6 @@ export const deliveryOrdersApi = {
     api.post<void>(`/api/delivery-orders/${id}/check-in`, {}),
   editLines: (id: string, lines: EditDeliveryOrderLine[]) =>
     api.put<void>(`/api/delivery-orders/${id}/lines`, { lines }),
+  delete: (id: string) =>
+    api.del<void>(`/api/delivery-orders/${id}`),
 };
