@@ -46,6 +46,17 @@ export default function ClientAccountsPage() {
   const [sendingWa, setSendingWa] = useState(false);
   const [waResult, setWaResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  // View reference modal
+  const [viewRefRow, setViewRefRow] = useState<(typeof rows[0]) | null>(null);
+  const [refCopied, setRefCopied] = useState(false);
+
+  // Resend invoice modal
+  type ResendRow = { entryId: string; reference: string; notes: string };
+  const [resendRow, setResendRow] = useState<ResendRow | null>(null);
+  const [resendPhone, setResendPhone] = useState("");
+  const [resendBusy, setResendBusy] = useState(false);
+  const [resendResult, setResendResult] = useState<{ success: boolean; message: string } | null>(null);
+
   useEffect(() => {
     clientsApi.list().then(data => setClients(data.filter((c: ClientDto) => !c.isWalkIn))).catch(() => setError("Failed to load clients."));
   }, []);
@@ -81,6 +92,30 @@ export default function ClientAccountsPage() {
     } catch (e: any) {
       setWaResult({ success: false, message: e?.message ?? "Failed to send." });
     } finally { setSendingWa(false); }
+  }
+
+  function openResend(row: ResendRow) {
+    setResendRow(row);
+    setResendPhone(selectedClient?.clientPhone ?? "");
+    setResendResult(null);
+  }
+
+  async function handleResend() {
+    if (!resendRow || !resendPhone.trim()) return;
+    setResendBusy(true); setResendResult(null);
+    try {
+      const res = await whatsappApi.sendInvoice(resendRow.reference, resendPhone.trim());
+      setResendResult(res);
+    } catch (e: any) {
+      setResendResult({ success: false, message: e?.message ?? "Failed to send." });
+    } finally { setResendBusy(false); }
+  }
+
+  function copyRef(text: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setRefCopied(true);
+      setTimeout(() => setRefCopied(false), 2000);
+    });
   }
 
   async function handleDeposit() {
@@ -321,9 +356,20 @@ export default function ClientAccountsPage() {
                             <td style={s.td}>
                               {row.paymentMethod || (row.entryType === "InvoiceCharge" ? "Invoice" : "—")}
                             </td>
-                            <td style={{ ...s.td, maxWidth: 240, wordBreak: "break-word" as const }}>
-                              {row.reference && <div style={{ fontSize: 12, color: "#2563eb", fontFamily: "monospace" }}>{row.reference.slice(0, 20)}</div>}
-                              {row.notes && <div style={{ fontSize: 13, color: "#374151" }}>{row.notes}</div>}
+                            <td style={{ ...s.td, maxWidth: 220 }}>
+                              {row.reference && (
+                                <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
+                                  <div style={{ fontSize: 12, color: "#2563eb", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, maxWidth: 160 }}>
+                                    {row.reference}
+                                  </div>
+                                  <button
+                                    style={s.viewRefBtn}
+                                    title="View full reference"
+                                    onClick={() => { setRefCopied(false); setViewRefRow(row); }}
+                                  >👁</button>
+                                </div>
+                              )}
+                              {row.notes && <div style={{ fontSize: 13, color: "#374151", wordBreak: "break-word" as const }}>{row.notes}</div>}
                               {row.proofS3Key && <span style={s.proofBadge}>📎 Proof</span>}
                             </td>
                             <td style={{ ...s.td, textAlign: "right" as const, fontWeight: 700, color: isDeposit ? "#15803d" : "#dc2626" }}>
@@ -332,12 +378,21 @@ export default function ClientAccountsPage() {
                             <td style={{ ...s.td, textAlign: "right" as const, fontWeight: 700, color: row.runningBalance >= 0 ? "#0f172a" : "#dc2626" }}>
                               {row.runningBalance < 0 ? "−" : ""}{fmt(row.runningBalance)}
                             </td>
-                            <td style={s.td}>
-                              <button
-                                title="Delete this entry"
-                                style={s.deleteEntryBtn}
-                                onClick={() => handleDeleteEntry(row.entryId)}
-                              >✕</button>
+                            <td style={{ ...s.td, whiteSpace: "nowrap" as const }}>
+                              <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                                {row.entryType === "InvoiceCharge" && row.reference && (
+                                  <button
+                                    title="Resend invoice via WhatsApp"
+                                    style={s.resendBtn}
+                                    onClick={() => openResend(row)}
+                                  >📱</button>
+                                )}
+                                <button
+                                  title="Delete this entry"
+                                  style={s.deleteEntryBtn}
+                                  onClick={() => handleDeleteEntry(row.entryId)}
+                                >✕</button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -438,6 +493,105 @@ export default function ClientAccountsPage() {
               <button style={{ ...s.primaryBtn, background: "#7c3aed" }} onClick={handleManualCharge} disabled={manualChargeBusy}>
                 {manualChargeBusy ? "Adding…" : "Add Charge"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Reference modal */}
+      {viewRefRow && (
+        <div style={s.backdrop} onClick={() => setViewRefRow(null)}>
+          <div style={{ ...s.modal, maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>Reference / Notes</div>
+            <div style={s.modalSub}>
+              {new Date(viewRefRow.createdAt).toLocaleDateString("en-ZA")} · {viewRefRow.entryType === "InvoiceCharge" ? "Invoice Charge" : viewRefRow.entryType}
+            </div>
+
+            {viewRefRow.reference && (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 6, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Reference</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", marginBottom: 16 }}>
+                  <code style={{ flex: 1, fontSize: 13, color: "#1e40af", wordBreak: "break-all" as const, fontFamily: "monospace" }}>
+                    {viewRefRow.reference}
+                  </code>
+                  <button
+                    style={{ ...s.cancelBtn, padding: "6px 12px", fontSize: 12, flexShrink: 0 }}
+                    onClick={() => copyRef(viewRefRow.reference)}
+                  >
+                    {refCopied ? "✅ Copied" : "📋 Copy"}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {viewRefRow.notes && (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 6, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Notes</div>
+                <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 14px", fontSize: 14, color: "#374151", lineHeight: 1.5, marginBottom: 16 }}>
+                  {viewRefRow.notes}
+                </div>
+              </>
+            )}
+
+            {viewRefRow.entryType === "InvoiceCharge" && viewRefRow.reference && (
+              <div style={{ marginBottom: 16 }}>
+                <button
+                  style={{ ...s.primaryBtn, background: "#15803d", width: "100%", fontSize: 14 }}
+                  onClick={() => { setViewRefRow(null); openResend(viewRefRow); }}
+                >
+                  📱 Resend Invoice via WhatsApp
+                </button>
+              </div>
+            )}
+
+            <div style={s.modalBtns}>
+              <button style={s.cancelBtn} onClick={() => setViewRefRow(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resend Invoice modal */}
+      {resendRow && (
+        <div style={s.backdrop} onClick={() => !resendBusy && setResendRow(null)}>
+          <div style={{ ...s.modal, maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>📱 Resend Invoice</div>
+            <div style={s.modalSub}>{ledger?.clientName}</div>
+
+            <div style={{ background: "#f1f5f9", borderRadius: 8, padding: "8px 12px", marginBottom: 16, fontSize: 12, fontFamily: "monospace", color: "#374151", wordBreak: "break-all" as const }}>
+              Invoice ID: {resendRow.reference}
+            </div>
+
+            {resendResult ? (
+              <div style={resendResult.success ? s.formSuccess : s.formError}>
+                {resendResult.success ? "✅ " : "❌ "}{resendResult.message}
+              </div>
+            ) : (
+              <label style={s.label}>WhatsApp Number *
+                <input
+                  style={s.input}
+                  placeholder="e.g. 0821234567"
+                  value={resendPhone}
+                  onChange={e => setResendPhone(e.target.value)}
+                  disabled={resendBusy}
+                />
+                <div style={{ fontSize: 12, color: "#6b7280", marginTop: -4 }}>Include country code or enter local 10-digit SA number.</div>
+              </label>
+            )}
+
+            <div style={s.modalBtns}>
+              <button style={s.cancelBtn} onClick={() => setResendRow(null)} disabled={resendBusy}>
+                {resendResult ? "Close" : "Cancel"}
+              </button>
+              {!resendResult && (
+                <button
+                  style={{ ...s.primaryBtn, background: "#15803d", opacity: (!resendPhone.trim() || resendBusy) ? 0.6 : 1 }}
+                  onClick={handleResend}
+                  disabled={!resendPhone.trim() || resendBusy}
+                >
+                  {resendBusy ? "Sending…" : "Send Invoice"}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -554,4 +708,6 @@ const s: Record<string, React.CSSProperties> = {
   uploadingBanner:     { background: "#fef9c3", border: "1px solid #fde047", borderRadius: 6, padding: "8px 12px", fontSize: 13, color: "#854d0e" },
   proofBadge:          { display: "inline-block", fontSize: 11, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: "1px 7px", color: "#1d4ed8", marginTop: 3 },
   deleteEntryBtn:      { background: "none", border: "1px solid rgba(220,38,38,0.3)", borderRadius: 6, color: "#dc2626", cursor: "pointer", fontSize: 12, padding: "2px 7px", fontWeight: 700 },
+  viewRefBtn:          { background: "none", border: "1px solid rgba(37,99,235,0.3)", borderRadius: 5, color: "#2563eb", cursor: "pointer", fontSize: 12, padding: "1px 5px", lineHeight: 1, flexShrink: 0 },
+  resendBtn:           { background: "none", border: "1px solid rgba(21,128,61,0.3)", borderRadius: 5, color: "#15803d", cursor: "pointer", fontSize: 13, padding: "2px 6px", lineHeight: 1 },
 };
