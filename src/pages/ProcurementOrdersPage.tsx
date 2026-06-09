@@ -244,6 +244,7 @@ export default function ProcurementOrdersPage() {
             <label style={s.label}>Supplier *
               <select style={s.input} value={form.supplierId} onChange={e => setForm(p => ({ ...p, supplierId: e.target.value }))} disabled={busy}>
                 <option value="">— Select supplier —</option>
+                <option value="HUB">🏭 Hub (Internal)</option>
                 {suppliers.map(s => <option key={s.supplierId} value={s.supplierId}>{s.name}</option>)}
               </select>
             </label>
