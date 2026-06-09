@@ -4,6 +4,8 @@ import type { ClientCreditLedgerDto, ClientCreditEntryDto } from "../api/clientC
 import { clientsApi } from "../api/clientsApi";
 import type { ClientDto } from "../api/clientsApi";
 import { whatsappApi } from "../api/whatsappApi";
+import { invoicesApi } from "../api/invoicesApi";
+import type { InvoiceResponse } from "../api/invoicesApi";
 import { NumericInput } from "../components/NumericInput";
 
 function todayIso() { return new Date().toISOString().slice(0, 10); }
@@ -56,6 +58,8 @@ export default function ClientAccountsPage() {
   const [resendPhone, setResendPhone] = useState("");
   const [resendBusy, setResendBusy] = useState(false);
   const [resendResult, setResendResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [resendInvoice, setResendInvoice] = useState<InvoiceResponse | null>(null);
+  const [resendInvoiceLoading, setResendInvoiceLoading] = useState(false);
 
   useEffect(() => {
     clientsApi.list().then(data => setClients(data.filter((c: ClientDto) => !c.isWalkIn))).catch(() => setError("Failed to load clients."));
@@ -98,6 +102,12 @@ export default function ClientAccountsPage() {
     setResendRow(row);
     setResendPhone(selectedClient?.clientPhone ?? "");
     setResendResult(null);
+    setResendInvoice(null);
+    setResendInvoiceLoading(true);
+    invoicesApi.get(row.reference)
+      .then(inv => setResendInvoice(inv))
+      .catch(() => setResendInvoice(null))
+      .finally(() => setResendInvoiceLoading(false));
   }
 
   async function handleResend() {
@@ -554,13 +564,74 @@ export default function ClientAccountsPage() {
       {/* Resend Invoice modal */}
       {resendRow && (
         <div style={s.backdrop} onClick={() => !resendBusy && setResendRow(null)}>
-          <div style={{ ...s.modal, maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+          <div style={{ ...s.modal, maxWidth: 520 }} onClick={e => e.stopPropagation()}>
             <div style={s.modalTitle}>📱 Resend Invoice</div>
             <div style={s.modalSub}>{ledger?.clientName}</div>
 
-            <div style={{ background: "#f1f5f9", borderRadius: 8, padding: "8px 12px", marginBottom: 16, fontSize: 12, fontFamily: "monospace", color: "#374151", wordBreak: "break-all" as const }}>
-              Invoice ID: {resendRow.reference}
-            </div>
+            {/* Invoice preview */}
+            {resendInvoiceLoading ? (
+              <div style={{ textAlign: "center" as const, color: "#94a3b8", padding: "20px 0", fontSize: 13 }}>Loading invoice…</div>
+            ) : resendInvoice ? (
+              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px", marginBottom: 18 }}>
+                {/* Header row */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>
+                      {resendInvoice.invoiceNumber || resendInvoice.invoiceId.slice(0, 8) + "…"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                      {new Date(resendInvoice.createdAt).toLocaleDateString("en-ZA")} · {resendInvoice.paymentType || "—"}
+                    </div>
+                  </div>
+                  <span style={{
+                    fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
+                    background: resendInvoice.paymentStatus === "Paid" ? "#dcfce7" : "#fef9c3",
+                    color:      resendInvoice.paymentStatus === "Paid" ? "#166534" : "#854d0e",
+                  }}>
+                    {resendInvoice.paymentStatus}
+                  </span>
+                </div>
+
+                {/* Lines table */}
+                <table style={{ width: "100%", borderCollapse: "collapse" as const, fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+                      <th style={{ textAlign: "left" as const, padding: "4px 6px", color: "#64748b", fontWeight: 600, fontSize: 11, textTransform: "uppercase" as const }}>Item</th>
+                      <th style={{ textAlign: "right" as const, padding: "4px 6px", color: "#64748b", fontWeight: 600, fontSize: 11, textTransform: "uppercase" as const }}>Qty</th>
+                      <th style={{ textAlign: "right" as const, padding: "4px 6px", color: "#64748b", fontWeight: 600, fontSize: 11, textTransform: "uppercase" as const }}>Unit</th>
+                      <th style={{ textAlign: "right" as const, padding: "4px 6px", color: "#64748b", fontWeight: 600, fontSize: 11, textTransform: "uppercase" as const }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resendInvoice.lines.map((l, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "5px 6px", color: "#1e293b" }}>{l.speciesId}</td>
+                        <td style={{ padding: "5px 6px", textAlign: "right" as const, color: "#374151" }}>{l.quantity}</td>
+                        <td style={{ padding: "5px 6px", textAlign: "right" as const, color: "#374151" }}>R {l.unitPrice.toFixed(2)}</td>
+                        <td style={{ padding: "5px 6px", textAlign: "right" as const, fontWeight: 600, color: "#0f172a" }}>R {l.lineTotal.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Totals */}
+                <div style={{ marginTop: 10, borderTop: "1px solid #e2e8f0", paddingTop: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#64748b", marginBottom: 3 }}>
+                    <span>Sub-total</span><span>R {resendInvoice.subTotal.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#64748b", marginBottom: 6 }}>
+                    <span>VAT</span><span>R {resendInvoice.vatTotal.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, fontWeight: 800, color: "#0f172a" }}>
+                    <span>Grand Total</span><span>R {resendInvoice.grandTotal.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ background: "#f1f5f9", borderRadius: 8, padding: "8px 12px", marginBottom: 16, fontSize: 12, fontFamily: "monospace", color: "#374151", wordBreak: "break-all" as const }}>
+                Invoice: {resendRow.reference}
+              </div>
+            )}
 
             {resendResult ? (
               <div style={resendResult.success ? s.formSuccess : s.formError}>
