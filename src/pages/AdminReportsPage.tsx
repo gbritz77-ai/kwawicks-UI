@@ -1346,6 +1346,17 @@ function InvoicesTab({
                     <Td style={{ color: "#64748b", fontSize: 13 }}>{inv.createdByDriverId || "—"}</Td>
                     <Td>
                       <div>{inv.paymentType || "—"}</div>
+                      {inv.paymentType === "Split" && inv.splitPayments?.length > 0 && (
+                        <div style={{ marginTop: 4 }}>
+                          {inv.splitPayments.map((sp, i) => (
+                            <div key={i} style={{ fontSize: 11, color: "#374151", lineHeight: 1.6 }}>
+                              <span style={{ fontWeight: 600, color: "#1e40af" }}>{sp.method}</span>
+                              {" — "}
+                              <span>{fmt(sp.amount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       {isAccountCredit && inv.paymentStatus === "Pending" && (
                         <div style={{ fontSize: 11, marginTop: 3, fontWeight: 600,
                           color: creditBal === undefined ? "#94a3b8" : creditNegative ? "#dc2626" : "#166534" }}>

@@ -75,6 +75,11 @@ export type ReceiptUploadUrlResponse = {
 
 // ── Recon ──────────────────────────────────────────────────────────────────
 
+export type SplitPaymentLine = {
+  method: string;
+  amount: number;
+};
+
 export type ReconInvoiceItem = {
   invoiceId: string;
   invoiceNumber: string;
@@ -90,6 +95,7 @@ export type ReconInvoiceItem = {
   reconNotes: string;
   reconciledAt: string | null;
   daysOutstanding: number;
+  splitPayments: SplitPaymentLine[];
 };
 
 export type ReconRequest = {
