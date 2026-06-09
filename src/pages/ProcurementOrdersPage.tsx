@@ -94,9 +94,24 @@ export default function ProcurementOrdersPage() {
     setShowForm(true);
   }
 
+  const isHubOrder = form.supplierId === "HUB";
+
+  function hubAvailable(speciesId: string): number {
+    const sp = species.find((x: any) => x.speciesId === speciesId);
+    return sp?.qtyOnHandHub ?? 0;
+  }
+
   async function saveOrder() {
     if (!form.supplierId) { setFormError("Please select a supplier."); return; }
     if (form.lines.some(l => !l.speciesId || l.orderedQty <= 0 || !l.unitCost || l.unitCost <= 0)) { setFormError("All lines require a species, quantity and unit cost > 0."); return; }
+    if (isHubOrder) {
+      const over = form.lines.find(l => l.speciesId && l.orderedQty > hubAvailable(l.speciesId));
+      if (over) {
+        const sp = species.find((x: any) => x.speciesId === over.speciesId);
+        setFormError(`Insufficient hub stock for ${sp?.name ?? over.speciesId}. Available: ${hubAvailable(over.speciesId)}, requested: ${over.orderedQty}`);
+        return;
+      }
+    }
     setBusy(true); setFormError("");
     try {
       if (editingOrderId) {
@@ -276,7 +291,21 @@ export default function ProcurementOrdersPage() {
                   <option value="">— Species —</option>
                   {species.map((sp: any) => <option key={sp.speciesId} value={sp.speciesId}>{sp.name}</option>)}
                 </select>
-                <NumericInput style={{ ...s.input, flex: 1 }} placeholder="Qty" allowDecimal={false}  value={line.orderedQty || ""} onChange={e => setLine(idx, "orderedQty", parseInt(e.target.value) || 0)} disabled={busy} />
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+                  <NumericInput
+                    style={{ ...s.input, ...(isHubOrder && line.speciesId && line.orderedQty > hubAvailable(line.speciesId) ? { borderColor: "#f87171" } : {}) }}
+                    placeholder="Qty"
+                    allowDecimal={false}
+                    value={line.orderedQty || ""}
+                    onChange={e => setLine(idx, "orderedQty", parseInt(e.target.value) || 0)}
+                    disabled={busy}
+                  />
+                  {isHubOrder && line.speciesId && (
+                    <span style={{ fontSize: 11, color: line.orderedQty > hubAvailable(line.speciesId) ? "#dc2626" : "#16a34a", fontWeight: 600 }}>
+                      avail: {hubAvailable(line.speciesId)}
+                    </span>
+                  )}
+                </div>
                 <div style={s.unitCostWrap}>
                   <span style={s.unitCostPrefix}>R</span>
                   <NumericInput style={{ ...s.input, ...s.unitCostInput }} placeholder="Unit cost"  value={line.unitCost || ""} onChange={e => setLine(idx, "unitCost", parseFloat(e.target.value) || 0)} disabled={busy} />
