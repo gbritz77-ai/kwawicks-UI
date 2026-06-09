@@ -2001,6 +2001,136 @@ function ClientOrdersTab({ clients, species, fmt }: {
           </div>
         );
       })}
+
+      {/* ── Delivery Runs Report ── */}
+      {tab === "delivery-runs" && runReport && !loading && (() => {
+        function fmtDT(iso: string) {
+          return new Date(iso).toLocaleString("en-ZA", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+        }
+
+        const filtered = runReport
+          .filter(r => {
+            const d = r.createdAt.slice(0, 10);
+            if (from && d < from) return false;
+            if (to   && d > to)   return false;
+            return true;
+          })
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+        const totalRuns      = filtered.length;
+        const completedRuns  = filtered.filter(r => r.status === "Completed").length;
+        const inProgressRuns = filtered.filter(r => r.status === "OutForDelivery").length;
+        const allAllocs      = filtered.flatMap(r => r.allocations);
+        const deliveredAllocs = allAllocs.filter(a => a.deliveryStatus === "Delivered");
+        const totalItemsDelivered = deliveredAllocs.flatMap(a => a.lines).reduce((s, l) => s + l.deliveredQty, 0);
+
+        const runStatus = (s: string) =>
+          s === "Completed"      ? { bg: "#dcfce7", color: "#166534", label: "Completed" } :
+          s === "OutForDelivery" ? { bg: "#dbeafe", color: "#1d4ed8", label: "Out for Delivery" } :
+                                   { bg: "#fef9c3", color: "#854d0e", label: "Open" };
+
+        const allocStatus = (s: string) =>
+          s === "Delivered"      ? { bg: "#dcfce7", color: "#166534", label: "Delivered" } :
+          s === "OutForDelivery" ? { bg: "#dbeafe", color: "#1d4ed8", label: "Out for Delivery" } :
+                                   { bg: "#fef9c3", color: "#854d0e", label: "Open" };
+
+        return (
+          <div>
+            <div style={s.kpiRow}>
+              <KpiCard label="Total Runs"        value={String(totalRuns)} />
+              <KpiCard label="Completed"         value={String(completedRuns)}  color="#166534" bg="#dcfce7" />
+              <KpiCard label="In Progress"       value={String(inProgressRuns)} color="#1d4ed8" bg="#dbeafe" />
+              <KpiCard label="Clients Delivered" value={String(deliveredAllocs.length)} color="#7c3aed" bg="#ede9fe" />
+              <KpiCard label="Items Delivered"   value={totalItemsDelivered.toLocaleString()} color="#0369a1" bg="#e0f2fe" />
+            </div>
+
+            {filtered.length === 0 ? (
+              <p style={s.muted}>No delivery runs in this period.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {filtered.map(run => {
+                  const rs = runStatus(run.status);
+                  const runItems = run.allocations.filter(a => a.deliveryStatus === "Delivered")
+                    .flatMap(a => a.lines).reduce((sum, l) => sum + l.deliveredQty, 0);
+                  return (
+                    <div key={run.deliveryRunId} style={{ background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+                      {/* Run header */}
+                      <div style={{ background: "#f8fafc", padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", borderBottom: "1px solid #e2e8f0" }}>
+                        <span style={{ ...s.badge, background: rs.bg, color: rs.color }}>{rs.label}</span>
+                        <strong style={{ fontSize: 14, color: "#0f172a" }}>🚚 {run.assignedDriverName || run.assignedDriverId}</strong>
+                        <span style={{ fontSize: 13, color: "#64748b" }}>{fmtDT(run.createdAt)}</span>
+                        {run.notes && <span style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>{run.notes}</span>}
+                        <span style={{ fontSize: 12, color: "#94a3b8", marginLeft: "auto" }}>
+                          {run.allocations.length} client{run.allocations.length !== 1 ? "s" : ""} · {runItems} delivered
+                        </span>
+                      </div>
+
+                      {/* Allocations */}
+                      {run.allocations.length > 0 && (
+                        <div style={s.tableWrap}>
+                          <table style={{ ...s.table, fontSize: 13 }}>
+                            <thead>
+                              <tr>
+                                <th style={s.th}>Client</th>
+                                <th style={s.th}>Status</th>
+                                <th style={s.th}>Items</th>
+                                <th style={s.th}>Payment</th>
+                                <th style={s.th}>Invoice</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {run.allocations.map((alloc, ai) => {
+                                const as_ = allocStatus(alloc.deliveryStatus);
+                                return (
+                                  <tr key={alloc.deliveryOrderId} style={{ background: ai % 2 === 0 ? "#fff" : "#f9fafb" }}>
+                                    <td style={{ ...s.td, fontWeight: 600 }}>{alloc.clientName}</td>
+                                    <td style={s.td}>
+                                      <span style={{ ...s.badge, background: as_.bg, color: as_.color }}>{as_.label}</span>
+                                    </td>
+                                    <td style={s.td}>
+                                      {alloc.lines.map(l => (
+                                        <div key={l.speciesId} style={{ lineHeight: 1.8 }}>
+                                          <span style={{ fontWeight: 600 }}>{l.speciesName}</span>
+                                          {": "}
+                                          {alloc.deliveryStatus === "Delivered" ? (
+                                            <>
+                                              <span style={{ color: "#15803d", fontWeight: 700 }}>{l.deliveredQty} delivered</span>
+                                              {l.deliveredQty !== l.qty && (
+                                                <span style={{ color: "#94a3b8", fontSize: 11 }}> of {l.qty} ordered</span>
+                                              )}
+                                            </>
+                                          ) : (
+                                            <span>{l.qty} ordered</span>
+                                          )}
+                                          {l.unitPrice > 0 && <span style={{ color: "#64748b" }}> @ R{l.unitPrice.toFixed(2)}</span>}
+                                        </div>
+                                      ))}
+                                    </td>
+                                    <td style={s.td}>
+                                      {alloc.paymentType
+                                        ? <span style={{ ...salesBadge, ...(alloc.paymentType === "Cash" ? badgeCash : alloc.paymentType === "EFT" ? badgeEFT : alloc.paymentType === "Credit" ? badgeCredit : badgeOther) }}>
+                                            {alloc.paymentType}
+                                          </span>
+                                        : <span style={{ color: "#94a3b8" }}>—</span>}
+                                    </td>
+                                    <td style={{ ...s.td, ...s.mono, color: "#64748b" }}>
+                                      {alloc.invoiceId ? alloc.invoiceId.slice(0, 12) + "…" : "—"}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -2148,136 +2278,6 @@ function SalesTab({
           </table>
         </div>
       )}
-
-      {/* ── Delivery Runs Report ── */}
-      {tab === "delivery-runs" && runReport && !loading && (() => {
-        function fmtDT(iso: string) {
-          return new Date(iso).toLocaleString("en-ZA", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-        }
-
-        const filtered = runReport
-          .filter(r => {
-            const d = r.createdAt.slice(0, 10);
-            if (from && d < from) return false;
-            if (to   && d > to)   return false;
-            return true;
-          })
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-
-        const totalRuns      = filtered.length;
-        const completedRuns  = filtered.filter(r => r.status === "Completed").length;
-        const inProgressRuns = filtered.filter(r => r.status === "OutForDelivery").length;
-        const allAllocs      = filtered.flatMap(r => r.allocations);
-        const deliveredAllocs = allAllocs.filter(a => a.deliveryStatus === "Delivered");
-        const totalItemsDelivered = deliveredAllocs.flatMap(a => a.lines).reduce((s, l) => s + l.deliveredQty, 0);
-
-        const runStatus = (s: string) =>
-          s === "Completed"      ? { bg: "#dcfce7", color: "#166534", label: "Completed" } :
-          s === "OutForDelivery" ? { bg: "#dbeafe", color: "#1d4ed8", label: "Out for Delivery" } :
-                                   { bg: "#fef9c3", color: "#854d0e", label: "Open" };
-
-        const allocStatus = (s: string) =>
-          s === "Delivered"      ? { bg: "#dcfce7", color: "#166534", label: "Delivered" } :
-          s === "OutForDelivery" ? { bg: "#dbeafe", color: "#1d4ed8", label: "Out for Delivery" } :
-                                   { bg: "#fef9c3", color: "#854d0e", label: "Open" };
-
-        return (
-          <div>
-            <div style={s.kpiRow}>
-              <KpiCard label="Total Runs"        value={String(totalRuns)} />
-              <KpiCard label="Completed"         value={String(completedRuns)}  color="#166534" bg="#dcfce7" />
-              <KpiCard label="In Progress"       value={String(inProgressRuns)} color="#1d4ed8" bg="#dbeafe" />
-              <KpiCard label="Clients Delivered" value={String(deliveredAllocs.length)} color="#7c3aed" bg="#ede9fe" />
-              <KpiCard label="Items Delivered"   value={totalItemsDelivered.toLocaleString()} color="#0369a1" bg="#e0f2fe" />
-            </div>
-
-            {filtered.length === 0 ? (
-              <p style={s.muted}>No delivery runs in this period.</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {filtered.map(run => {
-                  const rs = runStatus(run.status);
-                  const runItems = run.allocations.filter(a => a.deliveryStatus === "Delivered")
-                    .flatMap(a => a.lines).reduce((sum, l) => sum + l.deliveredQty, 0);
-                  return (
-                    <div key={run.deliveryRunId} style={{ background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0", overflow: "hidden" }}>
-                      {/* Run header */}
-                      <div style={{ background: "#f8fafc", padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", borderBottom: "1px solid #e2e8f0" }}>
-                        <span style={{ ...s.badge, background: rs.bg, color: rs.color }}>{rs.label}</span>
-                        <strong style={{ fontSize: 14, color: "#0f172a" }}>🚚 {run.assignedDriverName || run.assignedDriverId}</strong>
-                        <span style={{ fontSize: 13, color: "#64748b" }}>{fmtDT(run.createdAt)}</span>
-                        {run.notes && <span style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>{run.notes}</span>}
-                        <span style={{ fontSize: 12, color: "#94a3b8", marginLeft: "auto" }}>
-                          {run.allocations.length} client{run.allocations.length !== 1 ? "s" : ""} · {runItems} delivered
-                        </span>
-                      </div>
-
-                      {/* Allocations */}
-                      {run.allocations.length > 0 && (
-                        <div style={s.tableWrap}>
-                          <table style={{ ...s.table, fontSize: 13 }}>
-                            <thead>
-                              <tr>
-                                <th style={s.th}>Client</th>
-                                <th style={s.th}>Status</th>
-                                <th style={s.th}>Items</th>
-                                <th style={s.th}>Payment</th>
-                                <th style={s.th}>Invoice</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {run.allocations.map((alloc, ai) => {
-                                const as_ = allocStatus(alloc.deliveryStatus);
-                                return (
-                                  <tr key={alloc.deliveryOrderId} style={{ background: ai % 2 === 0 ? "#fff" : "#f9fafb" }}>
-                                    <td style={{ ...s.td, fontWeight: 600 }}>{alloc.clientName}</td>
-                                    <td style={s.td}>
-                                      <span style={{ ...s.badge, background: as_.bg, color: as_.color }}>{as_.label}</span>
-                                    </td>
-                                    <td style={s.td}>
-                                      {alloc.lines.map(l => (
-                                        <div key={l.speciesId} style={{ lineHeight: 1.8 }}>
-                                          <span style={{ fontWeight: 600 }}>{l.speciesName}</span>
-                                          {": "}
-                                          {alloc.deliveryStatus === "Delivered" ? (
-                                            <>
-                                              <span style={{ color: "#15803d", fontWeight: 700 }}>{l.deliveredQty} delivered</span>
-                                              {l.deliveredQty !== l.qty && (
-                                                <span style={{ color: "#94a3b8", fontSize: 11 }}> of {l.qty} ordered</span>
-                                              )}
-                                            </>
-                                          ) : (
-                                            <span>{l.qty} ordered</span>
-                                          )}
-                                          {l.unitPrice > 0 && <span style={{ color: "#64748b" }}> @ R{l.unitPrice.toFixed(2)}</span>}
-                                        </div>
-                                      ))}
-                                    </td>
-                                    <td style={s.td}>
-                                      {alloc.paymentType
-                                        ? <span style={{ ...salesBadge, ...(alloc.paymentType === "Cash" ? badgeCash : alloc.paymentType === "EFT" ? badgeEFT : alloc.paymentType === "Credit" ? badgeCredit : badgeOther) }}>
-                                            {alloc.paymentType}
-                                          </span>
-                                        : <span style={{ color: "#94a3b8" }}>—</span>}
-                                    </td>
-                                    <td style={{ ...s.td, ...s.mono, color: "#64748b" }}>
-                                      {alloc.invoiceId ? alloc.invoiceId.slice(0, 12) + "…" : "—"}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })()}
     </div>
   );
 }
