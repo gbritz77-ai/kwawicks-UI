@@ -118,7 +118,8 @@ export default function NavBar() {
     if (canSeeStaff)   adminItems.push(leaf("Staff",            "/app/staff-members"));
     if (isUserManager) adminItems.push(leaf("Users",            "/app/users"));
     if (isUserManager) adminItems.push(leaf("Price Approvals",  "/app/price-approvals"));
-    if (isUserManager) adminItems.push(leaf("OTP Audit",        "/app/otp-report"));
+    if (isUserManager) adminItems.push(leaf("OTP Audit",         "/app/otp-report"));
+    if (isFinancial)   adminItems.push(leaf("Vehicle Tracking", "/app/vehicle-tracking"));
     if (isOwner)       adminItems.push(leaf("Settings",         "/app/settings"));
     if (adminItems.length) entries.push(group("Admin", adminItems));
 
