@@ -101,6 +101,11 @@ export type InvoiceLineItem = {
   lineTotal: number;
 };
 
+export type SplitPaymentLine = {
+  method: string;
+  amount: number;
+};
+
 export type InvoiceItem = {
   invoiceId: string;
   invoiceNumber: string;
@@ -119,6 +124,7 @@ export type InvoiceItem = {
   createdAt: string;
   updatedAt: string;
   lines: InvoiceLineItem[];
+  splitPayments: SplitPaymentLine[];
 };
 
 // ── Admin: Customer Statement ─────────────────────────────────────────────────
