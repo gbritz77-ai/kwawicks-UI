@@ -601,11 +601,6 @@ export default function HubSalesPage() {
                   <span style={{ ...s.stockBadge, background: "#f8fafc", border: "1px solid #e2e8f0", color: "#64748b" }}>
                     {selectedSpeciesItem.qtyOnHandHub} on hand
                   </span>
-                  {selectedSpeciesItem.qtyBookedOutForDelivery > 0 && (
-                    <span style={{ ...s.stockBadge, background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e" }}>
-                      {selectedSpeciesItem.qtyBookedOutForDelivery} on delivery
-                    </span>
-                  )}
                 </div>
                 {/* Price hint */}
                 <span style={s.stockHint}>
