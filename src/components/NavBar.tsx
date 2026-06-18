@@ -2,6 +2,20 @@ import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { clearAuth, getProfileFromIdToken, hasRole, hasAnyRole } from "../api/auth";
 
+declare const __UI_BUILD_DATE__: string;
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:6001";
+
+function fmtDate(iso: string | null): string {
+  if (!iso || iso === "unknown") return "–";
+  try {
+    return new Date(iso).toLocaleDateString("en-ZA", {
+      day: "2-digit", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit", timeZone: "Africa/Johannesburg",
+    });
+  } catch { return iso; }
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type Leaf = { kind: "leaf"; label: string; path: string; tabParam?: string };
@@ -58,6 +72,14 @@ export default function NavBar() {
 
   const [menuOpen,     setMenuOpen]     = useState(false);
   const [openGroup,    setOpenGroup]    = useState<string | null>(null);
+  const [beDeployedAt, setBeDeployedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/version`)
+      .then(r => r.json())
+      .then((d: { deployedAt?: string }) => setBeDeployedAt(d.deployedAt ?? null))
+      .catch(() => setBeDeployedAt("unknown"));
+  }, []);
   const [expandedMob,  setExpandedMob]  = useState<string[]>([]);
   const [isMobile,     setIsMobile]     = useState(window.innerWidth < 1100);
 
@@ -233,6 +255,12 @@ export default function NavBar() {
 
         {/* Right side */}
         <div style={s.right}>
+          {!isMobile && (
+            <div style={s.deployInfo}>
+              <span style={s.deployRow}><span style={s.deployLabel}>UI</span>{fmtDate(__UI_BUILD_DATE__)}</span>
+              <span style={s.deployRow}><span style={s.deployLabel}>BE</span>{beDeployedAt === null ? "…" : fmtDate(beDeployedAt)}</span>
+            </div>
+          )}
           {!isMobile && profile?.username && (
             <span style={s.username}>{profile.username}</span>
           )}
@@ -298,6 +326,10 @@ export default function NavBar() {
 
           <div style={s.drawerDivider} />
           <button style={s.drawerLogout} onClick={logout}>Log out</button>
+          <div style={s.drawerDeploy}>
+            <span><strong>UI</strong> {fmtDate(__UI_BUILD_DATE__)}</span>
+            <span><strong>BE</strong> {beDeployedAt === null ? "…" : fmtDate(beDeployedAt)}</span>
+          </div>
         </div>
       )}
     </div>
@@ -426,6 +458,29 @@ const s: Record<string, React.CSSProperties> = {
     paddingLeft: 16,
     flexShrink: 0,
   },
+  deployInfo: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 1,
+    borderRight: "1px solid rgba(255,255,255,0.12)",
+    paddingRight: 14,
+    marginRight: 2,
+  },
+  deployRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    fontSize: 11,
+    color: "rgba(255,255,255,0.38)",
+    whiteSpace: "nowrap" as const,
+  },
+  deployLabel: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: "rgba(255,255,255,0.25)",
+    letterSpacing: "0.05em",
+    minWidth: 16,
+  },
   username: {
     fontSize: 13,
     color: "rgba(255,255,255,0.55)",
@@ -545,5 +600,13 @@ const s: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     padding: "12px 20px",
     textAlign: "left",
+  },
+  drawerDeploy: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+    padding: "8px 20px 4px",
+    fontSize: 11,
+    color: "rgba(255,255,255,0.3)",
   },
 };
