@@ -184,6 +184,7 @@ export default function FuelPage() {
   const [busy, setBusy] = useState(false);
   const [uploadProgress, setUploadProgress] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Report filters
   const [report, setReport] = useState<VehicleFuelReportDto[] | null>(null);
@@ -250,6 +251,7 @@ export default function FuelPage() {
       setForm(emptyForm());
       setSlipFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
+      if (cameraInputRef.current) cameraInputRef.current.value = "";
     } catch (e: any) { setFormError(e?.message ?? "Save failed."); }
     finally { setBusy(false); setUploadProgress(""); }
   }
@@ -348,17 +350,34 @@ export default function FuelPage() {
               <input style={s.input} value={form.reference ?? ""} onChange={e => setF("reference", e.target.value)} placeholder="e.g. slip number" />
             </div>
             <div style={{ gridColumn: "span 2" }}>
-              <label style={s.label}>Fuel Slip (photo or PDF)</label>
-              <input ref={fileInputRef} style={{ ...s.input, padding: "6px 10px", cursor: "pointer" }} type="file" accept="image/*,application/pdf"
-                onChange={e => setSlipFile(e.target.files?.[0] ?? null)} />
-              {slipFile && <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>📎 {slipFile.name}</div>}
+              <label style={s.label}>Fuel Slip</label>
+              <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" as const }}>
+                <button type="button" style={s.slipBtn} onClick={() => fileInputRef.current?.click()}>
+                  📎 Browse File
+                </button>
+                <button type="button" style={s.slipBtn} onClick={() => cameraInputRef.current?.click()}>
+                  📷 Take Photo
+                </button>
+                {/* hidden inputs */}
+                <input ref={fileInputRef} type="file" accept="image/*,application/pdf" style={{ display: "none" }}
+                  onChange={e => { setSlipFile(e.target.files?.[0] ?? null); if (cameraInputRef.current) cameraInputRef.current.value = ""; }} />
+                <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+                  onChange={e => { setSlipFile(e.target.files?.[0] ?? null); if (fileInputRef.current) fileInputRef.current.value = ""; }} />
+              </div>
+              {slipFile && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                  <span style={{ fontSize: 12, color: "#64748b" }}>📎 {slipFile.name}</span>
+                  <button type="button" onClick={() => { setSlipFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; if (cameraInputRef.current) cameraInputRef.current.value = ""; }}
+                    style={{ fontSize: 11, color: "#dc2626", background: "none", border: "none", cursor: "pointer", padding: 0 }}>✕ remove</button>
+                </div>
+              )}
             </div>
           </div>
 
           {uploadProgress && <div style={{ fontSize: 13, color: "#0284c7", marginTop: 8 }}>{uploadProgress}</div>}
           {formError && <div style={s.formError}>{formError}</div>}
           <div style={s.formFooter}>
-            <button style={s.btnSecondary} onClick={() => { setShowForm(false); setSlipFile(null); }} disabled={busy}>Cancel</button>
+            <button style={s.btnSecondary} onClick={() => { setShowForm(false); setSlipFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; if (cameraInputRef.current) cameraInputRef.current.value = ""; }} disabled={busy}>Cancel</button>
             <button style={s.btnPrimary} onClick={handleSave} disabled={busy}>{busy ? "Saving…" : "Save"}</button>
           </div>
         </div>
@@ -487,6 +506,7 @@ const s: Record<string, React.CSSProperties> = {
   input: { width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, boxSizing: "border-box" as const },
   btnPrimary: { background: "#166534", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer" },
   btnSecondary: { background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 8, padding: "9px 18px", fontSize: 14, cursor: "pointer" },
+  slipBtn: { background: "#f8fafc", color: "#374151", border: "1px solid #d1d5db", borderRadius: 7, padding: "8px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" },
   tableWrap: { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" },
   table: { width: "100%", borderCollapse: "collapse" as const, fontSize: 13 },
   th: { textAlign: "left" as const, padding: "10px 14px", fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.05em", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" as const },
