@@ -4,8 +4,11 @@ export type FuelIssueDto = {
   issueId: string;
   vehicleId: string;
   fleetNumber: string;
+  fuelSource: "tank" | "offsite";
   tankId: string;
   tankName: string;
+  tankIssuedBy: string;
+  supplierStation: string;
   siteId: string;
   siteName: string;
   litres: number;
@@ -21,7 +24,10 @@ export type FuelIssueDto = {
 
 export type CreateFuelIssueRequest = {
   vehicleId: string;
+  fuelSource: "tank" | "offsite";
   tankId?: string;
+  tankIssuedBy?: string;
+  supplierStation?: string;
   siteId?: string;
   litres: number;
   odometerKm?: number | null;
@@ -58,8 +64,9 @@ export const fuelIssuesApi = {
     api.get<{ uploadUrl: string; s3Key: string }>(`/api/fuel/${id}/slip-upload-url?contentType=${encodeURIComponent(contentType)}`),
   confirmSlip: (id: string, s3Key: string) =>
     api.put<FuelIssueDto>(`/api/fuel/${id}/slip`, { s3Key }),
-  getReport: (from?: string, to?: string) => {
+  getReport: (vehicleId?: string, from?: string, to?: string) => {
     const q = new URLSearchParams();
+    if (vehicleId) q.set("vehicleId", vehicleId);
     if (from) q.set("from", from);
     if (to) q.set("to", to);
     return api.get<VehicleFuelReportDto[]>(`/api/fuel/report${q.toString() ? "?" + q : ""}`);
