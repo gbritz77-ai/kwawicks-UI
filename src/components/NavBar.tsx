@@ -145,6 +145,7 @@ export default function NavBar() {
     if (adminItems.length) entries.push(group("Admin", adminItems));
 
     if (isFinancial) entries.push(leaf("Vehicle Tracking", "/app/vehicle-tracking"));
+    if (isUserManager) entries.push(leaf("Fleet", "/app/fleet"));
     entries.push(leaf("Help", "/app/help"));
   }
 
