@@ -35,6 +35,9 @@ import SalesReportPage from "./pages/SalesReportPage";
 import StockLossPage from "./pages/StockLossPage";
 import VehicleTrackingPage from "./pages/VehicleTrackingPage";
 import FleetPage from "./pages/FleetPage";
+import SitesPage from "./pages/SitesPage";
+import DipTanksPage from "./pages/DipTanksPage";
+import FuelPage from "./pages/FuelPage";
 
 function AuthLayout({ children }: { children: React.ReactElement }) {
   return (
@@ -74,6 +77,9 @@ export default function App() {
       <Route path="/app/stock-losses"         element={<AuthLayout><StockLossPage /></AuthLayout>} />
       <Route path="/app/vehicle-tracking"    element={<AuthLayout><VehicleTrackingPage /></AuthLayout>} />
       <Route path="/app/fleet"              element={<AuthLayout><FleetPage /></AuthLayout>} />
+      <Route path="/app/sites"              element={<AuthLayout><SitesPage /></AuthLayout>} />
+      <Route path="/app/dip-tanks"          element={<AuthLayout><DipTanksPage /></AuthLayout>} />
+      <Route path="/app/fuel"               element={<AuthLayout><FuelPage /></AuthLayout>} />
       <Route path="/app/driver-allocations"  element={<AuthLayout><DriverAllocationsPage /></AuthLayout>} />
       <Route path="/driver"              element={<AuthLayout><DriverDashboardPage /></AuthLayout>} />
       <Route path="/driver/work"         element={<AuthLayout><DriverPage /></AuthLayout>} />

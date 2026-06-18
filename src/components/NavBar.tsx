@@ -145,7 +145,16 @@ export default function NavBar() {
     if (adminItems.length) entries.push(group("Admin", adminItems));
 
     if (isFinancial) entries.push(leaf("Vehicle Tracking", "/app/vehicle-tracking"));
-    if (isUserManager) entries.push(leaf("Fleet", "/app/fleet"));
+
+    if (isUserManager) {
+      entries.push(group("Fleet", [
+        leaf("Vehicles",  "/app/fleet"),
+        leaf("Sites",     "/app/sites"),
+        leaf("Dip Tanks", "/app/dip-tanks"),
+        leaf("Fuel",      "/app/fuel"),
+      ]));
+    }
+
     entries.push(leaf("Help", "/app/help"));
   }
 
