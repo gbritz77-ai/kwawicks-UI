@@ -81,14 +81,14 @@ export default function FuelPage() {
           <div style={s.title}>⛽ Fuel Issues</div>
           <div style={s.sub}>{issues.length} records · {totalLitres.toFixed(0)}L total{totalCost > 0 ? ` · R${totalCost.toFixed(2)}` : ""}</div>
         </div>
-        <button style={s.btnPrimary} onClick={() => { setShowForm(true); setFormError(""); }}>+ Record Issue</button>
+        <button style={s.btnPrimary} onClick={() => { setShowForm(true); setFormError(""); }}>+ Add Fuel</button>
       </div>
 
       {error && <div style={s.errorBanner}>{error}</div>}
 
       {showForm && (
         <div style={s.formCard}>
-          <div style={s.formTitle}>Record Fuel Issue</div>
+          <div style={s.formTitle}>Add Fuel</div>
           <div style={s.formGrid}>
             <div>
               <label style={s.label}>Vehicle *</label>
