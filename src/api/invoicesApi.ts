@@ -89,6 +89,9 @@ export type ReconInvoiceItem = {
   paymentType: string;
   paymentStatus: string;
   grandTotal: number;
+  amountPaid: number;
+  amountOutstanding: number;
+  isPartiallyPaid: boolean;
   receiptS3Key: string;
   createdAt: string;
   reconReference: string;

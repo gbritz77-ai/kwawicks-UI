@@ -415,12 +415,16 @@ function BankStatementsTab() {
 
         {/* Warning banner (amount mismatch) */}
         {warning && (
-          <div style={sp.warningBanner}>
-            <span style={{ fontWeight: 700 }}>⚠ Amount mismatch — </span>
-            {warning.message}
-            <span style={{ marginLeft: 8 }}>
-              Bank: <b>{fmt(warning.bankAmount)}</b> · Allocated: <b>{fmt(warning.allocationAmount)}</b> · Diff: <b>{fmt(Math.abs(warning.difference))}</b>
+          <div style={{ ...sp.warningBanner, background: warning.code === "PARTIAL_PAYMENT" ? "#fffbeb" : "#fef3c7", borderColor: warning.code === "PARTIAL_PAYMENT" ? "#fcd34d" : "#fcd34d" }}>
+            <span style={{ fontWeight: 700 }}>
+              {warning.code === "PARTIAL_PAYMENT" ? "💛 Partial payment recorded — " : "⚠ Amount mismatch — "}
             </span>
+            {warning.message}
+            {warning.code !== "PARTIAL_PAYMENT" && (
+              <span style={{ marginLeft: 8 }}>
+                Bank: <b>{fmt(warning.bankAmount)}</b> · Allocated: <b>{fmt(warning.allocationAmount)}</b> · Diff: <b>{fmt(Math.abs(warning.difference))}</b>
+              </span>
+            )}
             <button style={sp.warnDismiss} onClick={() => setWarning(null)}>✕</button>
           </div>
         )}
@@ -595,17 +599,31 @@ function BankStatementsTab() {
                         </div>
                       ) : matches.map(inv => {
                         const busy = allocBusy === inv.invoiceId;
+                        const outstanding = inv.amountOutstanding ?? inv.grandTotal;
+                        const txMatch = activeTx ? Math.abs(activeTx.amount - outstanding) < 0.02 : false;
+                        const txPartial = activeTx ? activeTx.amount < outstanding - 0.01 : false;
                         return (
                           <div key={inv.invoiceId} style={sp.invoiceRow}>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                              <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" as const }}>
                                 <span style={s.mono}>{inv.invoiceNumber}</span>
                                 <span style={{ color: "#6b7280", fontSize: 12 }}>{inv.customerName}</span>
+                                {inv.isPartiallyPaid && <span style={{ ...s.badge, background: "#fef3c7", color: "#92400e", fontSize: 10 }}>partial</span>}
                               </div>
-                              <div style={{ fontSize: 12, color: "#9ca3af" }}>{fmtDate(inv.createdAt)}</div>
+                              <div style={{ display: "flex", gap: 10, marginTop: 2 }}>
+                                <span style={{ fontSize: 12, color: "#9ca3af" }}>{fmtDate(inv.createdAt)}</span>
+                                {inv.isPartiallyPaid && (
+                                  <span style={{ fontSize: 12, color: "#92400e" }}>Paid {fmt(inv.amountPaid)} · Due {fmt(outstanding)}</span>
+                                )}
+                              </div>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ fontWeight: 700, fontSize: 14 }}>{fmt(inv.grandTotal)}</span>
+                              <div style={{ textAlign: "right" as const }}>
+                                <div style={{ fontWeight: 700, fontSize: 14 }}>{fmt(inv.grandTotal)}</div>
+                                {inv.isPartiallyPaid && <div style={{ fontSize: 11, color: "#dc2626", fontWeight: 600 }}>Due: {fmt(outstanding)}</div>}
+                                {txMatch && <div style={{ fontSize: 11, color: "#15803d", fontWeight: 700 }}>✓ exact match</div>}
+                                {txPartial && <div style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700 }}>⚠ partial payment</div>}
+                              </div>
                               <span style={{ ...s.badge, ...(inv.paymentType==="EFT"?s.badgeEFT:s.badgeCash), fontSize: 11 }}>{inv.paymentType}</span>
                               <button
                                 style={{ ...sp.allocBtn, opacity: busy ? 0.6 : 1 }}
@@ -662,18 +680,29 @@ function BankStatementsTab() {
                               : sortedClientInvoices.map(inv => {
                                 const isReconced = !!(inv as any).reconciledAt;
                                 const busy = allocBusy === inv.invoiceId;
-                                const amtMatch = Math.abs(inv.grandTotal - activeTx.amount) < 0.02;
+                                const outstanding = (inv as any).amountOutstanding ?? inv.grandTotal;
+                                const isPartial = !!(inv as any).isPartiallyPaid;
+                                const txMatch = Math.abs(outstanding - activeTx.amount) < 0.02;
+                                const txPartial = activeTx.amount < outstanding - 0.01;
                                 return (
                                   <div key={inv.invoiceId} style={{ ...sp.invoiceRow, ...(isReconced ? sp.invoiceRowReconced : {}) }}>
                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" as const }}>
                                         <span style={s.mono}>{inv.invoiceNumber}</span>
-                                        {amtMatch && <span style={{ fontSize: 11, color: "#15803d", fontWeight: 700 }}>✓ amount match</span>}
+                                        {isPartial && <span style={{ ...s.badge, background: "#fef3c7", color: "#92400e", fontSize: 10 }}>partial</span>}
+                                        {txMatch && !isReconced && <span style={{ fontSize: 11, color: "#15803d", fontWeight: 700 }}>✓ exact match</span>}
+                                        {txPartial && !isReconced && <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700 }}>⚠ partial payment</span>}
                                       </div>
-                                      <div style={{ fontSize: 12, color: "#9ca3af" }}>{fmtDate(inv.createdAt)}</div>
+                                      <div style={{ display: "flex", gap: 10, marginTop: 2 }}>
+                                        <span style={{ fontSize: 12, color: "#9ca3af" }}>{fmtDate(inv.createdAt)}</span>
+                                        {isPartial && <span style={{ fontSize: 12, color: "#92400e" }}>Paid {fmt((inv as any).amountPaid)} · Due {fmt(outstanding)}</span>}
+                                      </div>
                                     </div>
                                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                      <span style={{ fontWeight: 700, fontSize: 14 }}>{fmt(inv.grandTotal)}</span>
+                                      <div style={{ textAlign: "right" as const }}>
+                                        <div style={{ fontWeight: 700, fontSize: 14 }}>{fmt(inv.grandTotal)}</div>
+                                        {isPartial && !isReconced && <div style={{ fontSize: 11, color: "#dc2626", fontWeight: 600 }}>Due: {fmt(outstanding)}</div>}
+                                      </div>
                                       <span style={{ ...s.badge, ...(inv.paymentType==="EFT"?s.badgeEFT:s.badgeCash), fontSize: 11 }}>{inv.paymentType}</span>
                                       {isReconced
                                         ? <span style={{ ...s.pillGreen, fontSize: 11 }}>Reconciled</span>
