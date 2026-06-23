@@ -215,6 +215,24 @@ function BankStatementsTab() {
     finally { setClientInvLoading(false); }
   }
 
+  const [cancelBusy, setCancelBusy] = useState<string | null>(null);
+
+  async function cancelInvoice(inv: InvoiceResponse) {
+    const reason = window.prompt(
+      `Cancel invoice ${inv.invoiceNumber}?\n\nThis restores stock and reverses any credit charge.\nEnter a reason (e.g. "Duplicate invoice"):`
+    );
+    if (!reason || !reason.trim()) return;
+    setCancelBusy(inv.invoiceId); setAllocError("");
+    try {
+      await invoicesApi.cancel(inv.invoiceId, { reason: reason.trim() });
+      if (pickedClient) setClientInvoices(await invoicesApi.listByClient(pickedClient.clientId));
+    } catch (e: any) {
+      setAllocError(e?.message ?? "Failed to cancel invoice.");
+    } finally {
+      setCancelBusy(null);
+    }
+  }
+
   // ── Client credit ─────────────────────────────────────────────────────────
 
   async function switchToClientCredit() {
@@ -678,37 +696,51 @@ function BankStatementsTab() {
                             : sortedClientInvoices.length === 0
                               ? <div style={{ padding: "20px 0", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No invoices found.</div>
                               : sortedClientInvoices.map(inv => {
-                                const isReconced = !!(inv as any).reconciledAt;
+                                const isReconced = !!inv.reconciledAt;
+                                const isCancelled = inv.status === "Cancelled" || !!inv.cancelledAt;
                                 const busy = allocBusy === inv.invoiceId;
-                                const outstanding = (inv as any).amountOutstanding ?? inv.grandTotal;
-                                const isPartial = !!(inv as any).isPartiallyPaid;
+                                const cancelling = cancelBusy === inv.invoiceId;
+                                const outstanding = inv.amountOutstanding ?? inv.grandTotal;
+                                const isPartial = !isReconced && inv.amountPaid > 0 && inv.amountPaid < inv.grandTotal;
                                 const txMatch = Math.abs(outstanding - activeTx.amount) < 0.02;
                                 const txPartial = activeTx.amount < outstanding - 0.01;
                                 return (
-                                  <div key={inv.invoiceId} style={{ ...sp.invoiceRow, ...(isReconced ? sp.invoiceRowReconced : {}) }}>
+                                  <div key={inv.invoiceId} style={{ ...sp.invoiceRow, ...(isReconced ? sp.invoiceRowReconced : {}), ...(isCancelled ? { opacity: 0.55 } : {}) }}>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                       <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" as const }}>
-                                        <span style={s.mono}>{inv.invoiceNumber}</span>
-                                        {isPartial && <span style={{ ...s.badge, background: "#fef3c7", color: "#92400e", fontSize: 10 }}>partial</span>}
-                                        {txMatch && !isReconced && <span style={{ fontSize: 11, color: "#15803d", fontWeight: 700 }}>✓ exact match</span>}
-                                        {txPartial && !isReconced && <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700 }}>⚠ partial payment</span>}
+                                        <span style={{ ...s.mono, ...(isCancelled ? { textDecoration: "line-through" } : {}) }}>{inv.invoiceNumber}</span>
+                                        {isCancelled && <span style={{ ...s.badge, background: "#fee2e2", color: "#991b1b", fontSize: 10 }}>cancelled</span>}
+                                        {!isCancelled && isPartial && <span style={{ ...s.badge, background: "#fef3c7", color: "#92400e", fontSize: 10 }}>partial</span>}
+                                        {!isCancelled && txMatch && !isReconced && <span style={{ fontSize: 11, color: "#15803d", fontWeight: 700 }}>✓ exact match</span>}
+                                        {!isCancelled && txPartial && !isReconced && <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700 }}>⚠ partial payment</span>}
                                       </div>
                                       <div style={{ display: "flex", gap: 10, marginTop: 2 }}>
                                         <span style={{ fontSize: 12, color: "#9ca3af" }}>{fmtDate(inv.createdAt)}</span>
-                                        {isPartial && <span style={{ fontSize: 12, color: "#92400e" }}>Paid {fmt((inv as any).amountPaid)} · Due {fmt(outstanding)}</span>}
+                                        {!isCancelled && isPartial && <span style={{ fontSize: 12, color: "#92400e" }}>Paid {fmt(inv.amountPaid)} · Due {fmt(outstanding)}</span>}
+                                        {isCancelled && inv.cancelledReason && <span style={{ fontSize: 12, color: "#991b1b" }}>{inv.cancelledReason}</span>}
                                       </div>
                                     </div>
                                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                       <div style={{ textAlign: "right" as const }}>
                                         <div style={{ fontWeight: 700, fontSize: 14 }}>{fmt(inv.grandTotal)}</div>
-                                        {isPartial && !isReconced && <div style={{ fontSize: 11, color: "#dc2626", fontWeight: 600 }}>Due: {fmt(outstanding)}</div>}
+                                        {!isCancelled && isPartial && !isReconced && <div style={{ fontSize: 11, color: "#dc2626", fontWeight: 600 }}>Due: {fmt(outstanding)}</div>}
                                       </div>
                                       <span style={{ ...s.badge, ...(inv.paymentType==="EFT"?s.badgeEFT:s.badgeCash), fontSize: 11 }}>{inv.paymentType}</span>
-                                      {isReconced
+                                      {isCancelled ? null : isReconced
                                         ? <span style={{ ...s.pillGreen, fontSize: 11 }}>Reconciled</span>
                                         : <button style={{ ...sp.allocBtn, opacity: busy ? 0.6 : 1 }} disabled={!!allocBusy} onClick={() => allocateToInvoice(inv.invoiceId)}>
                                             {busy ? "…" : "Allocate"}
                                           </button>}
+                                      {!isCancelled && !isReconced && (
+                                        <button
+                                          style={{ background: "none", border: "1px solid #fca5a5", color: "#dc2626", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: cancelling ? 0.6 : 1 }}
+                                          disabled={cancelling}
+                                          onClick={() => cancelInvoice(inv)}
+                                          title="Cancel this invoice (duplicate or mistaken)"
+                                        >
+                                          {cancelling ? "…" : "Cancel"}
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 );

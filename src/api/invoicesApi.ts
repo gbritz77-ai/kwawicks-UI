@@ -65,6 +65,11 @@ export type InvoiceResponse = {
   lines: InvoiceLineResponse[];
   createdAt: string;
   updatedAt: string;
+  amountPaid: number;
+  amountOutstanding: number;
+  reconciledAt: string | null;
+  cancelledAt: string | null;
+  cancelledReason: string;
 };
 
 export type ReceiptUploadUrlResponse = {
@@ -99,12 +104,18 @@ export type ReconInvoiceItem = {
   reconciledAt: string | null;
   daysOutstanding: number;
   splitPayments: SplitPaymentLine[];
+  cancelledAt: string | null;
+  cancelledReason: string;
 };
 
 export type ReconRequest = {
   referenceNumber?: string;
   notes?: string;
   receivedAt?: string; // ISO date string
+};
+
+export type CancelInvoiceRequest = {
+  reason: string;
 };
 
 // ── API ────────────────────────────────────────────────────────────────────
@@ -154,6 +165,10 @@ export const invoicesApi = {
   /** Finance: mark an invoice as reconciled */
   recon: (invoiceId: string, req: ReconRequest) =>
     api.put<void>(`/api/invoices/${invoiceId}/recon`, req),
+
+  /** Finance/Owner: cancel a duplicate or mistaken invoice. Restores stock and reverses any credit charge. */
+  cancel: (invoiceId: string, req: CancelInvoiceRequest) =>
+    api.put<void>(`/api/invoices/${invoiceId}/cancel`, req),
 
   /** List all invoices for a specific customer */
   listByClient: (customerId: string) =>
