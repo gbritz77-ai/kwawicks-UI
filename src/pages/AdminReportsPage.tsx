@@ -25,13 +25,14 @@ import type {
   InvoiceItem,
   SpeciesRevenueResponse,
   SalesReportRow,
+  StaffStockDeductionsReportResponse,
 } from "../api/reportsApi";
 import { costAveragesApi } from "../api/costAveragesApi";
 import type { CostAverageRecordDto } from "../api/costAveragesApi";
 import type { ClientDto } from "../api/clientsApi";
 import { NumericInput } from "../components/NumericInput";
 
-type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability" | "client-orders" | "sales" | "delivery-runs";
+type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability" | "client-orders" | "sales" | "delivery-runs" | "staff-deductions";
 
 export default function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -76,6 +77,10 @@ export default function AdminReportsPage() {
   const [salesClientId,    setSalesClientId]    = useState("");
   const [salesView,        setSalesView]        = useState<"client" | "walkin">("client");
   const [salesCostRecords, setSalesCostRecords] = useState<CostAverageRecordDto[]>([]);
+
+  // ── Staff Stock Deductions tab state ────────────────────────────────────────
+  const [staffDeductions, setStaffDeductions] = useState<StaffStockDeductionsReportResponse | null>(null);
+  const [staffDeductFilter, setStaffDeductFilter] = useState("");
 
   async function load() {
     setLoading(true);
@@ -123,6 +128,9 @@ export default function AdminReportsPage() {
         setSalesCostRecords(costData);
         if (!clients.length) setClients(cls);
       }
+      if (tab === "staff-deductions") {
+        setStaffDeductions(await reportsApi.getStaffStockDeductions({ from: from || undefined, to: to || undefined }));
+      }
     } catch {
       setError("Failed to load report.");
     } finally {
@@ -141,9 +149,9 @@ export default function AdminReportsPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["revenue", "outstanding", "invoices", "sales", "client-orders", "drivers", "returns", "deliveries", "delivery-runs", "species", "statement", "supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability"] as Tab[])
+        {(["revenue", "outstanding", "invoices", "sales", "staff-deductions", "client-orders", "drivers", "returns", "deliveries", "delivery-runs", "species", "statement", "supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability"] as Tab[])
           .filter(t => {
-            const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "statement", "sales"];
+            const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "statement", "sales", "staff-deductions"];
             const procurementTabs: Tab[] = ["supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability"];
             if (procurementTabs.includes(t)) return isProcurementUser;
             return isFinancialUser || !financialTabs.includes(t);
@@ -154,6 +162,7 @@ export default function AdminReportsPage() {
             {t === "outstanding"           && "⚠️ Outstanding"}
             {t === "invoices"              && "🧾 Invoices"}
             {t === "sales"                 && "📋 Sales"}
+            {t === "staff-deductions"      && "👤 Staff Stock Deductions"}
             {t === "drivers"               && "🚚 Driver Performance"}
             {t === "returns"               && "↩️ Returns"}
             {t === "deliveries"            && "📬 Deliveries"}
@@ -900,6 +909,83 @@ export default function AdminReportsPage() {
         />
       )}
 
+      {/* ── Staff Stock Deductions ── */}
+      {tab === "staff-deductions" && staffDeductions && !loading && (() => {
+        const filteredSummary = staffDeductions.summary.filter(s =>
+          !staffDeductFilter || s.staffName.toLowerCase().includes(staffDeductFilter.toLowerCase())
+        );
+        const filteredDetails = staffDeductions.details.filter(d =>
+          !staffDeductFilter || d.staffName.toLowerCase().includes(staffDeductFilter.toLowerCase())
+        );
+        return (
+          <div>
+            <div style={s.kpiRow}>
+              <KpiCard label="Staff with deductions" value={String(staffDeductions.summary.length)} />
+              <KpiCard label="Transactions" value={String(staffDeductions.details.length)} />
+              <KpiCard label="Total to deduct" value={fmt(staffDeductions.totalAmount)} highlight />
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <input
+                style={s.dateInput}
+                placeholder="Filter by staff name…"
+                value={staffDeductFilter}
+                onChange={e => setStaffDeductFilter(e.target.value)}
+              />
+            </div>
+
+            <h3 style={s.subHeading}>Summary — amount to deduct per staff member</h3>
+            <ScrollTable>
+              <thead>
+                <tr>
+                  <Th>Staff</Th><Th>Department</Th><Th>Transactions</Th><Th>Total to Deduct</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSummary.length === 0 ? (
+                  <tr><Td>No staff stock deductions in this period.</Td><Td>{""}</Td><Td>{""}</Td><Td>{""}</Td></tr>
+                ) : filteredSummary.map(row => (
+                  <tr key={row.staffMemberId}>
+                    <Td>{row.staffName}</Td>
+                    <Td>{row.department || "—"}</Td>
+                    <Td>{row.transactionCount}</Td>
+                    <Td><strong>{fmt(row.totalAmount)}</strong></Td>
+                  </tr>
+                ))}
+              </tbody>
+            </ScrollTable>
+
+            <h3 style={s.subHeading}>Detail — what stock, cost, and date</h3>
+            <ScrollTable>
+              <thead>
+                <tr>
+                  <Th>Date</Th><Th>Staff</Th><Th>Invoice #</Th><Th>Items Taken</Th><Th>Payment Type</Th><Th>Amount</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredDetails.length === 0 ? (
+                  <tr><Td>No transactions found.</Td><Td>{""}</Td><Td>{""}</Td><Td>{""}</Td><Td>{""}</Td><Td>{""}</Td></tr>
+                ) : filteredDetails.map(d => (
+                  <tr key={d.invoiceId}>
+                    <Td>{new Date(d.date).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" })}</Td>
+                    <Td>{d.staffName}{d.department ? ` (${d.department})` : ""}</Td>
+                    <Td>{d.invoiceNumber}</Td>
+                    <Td>
+                      {d.lines.map((l, i) => (
+                        <div key={i} style={{ fontSize: 12 }}>
+                          {l.quantity} × {l.speciesName} @ {fmt(l.unitPrice)} = {fmt(l.lineTotal)}
+                        </div>
+                      ))}
+                    </Td>
+                    <Td>{d.paymentType}</Td>
+                    <Td><strong>{fmt(d.grandTotal)}</strong></Td>
+                  </tr>
+                ))}
+              </tbody>
+            </ScrollTable>
+          </div>
+        );
+      })()}
 
       {/* ── Delivery Runs Report ── */}
       {tab === "delivery-runs" && runReport && !loading && (() => {

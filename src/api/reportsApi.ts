@@ -193,6 +193,46 @@ export type SalesReportResponse = {
   rows: SalesReportRow[];
 };
 
+// ── Admin/Finance: Staff Stock Deductions ────────────────────────────────────
+export type StaffStockDeductionLine = {
+  speciesId: string;
+  speciesName: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+};
+
+export type StaffStockDeductionItem = {
+  invoiceId: string;
+  invoiceNumber: string;
+  staffMemberId: string;
+  staffName: string;
+  department: string;
+  date: string;
+  paymentType: string;
+  paymentStatus: string;
+  subTotal: number;
+  vatTotal: number;
+  grandTotal: number;
+  lines: StaffStockDeductionLine[];
+};
+
+export type StaffStockDeductionSummaryItem = {
+  staffMemberId: string;
+  staffName: string;
+  department: string;
+  transactionCount: number;
+  totalAmount: number;
+};
+
+export type StaffStockDeductionsReportResponse = {
+  from?: string;
+  to?: string;
+  totalAmount: number;
+  summary: StaffStockDeductionSummaryItem[];
+  details: StaffStockDeductionItem[];
+};
+
 // ── Driver types ─────────────────────────────────────────────────────────────
 export type MyDeliveryItem = {
   deliveryOrderId: string;
@@ -257,4 +297,13 @@ export const reportsApi = {
 
   getSalesReport: (from?: string, to?: string) =>
     api.get<SalesReportResponse>(`/api/reports/sales${dateParams(from, to)}`),
+
+  getStaffStockDeductions: (params?: { staffMemberId?: string; from?: string; to?: string }) => {
+    const p = new URLSearchParams();
+    if (params?.staffMemberId) p.set("staffMemberId", params.staffMemberId);
+    if (params?.from) p.set("from", params.from);
+    if (params?.to) p.set("to", params.to);
+    const qs = p.toString() ? `?${p}` : "";
+    return api.get<StaffStockDeductionsReportResponse>(`/api/reports/staff-stock-deductions${qs}`);
+  },
 };
