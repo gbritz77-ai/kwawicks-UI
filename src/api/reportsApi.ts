@@ -122,6 +122,10 @@ export type InvoiceItem = {
   subTotal: number;
   vatTotal: number;
   grandTotal: number;
+  amountPaid: number;
+  amountOutstanding: number;
+  cancelledAt: string | null;
+  cancelledReason: string;
   createdAt: string;
   updatedAt: string;
   lines: InvoiceLineItem[];

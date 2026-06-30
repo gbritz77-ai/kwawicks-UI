@@ -1146,6 +1146,7 @@ function InvoicesTab({
   useEffect(() => { staffMembersApi.list().then(setStaffMembers).catch(() => {}); }, []);
   const staffMap = Object.fromEntries(staffMembers.map(s => [s.staffMemberId, s.name]));
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [cancelBusy, setCancelBusy] = useState<string | null>(null);
   const [creditBlockMsg, setCreditBlockMsg] = useState<string | null>(null);
   const [overridePrompt, setOverridePrompt] = useState<{ invoiceId: string; customerId: string; balance: number; clientName: string } | null>(null);
   const [payTypeFilter, setPayTypeFilter] = useState("");
@@ -1237,6 +1238,22 @@ function InvoicesTab({
       onConfirmed();
     } finally {
       setConfirming(null);
+    }
+  }
+
+  async function cancelInvoice(inv: InvoiceItem) {
+    const reason = window.prompt(
+      `Cancel invoice ${inv.invoiceNumber}?\n\nThis restores stock and reverses any credit charge.\nEnter a reason (e.g. "Wrong sale", "Duplicate"):`
+    );
+    if (!reason || !reason.trim()) return;
+    setCancelBusy(inv.invoiceId);
+    try {
+      await invoicesApi.cancel(inv.invoiceId, { reason: reason.trim() });
+      onConfirmed();
+    } catch (e: any) {
+      setCreditBlockMsg(e?.message ?? "Failed to cancel invoice.");
+    } finally {
+      setCancelBusy(null);
     }
   }
 
@@ -1529,6 +1546,12 @@ function InvoicesTab({
                       <span style={{ ...s.badge, background: payBg, color: payColor }}>
                         {inv.paymentStatus}
                       </span>
+                      {inv.status === "Cancelled" && (
+                        <div style={{ marginTop: 4 }}>
+                          <span style={{ ...s.badge, background: "#fee2e2", color: "#991b1b", fontSize: 10 }}>✕ Cancelled</span>
+                          {inv.cancelledReason && <div style={{ fontSize: 11, color: "#991b1b", marginTop: 2 }}>{inv.cancelledReason}</div>}
+                        </div>
+                      )}
                     </Td>
                     <Td>{fmt(inv.subTotal)}</Td>
                     <Td>{fmt(inv.vatTotal)}</Td>
@@ -1548,27 +1571,46 @@ function InvoicesTab({
                       ) : "—"}
                     </Td>
                     <Td>
-                      {inv.paymentStatus === "Pending" ? (() => {
-                        const hardBlocked = isAccountCredit && creditNegative && !canOverrideNegativeBalance;
-                        return (
-                          <button
-                            disabled={confirming === inv.invoiceId || (isAccountCredit && creditBal === undefined) || hardBlocked}
-                            onClick={() => handleConfirm(inv.invoiceId, inv.customerId, inv.paymentType)}
-                            style={{
-                              ...s.confirmBtn,
-                              ...(hardBlocked ? { background: "#94a3b8", cursor: "not-allowed" }
-                                : isAccountCredit && creditNegative ? { background: "#f59e0b" } : {}),
-                            }}
-                            title={
-                              hardBlocked ? "Credit balance is negative — client must top up first"
-                                : isAccountCredit && creditNegative ? "Balance is negative — click to confirm with an override"
-                                : undefined
-                            }
-                          >
-                            {confirming === inv.invoiceId ? "…" : isAccountCredit && creditNegative ? "⚠ Confirm" : "Confirm"}
-                          </button>
-                        );
-                      })() : "—"}
+                      <div style={{ display: "flex", flexDirection: "column" as const, gap: 4, alignItems: "flex-start" }}>
+                        {inv.paymentStatus === "Pending" && (() => {
+                          const hardBlocked = isAccountCredit && creditNegative && !canOverrideNegativeBalance;
+                          return (
+                            <button
+                              disabled={confirming === inv.invoiceId || (isAccountCredit && creditBal === undefined) || hardBlocked}
+                              onClick={() => handleConfirm(inv.invoiceId, inv.customerId, inv.paymentType)}
+                              style={{
+                                ...s.confirmBtn,
+                                ...(hardBlocked ? { background: "#94a3b8", cursor: "not-allowed" }
+                                  : isAccountCredit && creditNegative ? { background: "#f59e0b" } : {}),
+                              }}
+                              title={
+                                hardBlocked ? "Credit balance is negative — client must top up first"
+                                  : isAccountCredit && creditNegative ? "Balance is negative — click to confirm with an override"
+                                  : undefined
+                              }
+                            >
+                              {confirming === inv.invoiceId ? "…" : isAccountCredit && creditNegative ? "⚠ Confirm" : "Confirm"}
+                            </button>
+                          );
+                        })()}
+                        {inv.status !== "Cancelled" && (
+                          inv.amountPaid > 0 ? (
+                            <span style={{ fontSize: 10, color: "#94a3b8" }} title="Bank-reconciled — remove the allocation on the Reconciliation page first">
+                              Bank-reconciled
+                            </span>
+                          ) : (
+                            <button
+                              disabled={cancelBusy === inv.invoiceId}
+                              onClick={() => cancelInvoice(inv)}
+                              style={{ background: "none", border: "1px solid #fca5a5", color: "#dc2626", borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                              title="Cancel this invoice — restores stock and reverses any credit charge"
+                            >
+                              {cancelBusy === inv.invoiceId ? "…" : "Cancel"}
+                            </button>
+                          )
+                        )}
+                        {inv.paymentStatus !== "Pending" && inv.status === "Cancelled" && "—"}
+                      </div>
                     </Td>
                     <Td>
                       <button
