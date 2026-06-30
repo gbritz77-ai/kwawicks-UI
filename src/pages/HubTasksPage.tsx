@@ -485,8 +485,6 @@ export default function HubTasksPage() {
                 <div>Sell Price</div>
                 <div>VAT</div>
                 <div>Qty on Hand</div>
-                <div>Qty Booked</div>
-                <div>Available</div>
                 <div>Status</div>
                 {canManageSpecies && <div style={{ textAlign: "right" }}>Actions</div>}
               </div>
@@ -507,8 +505,6 @@ export default function HubTasksPage() {
                     <div style={s.gridCell}>{x.sellPrice == null ? "—" : money(x.sellPrice)}</div>
                     <div style={s.gridCell}>{x.vat}</div>
                     <div style={s.gridCell}>{x.qtyOnHandHub}</div>
-                    <div style={s.gridCell}>{x.qtyBookedOutForDelivery}</div>
-                    <div style={s.gridCell}>{x.qtyAvailable ?? x.qtyOnHandHub}</div>
                     <div style={s.gridCell}>{x.isActive ? "Active" : "Inactive"}</div>
                     {canManageSpecies && (
                       <div style={s.gridActions}>
@@ -970,10 +966,10 @@ const s: Record<string, React.CSSProperties> = {
     background: "white",
   },
 
-  // Species grid: Name | Unit Cost | Sell Price | VAT | Qty on Hand | Qty Booked | Available | Status | Actions
+  // Species grid: Name | Unit Cost | Sell Price | VAT | Qty on Hand | Status | Actions
   speciesRow: {
     display: "grid",
-    gridTemplateColumns: "1.8fr 1fr 1fr 0.6fr 1fr 1fr 1fr 0.8fr 0.8fr",
+    gridTemplateColumns: "1.8fr 1fr 1fr 0.6fr 1fr 0.8fr 0.8fr",
     gap: 12,
     padding: "14px 14px",
     alignItems: "center",
