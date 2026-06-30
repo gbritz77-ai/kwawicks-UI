@@ -12,7 +12,9 @@ import { NumericInput } from "../components/NumericInput";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type PaymentType = "Cash" | "EFT" | "Credit" | "CardMachine";
+type PaymentType = "Cash" | "EFT" | "Credit" | "CardMachine" | "Split";
+
+type SplitLine = { method: string; amount: string };
 
 type ReturnLine = {
   speciesId: string;
@@ -93,6 +95,7 @@ export default function DriverDashboardPage() {
   const [step, setStep] = useState<CompletionStep>("returns");
   const [returnLines, setReturnLines] = useState<ReturnLine[]>([]);
   const [paymentType, setPaymentType] = useState<PaymentType>("Cash");
+  const [splitLines, setSplitLines] = useState<SplitLine[]>([{ method: "Cash", amount: "" }, { method: "Card", amount: "" }]);
   const [completionBusy, setCompletionBusy] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
   const [createdInvoiceId, setCreatedInvoiceId] = useState<string | null>(null);
@@ -209,6 +212,7 @@ export default function DriverDashboardPage() {
     setReceiptFile(null);
     setReceiptDone(false);
     setPaymentType("Cash");
+    setSplitLines([{ method: "Cash", amount: "" }, { method: "Card", amount: "" }]);
     setClientPhone("");
     setReturnLines(order.lines.map(l => ({
       speciesId: l.speciesId, orderedQty: l.quantity,
@@ -235,6 +239,18 @@ export default function DriverDashboardPage() {
     setReturnLines(prev => { const n = [...prev]; n[idx] = { ...n[idx], [field]: value }; return n; });
   }
 
+  // Estimated invoice total (incl. VAT) from delivered quantities — used to validate split
+  // payment amounts before the invoice is actually created server-side.
+  const estimatedTotal = completing
+    ? returnLines.reduce((sum, rl) => {
+        const doLine = completing.lines.find(l => l.speciesId === rl.speciesId);
+        const del = parseInt(rl.deliveredQty) || 0;
+        return sum + del * (doLine?.unitPrice ?? 0);
+      }, 0)
+    : 0;
+
+  const splitAllocated = splitLines.reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0);
+
   function validateReturns(): string | null {
     for (let i = 0; i < returnLines.length; i++) {
       const rl = returnLines[i];
@@ -245,6 +261,13 @@ export default function DriverDashboardPage() {
       if (del < 0 || dead < 0 || mut < 0 || nw < 0) return `Line ${i + 1}: quantities cannot be negative.`;
       if (del + dead + mut + nw !== rl.orderedQty)
         return `Line ${i + 1} (${speciesName(rl.speciesId)}): total must equal ordered (${rl.orderedQty}).`;
+    }
+    if (paymentType === "Split") {
+      const validSplitLines = splitLines.filter(l => parseFloat(l.amount) > 0);
+      if (validSplitLines.length === 0) return "Add at least one split payment amount.";
+      const splitTotal = validSplitLines.reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0);
+      if (Math.abs(splitTotal - estimatedTotal) > 0.5)
+        return `Split payments total R${splitTotal.toFixed(2)} must equal the invoice total (approx. R${estimatedTotal.toFixed(2)}).`;
     }
     return null;
   }
@@ -272,8 +295,13 @@ export default function DriverDashboardPage() {
       const result = await invoicesApi.createFromDelivery(completing.deliveryOrderId, { createdByDriverId: driverId, lines, clientPhone: clientPhone.trim() || undefined });
       setCreatedInvoiceId(result.invoiceId);
       setWhatsAppError((result as any).whatsAppError ?? null);
-      await invoicesApi.recordPayment(result.invoiceId, paymentType);
-      if (paymentType === "EFT" || paymentType === "CardMachine") {
+      const splitPayments = paymentType === "Split"
+        ? splitLines.filter(l => parseFloat(l.amount) > 0).map(l => ({ method: l.method, amount: parseFloat(l.amount) }))
+        : undefined;
+      await invoicesApi.recordPayment(result.invoiceId, paymentType, splitPayments);
+      const needsReceipt = paymentType === "EFT" || paymentType === "CardMachine"
+        || (paymentType === "Split" && splitLines.some(l => parseFloat(l.amount) > 0 && (l.method === "EFT" || l.method === "CardMachine" || l.method === "Card")));
+      if (needsReceipt) {
         setStep("receipt");
       } else {
         setStep("done");
@@ -671,17 +699,60 @@ export default function DriverDashboardPage() {
                 <div style={s.paySection}>
                   <div style={s.payHead}>Payment Method</div>
                   <div style={s.payGrid}>
-                    {(["Cash", "EFT", "CardMachine", "Credit"] as PaymentType[]).map(pt => (
+                    {(["Cash", "EFT", "CardMachine", "Credit", "Split"] as PaymentType[]).map(pt => (
                       <button key={pt}
                         style={{ ...s.payBtn, ...(paymentType === pt ? s.payBtnActive : {}) }}
                         onClick={() => setPaymentType(pt)} disabled={completionBusy}
                       >
-                        {pt === "Cash" ? "💵 Cash" : pt === "EFT" ? "📱 EFT" : pt === "CardMachine" ? "💳 Card Machine" : "📋 Credit"}
+                        {pt === "Cash" ? "💵 Cash" : pt === "EFT" ? "📱 EFT" : pt === "CardMachine" ? "💳 Card Machine" : pt === "Credit" ? "📋 Credit" : "➗ Split"}
                       </button>
                     ))}
                   </div>
                   {(paymentType === "EFT" || paymentType === "CardMachine") && (
                     <div style={s.payNote}>You'll be prompted to take a photo of the receipt.</div>
+                  )}
+                  {paymentType === "Split" && (
+                    <div style={s.splitPanel}>
+                      <div style={s.splitPanelTitle}>
+                        Split Payment Breakdown
+                        <span style={{ fontWeight: 500, color: "#64748b", marginLeft: 8 }}>
+                          (Allocated: R{splitAllocated.toFixed(2)} / Est. Total: R{estimatedTotal.toFixed(2)})
+                        </span>
+                      </div>
+                      {splitLines.map((line, i) => (
+                        <div key={i} style={s.splitRow}>
+                          <select
+                            style={s.splitMethodSelect}
+                            value={line.method}
+                            onChange={e => setSplitLines(prev => prev.map((x, j) => j === i ? { ...x, method: e.target.value } : x))}
+                            disabled={completionBusy}
+                          >
+                            {["Cash", "Card", "EFT", "CardMachine"].map(m => <option key={m} value={m}>{m === "CardMachine" ? "Card Machine" : m}</option>)}
+                          </select>
+                          <NumericInput
+                            style={s.splitAmountInput}
+                            placeholder="0.00"
+                            value={line.amount}
+                            onChange={e => setSplitLines(prev => prev.map((x, j) => j === i ? { ...x, amount: e.target.value } : x))}
+                            disabled={completionBusy}
+                          />
+                          {splitLines.length > 1 && (
+                            <button
+                              style={s.splitRemoveBtn}
+                              onClick={() => setSplitLines(prev => prev.filter((_, j) => j !== i))}
+                              disabled={completionBusy}
+                              type="button"
+                            >✕</button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        style={s.splitAddBtn}
+                        onClick={() => setSplitLines(prev => [...prev, { method: "Cash", amount: "" }])}
+                        disabled={completionBusy}
+                        type="button"
+                      >+ Add line</button>
+                    </div>
                   )}
                 </div>
                 {/* WhatsApp phone — required if client has none */}
@@ -712,7 +783,7 @@ export default function DriverDashboardPage() {
 
             {step === "receipt" && (
               <>
-                <div style={s.modalTitle}>{paymentType === "CardMachine" ? "Upload Card Machine Slip" : "Upload EFT Receipt"}</div>
+                <div style={s.modalTitle}>{paymentType === "CardMachine" ? "Upload Card Machine Slip" : paymentType === "Split" ? "Upload Proof of Payment" : "Upload EFT Receipt"}</div>
                 <div style={s.modalSub}>Take a photo of the payment receipt.</div>
                 {completionError && <div style={s.modalError}>{completionError}</div>}
                 <div style={{ margin: "14px 0" }}>
@@ -1043,6 +1114,14 @@ const s: Record<string, React.CSSProperties> = {
   payBtn:     { padding: "14px 10px", borderRadius: 12, border: "1px solid rgba(0,0,0,0.15)", background: "white", fontWeight: 800, fontSize: 14, cursor: "pointer" },
   payBtnActive: { border: "2px solid #2563eb", background: "rgba(37,99,235,0.08)", color: "#1d4ed8" },
   payNote:    { marginTop: 8, fontSize: 13, color: "rgba(0,0,0,0.55)", fontStyle: "italic" },
+
+  splitPanel:        { background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: "12px 14px", marginTop: 10 },
+  splitPanelTitle:   { fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 10 },
+  splitRow:          { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 },
+  splitMethodSelect: { flex: 1, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(0,0,0,0.15)", fontSize: 13, background: "#fff" },
+  splitAmountInput:  { width: 100, padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(0,0,0,0.15)", fontSize: 13, textAlign: "right" as const },
+  splitRemoveBtn:    { background: "none", border: "1px solid rgba(220,38,38,0.3)", borderRadius: 6, color: "#dc2626", cursor: "pointer", fontSize: 12, padding: "6px 9px", fontWeight: 700 },
+  splitAddBtn:       { background: "none", border: "1px dashed #94a3b8", color: "#64748b", borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontSize: 12, width: "100%" },
 
   cameraBtn: { width: "100%", padding: "32px 20px", borderRadius: 16, border: "2px dashed rgba(37,99,235,0.3)", background: "rgba(37,99,235,0.04)", cursor: "pointer", textAlign: "center" as const, color: "#1d4ed8" },
 
