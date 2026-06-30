@@ -1139,8 +1139,10 @@ function InvoicesTab({
   onConfirmed: () => void;
 }) {
   const isOwner = hasAnyRole("Owner");
+  const canOverrideNegativeBalance = hasAnyRole("Owner", "Finance");
   const [confirming, setConfirming] = useState<string | null>(null);
   const [creditBlockMsg, setCreditBlockMsg] = useState<string | null>(null);
+  const [overridePrompt, setOverridePrompt] = useState<{ invoiceId: string; customerId: string; balance: number; clientName: string } | null>(null);
   const [payTypeFilter, setPayTypeFilter] = useState("");
   const [saleTypeFilter, setSaleTypeFilter] = useState("");
   const [creditBalances, setCreditBalances] = useState<Record<string, number>>({}); // customerId → balance
@@ -1207,10 +1209,14 @@ function InvoicesTab({
         setCreditBalances(b => ({ ...b, [customerId]: balance }));
         if (balance < 0) {
           const clientName = clientMap[customerId] ?? "this client";
-          const fmt2 = (n: number) => `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-          setCreditBlockMsg(
-            `Cannot confirm — ${clientName}'s credit account is ${fmt2(balance)}. They must top up their account before this invoice can be confirmed.`
-          );
+          if (canOverrideNegativeBalance) {
+            setOverridePrompt({ invoiceId, customerId, balance, clientName });
+          } else {
+            const fmt2 = (n: number) => `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            setCreditBlockMsg(
+              `Cannot confirm — ${clientName}'s credit account is ${fmt2(balance)}. They must top up their account before this invoice can be confirmed.`
+            );
+          }
           return;
         }
       } catch {
@@ -1224,6 +1230,22 @@ function InvoicesTab({
     try {
       await invoicesApi.confirmPayment(invoiceId);
       onConfirmed();
+    } finally {
+      setConfirming(null);
+    }
+  }
+
+  async function confirmOverride() {
+    if (!overridePrompt) return;
+    const { invoiceId } = overridePrompt;
+    setConfirming(invoiceId);
+    try {
+      await invoicesApi.confirmPayment(invoiceId);
+      setOverridePrompt(null);
+      onConfirmed();
+    } catch {
+      setCreditBlockMsg("Failed to confirm invoice. Please try again.");
+      setOverridePrompt(null);
     } finally {
       setConfirming(null);
     }
@@ -1275,6 +1297,46 @@ function InvoicesTab({
 
   return (
     <div>
+      {/* Negative-balance override modal (Owner/Finance only) */}
+      {overridePrompt && (
+        <div
+          onClick={() => !confirming && setOverridePrompt(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.6)", backdropFilter: "blur(4px)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: "#fff", borderRadius: 14, padding: "32px 28px", maxWidth: 460, width: "100%", boxShadow: "0 24px 60px rgba(0,0,0,0.3)", textAlign: "center" }}
+          >
+            <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#92400e", marginBottom: 10 }}>Confirm With Negative Balance?</div>
+            <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.6, marginBottom: 24 }}>
+              <strong>{overridePrompt.clientName}</strong>'s credit account is{" "}
+              <strong style={{ color: "#dc2626" }}>
+                R {overridePrompt.balance.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </strong>{" "}
+              — already overdrawn. Confirming this invoice will charge it to their account anyway, pushing the balance further negative.
+              This override is only available to Owner/Finance.
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+              <button
+                onClick={() => setOverridePrompt(null)}
+                disabled={!!confirming}
+                style={{ padding: "10px 22px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmOverride}
+                disabled={!!confirming}
+                style={{ padding: "10px 22px", borderRadius: 8, border: "none", background: "#f59e0b", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+              >
+                {confirming ? "Confirming…" : "⚠ Confirm Anyway"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Credit block modal */}
       {creditBlockMsg && (
         <div
@@ -1477,19 +1539,27 @@ function InvoicesTab({
                       ) : "—"}
                     </Td>
                     <Td>
-                      {inv.paymentStatus === "Pending" ? (
-                        <button
-                          disabled={confirming === inv.invoiceId || (isAccountCredit && (creditBal === undefined || creditNegative))}
-                          onClick={() => handleConfirm(inv.invoiceId, inv.customerId, inv.paymentType)}
-                          style={{
-                            ...s.confirmBtn,
-                            ...(isAccountCredit && creditNegative ? { background: "#94a3b8", cursor: "not-allowed" } : {}),
-                          }}
-                          title={isAccountCredit && creditNegative ? "Credit balance is negative — client must top up first" : undefined}
-                        >
-                          {confirming === inv.invoiceId ? "…" : "Confirm"}
-                        </button>
-                      ) : "—"}
+                      {inv.paymentStatus === "Pending" ? (() => {
+                        const hardBlocked = isAccountCredit && creditNegative && !canOverrideNegativeBalance;
+                        return (
+                          <button
+                            disabled={confirming === inv.invoiceId || (isAccountCredit && creditBal === undefined) || hardBlocked}
+                            onClick={() => handleConfirm(inv.invoiceId, inv.customerId, inv.paymentType)}
+                            style={{
+                              ...s.confirmBtn,
+                              ...(hardBlocked ? { background: "#94a3b8", cursor: "not-allowed" }
+                                : isAccountCredit && creditNegative ? { background: "#f59e0b" } : {}),
+                            }}
+                            title={
+                              hardBlocked ? "Credit balance is negative — client must top up first"
+                                : isAccountCredit && creditNegative ? "Balance is negative — click to confirm with an override"
+                                : undefined
+                            }
+                          >
+                            {confirming === inv.invoiceId ? "…" : isAccountCredit && creditNegative ? "⚠ Confirm" : "Confirm"}
+                          </button>
+                        );
+                      })() : "—"}
                     </Td>
                     <Td>
                       <button
