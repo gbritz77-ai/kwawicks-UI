@@ -5,6 +5,8 @@ import { hasAnyRole } from "../api/auth";
 import { reportsApi } from "../api/reportsApi";
 import { invoicesApi } from "../api/invoicesApi";
 import { clientsApi } from "../api/clientsApi";
+import { staffMembersApi } from "../api/staffMembersApi";
+import type { StaffMemberDto } from "../api/staffMembersApi";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
 import { whatsappApi } from "../api/whatsappApi";
 import { procurementOrdersApi } from "../api/procurementOrdersApi";
@@ -1140,6 +1142,9 @@ function InvoicesTab({
 }) {
   const isOwner = hasAnyRole("Owner");
   const canOverrideNegativeBalance = hasAnyRole("Owner", "Finance");
+  const [staffMembers, setStaffMembers] = useState<StaffMemberDto[]>([]);
+  useEffect(() => { staffMembersApi.list().then(setStaffMembers).catch(() => {}); }, []);
+  const staffMap = Object.fromEntries(staffMembers.map(s => [s.staffMemberId, s.name]));
   const [confirming, setConfirming] = useState<string | null>(null);
   const [creditBlockMsg, setCreditBlockMsg] = useState<string | null>(null);
   const [overridePrompt, setOverridePrompt] = useState<{ invoiceId: string; customerId: string; balance: number; clientName: string } | null>(null);
@@ -1482,7 +1487,11 @@ function InvoicesTab({
                 return (
                   <tr key={inv.invoiceId}>
                     <Td><span style={s.mono}>{inv.invoiceNumber || inv.invoiceId.slice(0, 8) + "…"}</span></Td>
-                    <Td>{clientMap[inv.customerId] ?? inv.customerId}</Td>
+                    <Td>
+                      {inv.staffMemberId
+                        ? <>{staffMap[inv.staffMemberId] ?? inv.staffMemberId}<span style={{ ...s.badge, background: "#ede9fe", color: "#6d28d9", marginLeft: 6, fontSize: 10 }}>Staff</span></>
+                        : (clientMap[inv.customerId] ?? inv.customerId)}
+                    </Td>
                     <Td>
                       <span style={{ fontSize: 12, fontWeight: 600, padding: "2px 8px", borderRadius: 6,
                         background: inv.saleType === "HubDirect" ? "#eff6ff" : inv.saleType === "DriverDirect" ? "#f0fdf4" : "#fef9c3",

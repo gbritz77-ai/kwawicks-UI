@@ -109,6 +109,7 @@ export type SplitPaymentLine = {
 export type InvoiceItem = {
   invoiceId: string;
   invoiceNumber: string;
+  staffMemberId: string;
   customerId: string;
   hubId: string;
   deliveryOrderId: string;
