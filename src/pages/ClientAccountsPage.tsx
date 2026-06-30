@@ -65,14 +65,23 @@ export default function ClientAccountsPage() {
     clientsApi.list().then(data => setClients(data.filter((c: ClientDto) => !c.isWalkIn))).catch(() => setError("Failed to load clients."));
   }, []);
 
-  useEffect(() => {
-    if (!selectedClientId) { setLedger(null); return; }
-    setLoadingLedger(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function loadLedger(clientId: string, opts?: { silent?: boolean }) {
+    if (!clientId) { setLedger(null); return; }
+    if (opts?.silent) setRefreshing(true); else setLoadingLedger(true);
     setError("");
-    clientCreditApi.getLedger(selectedClientId)
-      .then(setLedger)
-      .catch(() => setError("Failed to load credit ledger."))
-      .finally(() => setLoadingLedger(false));
+    try {
+      setLedger(await clientCreditApi.getLedger(clientId));
+    } catch {
+      setError("Failed to load credit ledger.");
+    } finally {
+      if (opts?.silent) setRefreshing(false); else setLoadingLedger(false);
+    }
+  }
+
+  useEffect(() => {
+    loadLedger(selectedClientId);
   }, [selectedClientId]);
 
   // Pre-fill WhatsApp phone from client record
@@ -252,7 +261,17 @@ export default function ClientAccountsPage() {
         <input type="date" style={{ ...s.select, flex: "none", width: 140 }} value={toDate} onChange={e => setToDate(e.target.value)} />
 
         {selectedClientId && (
-          <button style={s.waBtn} onClick={openWa}>📱 Send Statement</button>
+          <>
+            <button
+              style={{ ...s.refreshBtn, ...(refreshing ? { opacity: 0.6, cursor: "default" } : {}) }}
+              onClick={() => loadLedger(selectedClientId, { silent: true })}
+              disabled={refreshing}
+              title="Refresh transactions"
+            >
+              {refreshing ? "⏳ Refreshing…" : "🔄 Refresh"}
+            </button>
+            <button style={s.waBtn} onClick={openWa}>📱 Send Statement</button>
+          </>
         )}
       </div>
 
@@ -728,6 +747,7 @@ const s: Record<string, React.CSSProperties> = {
   selectorLabel:{ fontSize: 13, fontWeight: 700, color: "#374151", flexShrink: 0 },
   select:       { flex: 1, padding: "9px 12px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 14, background: "#f9fafb", outline: "none" },
   waBtn:        { padding: "9px 18px", borderRadius: 8, background: "#15803d", color: "#fff", border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" as const },
+  refreshBtn:   { padding: "9px 18px", borderRadius: 8, background: "#fff", color: "#374151", border: "1px solid #d1d5db", fontWeight: 700, fontSize: 13, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" as const },
 
   balanceCard:  { borderRadius: 14, padding: "20px 24px", display: "flex", alignItems: "center", gap: 20, marginBottom: 14, flexWrap: "wrap" as const },
   balanceLeft:  { flex: 1 },
