@@ -71,6 +71,7 @@ function BankStatementsTab() {
   const [txTypeFilter,  setTxTypeFilter]  = useState<"all"|"Credit"|"Debit">("Credit");
   const [txAllocFilter, setTxAllocFilter] = useState<"all"|"unallocated"|"allocated">("unallocated");
   const [txSearch,      setTxSearch]      = useState("");
+  const [showDuplicates, setShowDuplicates] = useState(false);
 
   // Selected transaction
   const [activeTx, setActiveTx] = useState<BankTransactionResponse | null>(null);
@@ -131,7 +132,7 @@ function BankStatementsTab() {
   async function openStatement(statementId: string) {
     setDetailLoading(true);
     resetRightPanel();
-    setTxSearch(""); setTxTypeFilter("Credit"); setTxAllocFilter("unallocated");
+    setTxSearch(""); setTxTypeFilter("Credit"); setTxAllocFilter("unallocated"); setShowDuplicates(false);
     try { setSelected(await bankStatementsApi.get(statementId)); }
     catch (e: any) { setError(e?.message ?? "Failed to load statement."); }
     finally { setDetailLoading(false); }
@@ -553,6 +554,46 @@ function BankStatementsTab() {
                 );
               })}
             </div>
+
+            {/* Possible duplicates — hidden from the main list by default */}
+            {selected.possibleDuplicates && selected.possibleDuplicates.length > 0 && (
+              <div style={sp.dupSection}>
+                <div style={sp.dupHeader} onClick={() => setShowDuplicates(v => !v)}>
+                  <span>⚠ Possible Duplicates ({selected.possibleDuplicates.length})</span>
+                  <span>{showDuplicates ? "▲" : "▼"}</span>
+                </div>
+                {showDuplicates && (
+                  <div style={sp.dupList}>
+                    <div style={sp.dupNote}>
+                      These credits match the date + amount of a transaction already reconciled under a different statement upload —
+                      likely from overlapping date ranges between exports. Verify before allocating.
+                    </div>
+                    {selected.possibleDuplicates.map(tx => {
+                      const isActive = activeTx?.transactionId === tx.transactionId;
+                      return (
+                        <div
+                          key={tx.transactionId}
+                          style={{ ...sp.txRow, ...sp.dupRow, ...(isActive ? sp.txRowActive : {}) }}
+                          onClick={() => selectTx(tx)}
+                        >
+                          <div style={sp.txTop}>
+                            <span style={sp.txDate}>{fmtDate(tx.date)}</span>
+                            <span style={{ ...sp.txAmount, color: "#92400e" }}>{fmt(tx.amount)}</span>
+                          </div>
+                          <div style={sp.txDesc}>{tx.description}</div>
+                          {tx.reference && <div style={sp.txRef}>{tx.reference}</div>}
+                          <div style={sp.dupWarning}>
+                            ⚠ Already reconciled in <strong>{tx.duplicateOfStatementFileName}</strong> as {tx.duplicateOfAllocationSummary || "an allocation"}
+                            {tx.duplicateOfAllocatedAt && <> on {fmtDate(tx.duplicateOfAllocatedAt)}</>}
+                          </div>
+                          <div style={sp.txSelectHint}>{isActive ? "↗ Select an invoice or entry →" : "Click to allocate anyway"}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ── RIGHT: Allocation panel ── */}
@@ -1022,6 +1063,12 @@ const sp: Record<string, React.CSSProperties> = {
   rightPanel: { flex:1, display:"flex", flexDirection:"column", padding:"14px 16px", overflow:"hidden" },
   panelTitle: { fontSize:11, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#6b7280", padding:"12px 14px 6px", borderBottom:"1px solid #f1f5f9" },
   txList: { flex:1, overflowY:"auto" as const },
+  dupSection: { borderTop:"2px solid #fcd34d", background:"#fffbeb" },
+  dupHeader: { padding:"10px 14px", fontSize:12, fontWeight:700, color:"#92400e", display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer" },
+  dupList: { maxHeight:260, overflowY:"auto" as const, borderTop:"1px solid #fde68a" },
+  dupNote: { padding:"8px 14px", fontSize:11, color:"#92400e", lineHeight:1.5, background:"#fef3c7" },
+  dupRow: { background:"#fffbeb" },
+  dupWarning: { marginTop:6, fontSize:11, color:"#b45309", fontWeight:600, lineHeight:1.4 },
   txRow: { padding:"12px 14px", borderBottom:"1px solid #f1f5f9", cursor:"pointer" },
   txRowActive: { background:"#eff6ff", borderLeft:"3px solid #3b82f6", paddingLeft:11 },
   txRowAllocated: { background:"#f0fdf4", cursor:"default" },

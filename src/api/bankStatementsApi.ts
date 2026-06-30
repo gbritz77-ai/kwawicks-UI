@@ -19,6 +19,12 @@ export type BankTransactionResponse = {
   allocatedClientId: string;
   allocatedClientName: string;
   allocatedAt: string | null;
+  /** True when this unallocated credit matches (same date + amount) a transaction that was
+   * already allocated under a different, previously-imported statement. */
+  isPossibleDuplicate: boolean;
+  duplicateOfStatementFileName: string;
+  duplicateOfAllocationSummary: string;
+  duplicateOfAllocatedAt: string | null;
 };
 
 export type BankStatementResponse = {
@@ -33,6 +39,7 @@ export type BankStatementResponse = {
   unallocatedAmount: number;
   uploadedAt: string;
   transactions: BankTransactionResponse[];
+  possibleDuplicates: BankTransactionResponse[];
 };
 
 export type BankStatementSummaryResponse = {
