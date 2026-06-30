@@ -68,6 +68,16 @@ export default function DeliveryRunsPage() {
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState("");
 
+  // Reallocate stock modal
+  const [reallocTarget, setReallocTarget] = useState<{ run: DeliveryRunDto; alloc: DeliveryRunAllocationDto; line: DeliveryRunAllocationDto["lines"][number] } | null>(null);
+  const [reallocQty, setReallocQty] = useState("");
+  const [reallocUnitPrice, setReallocUnitPrice] = useState("");
+  const [reallocMode, setReallocMode] = useState<"existing" | "new">("existing");
+  const [reallocToDeliveryOrderId, setReallocToDeliveryOrderId] = useState("");
+  const [reallocToClientId, setReallocToClientId] = useState("");
+  const [reallocError, setReallocError] = useState("");
+  const [reallocBusy, setReallocBusy] = useState(false);
+
   // ── Loaders ──────────────────────────────────────────────────────────────
 
   async function load() {
@@ -243,6 +253,46 @@ export default function DeliveryRunsPage() {
     finally { setRemoveBusy(false); }
   }
 
+  // ── Reallocate stock ──────────────────────────────────────────────────────
+
+  function openRealloc(run: DeliveryRunDto, alloc: DeliveryRunAllocationDto, line: DeliveryRunAllocationDto["lines"][number]) {
+    setReallocTarget({ run, alloc, line });
+    setReallocQty(String(line.qty));
+    setReallocUnitPrice(String(line.unitPrice));
+    setReallocMode("existing");
+    setReallocToDeliveryOrderId("");
+    setReallocToClientId("");
+    setReallocError("");
+    loadRefs();
+  }
+
+  async function submitRealloc() {
+    if (!reallocTarget) return;
+    const qty = Number(reallocQty);
+    if (!qty || qty <= 0) return setReallocError("Qty must be greater than 0.");
+    if (qty > reallocTarget.line.qty) return setReallocError(`Only ${reallocTarget.line.qty} available to move.`);
+    if (reallocMode === "existing" && !reallocToDeliveryOrderId) return setReallocError("Select a destination delivery.");
+    if (reallocMode === "new" && !reallocToClientId) return setReallocError("Select a destination client.");
+
+    setReallocBusy(true); setReallocError("");
+    try {
+      const updated = await deliveryRunsApi.reallocateStock(
+        reallocTarget.run.deliveryRunId,
+        reallocTarget.alloc.deliveryOrderId,
+        {
+          speciesId: reallocTarget.line.speciesId,
+          qty,
+          toDeliveryOrderId: reallocMode === "existing" ? reallocToDeliveryOrderId : undefined,
+          toClientId: reallocMode === "new" ? reallocToClientId : undefined,
+          unitPrice: Number(reallocUnitPrice) || 0,
+        },
+      );
+      setItems(prev => prev.map(x => x.deliveryRunId === updated.deliveryRunId ? updated : x));
+      setReallocTarget(null);
+    } catch (e: any) { setReallocError(e?.message ?? "Could not reallocate stock."); }
+    finally { setReallocBusy(false); }
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -337,22 +387,34 @@ export default function DeliveryRunsPage() {
                             </div>
                           </div>
                           <div style={s.allocLines}>
-                            {alloc.lines.map(l => (
-                              <span key={l.speciesId} style={s.allocPill}>
-                                {l.speciesName || l.speciesId}:{" "}
-                                {alloc.deliveryStatus === "Delivered" ? (
-                                  <>
-                                    <span style={{ color: "#15803d", fontWeight: 700 }}>✓ {l.deliveredQty} delivered</span>
-                                    {l.deliveredQty !== l.qty && (
-                                      <span style={{ color: "#94a3b8", fontSize: 11 }}> (of {l.qty} ordered)</span>
-                                    )}
-                                  </>
-                                ) : (
-                                  <><strong>{l.qty}</strong><span style={{ color: "#94a3b8", fontSize: 11 }}> ordered</span></>
-                                )}
-                                {l.unitPrice > 0 && <span style={{ color: "#64748b" }}> @ R{l.unitPrice.toFixed(2)}</span>}
-                              </span>
-                            ))}
+                            {alloc.lines.map(l => {
+                              const canReallocate = isAdmin && alloc.deliveryStatus !== "Delivered" && run.status === "OutForDelivery";
+                              return (
+                                <span key={l.speciesId} style={s.allocPill}>
+                                  {l.speciesName || l.speciesId}:{" "}
+                                  {alloc.deliveryStatus === "Delivered" ? (
+                                    <>
+                                      <span style={{ color: "#15803d", fontWeight: 700 }}>✓ {l.deliveredQty} delivered</span>
+                                      {l.deliveredQty !== l.qty && (
+                                        <span style={{ color: "#94a3b8", fontSize: 11 }}> (of {l.qty} ordered)</span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <><strong>{l.qty}</strong><span style={{ color: "#94a3b8", fontSize: 11 }}> ordered</span></>
+                                  )}
+                                  {l.unitPrice > 0 && <span style={{ color: "#64748b" }}> @ R{l.unitPrice.toFixed(2)}</span>}
+                                  {canReallocate && (
+                                    <button
+                                      style={s.reallocBtn}
+                                      onClick={() => openRealloc(run, alloc, l)}
+                                      title="Move surplus stock to another client's delivery"
+                                    >
+                                      ↔ Reallocate
+                                    </button>
+                                  )}
+                                </span>
+                              );
+                            })}
                           </div>
                           {alloc.invoiceId && (
                             <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>
@@ -602,6 +664,98 @@ export default function DeliveryRunsPage() {
           </div>
         </div>
       )}
+      {/* ── Reallocate Stock Modal ── */}
+      {reallocTarget && (() => {
+        const otherAllocs = reallocTarget.run.allocations.filter(
+          a => a.deliveryOrderId !== reallocTarget.alloc.deliveryOrderId && a.deliveryStatus !== "Delivered"
+        );
+        return (
+          <div style={s.backdrop} onClick={() => !reallocBusy && setReallocTarget(null)}>
+            <div style={s.modal} onClick={e => e.stopPropagation()}>
+              <div style={s.modalTitle}>Reallocate Surplus Stock</div>
+              <div style={s.modalSub}>
+                {reallocTarget.line.speciesName || reallocTarget.line.speciesId} · from {reallocTarget.alloc.clientName} ({reallocTarget.run.assignedDriverName})
+              </div>
+
+              <label style={s.label}>
+                Qty to move (max {reallocTarget.line.qty})
+                <NumericInput
+                  style={s.input}
+                  allowDecimal={false}
+                  min={1}
+                  max={reallocTarget.line.qty}
+                  value={reallocQty}
+                  onChange={e => setReallocQty(e.target.value)}
+                  disabled={reallocBusy}
+                />
+              </label>
+
+              <label style={s.label}>
+                Unit Price (R)
+                <NumericInput
+                  style={s.input}
+                  min={0}
+                  step={0.01}
+                  value={reallocUnitPrice}
+                  onChange={e => setReallocUnitPrice(e.target.value)}
+                  disabled={reallocBusy}
+                />
+              </label>
+
+              <div style={{ display: "flex", gap: 8, marginTop: 10, marginBottom: 12 }}>
+                <button
+                  style={reallocMode === "existing" ? s.modeBtnActive : s.modeBtn}
+                  onClick={() => setReallocMode("existing")}
+                  disabled={reallocBusy}
+                  type="button"
+                >
+                  Existing delivery on this run
+                </button>
+                <button
+                  style={reallocMode === "new" ? s.modeBtnActive : s.modeBtn}
+                  onClick={() => setReallocMode("new")}
+                  disabled={reallocBusy}
+                  type="button"
+                >
+                  New client
+                </button>
+              </div>
+
+              {reallocMode === "existing" ? (
+                <label style={s.label}>
+                  Destination delivery *
+                  <select style={s.input} value={reallocToDeliveryOrderId} onChange={e => setReallocToDeliveryOrderId(e.target.value)} disabled={reallocBusy}>
+                    <option value="">— Select delivery —</option>
+                    {otherAllocs.map(a => (
+                      <option key={a.deliveryOrderId} value={a.deliveryOrderId}>{a.clientName}</option>
+                    ))}
+                  </select>
+                  {otherAllocs.length === 0 && (
+                    <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>No other active deliveries on this run — use "New client" instead.</div>
+                  )}
+                </label>
+              ) : (
+                <label style={s.label}>
+                  Destination client *
+                  <select style={s.input} value={reallocToClientId} onChange={e => setReallocToClientId(e.target.value)} disabled={reallocBusy}>
+                    <option value="">— Select client —</option>
+                    {clients.map(c => <option key={c.clientId} value={c.clientId}>{c.clientName}</option>)}
+                  </select>
+                </label>
+              )}
+
+              {reallocError && <div style={s.formError}>{reallocError}</div>}
+
+              <div style={s.modalBtns}>
+                <button style={s.secondaryBtn} onClick={() => setReallocTarget(null)} disabled={reallocBusy}>Cancel</button>
+                <button style={s.primaryBtn} onClick={submitRealloc} disabled={reallocBusy}>
+                  {reallocBusy ? "Moving…" : "↔ Move Stock"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -635,6 +789,9 @@ const s: Record<string, React.CSSProperties> = {
   paymentBadge: { fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", color: "#15803d" },
   confirmBtn: { padding: "3px 10px", borderRadius: 6, background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.35)", color: "#15803d", fontWeight: 700, fontSize: 11, cursor: "pointer" },
   removeAllocBtn: { padding: "3px 8px", borderRadius: 6, background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.3)", color: "#dc2626", fontWeight: 700, fontSize: 11, cursor: "pointer" },
+  reallocBtn: { marginLeft: 6, padding: "2px 8px", borderRadius: 6, background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.3)", color: "#7c3aed", fontWeight: 700, fontSize: 10, cursor: "pointer" },
+  modeBtn: { flex: 1, padding: "8px 10px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", color: "#374151", fontWeight: 600, fontSize: 12, cursor: "pointer" },
+  modeBtnActive: { flex: 1, padding: "8px 10px", borderRadius: 8, border: "1px solid #7c3aed", background: "rgba(124,58,237,0.08)", color: "#7c3aed", fontWeight: 700, fontSize: 12, cursor: "pointer" },
   cardActions: { display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end", flexWrap: "wrap" },
   allocBtn: { padding: "8px 14px", borderRadius: 8, background: "rgba(37,99,235,0.08)", border: "1px solid rgba(37,99,235,0.3)", color: "#1d4ed8", fontWeight: 700, fontSize: 13, cursor: "pointer" },
   dispatchBtn: { padding: "8px 14px", borderRadius: 8, background: "#2563eb", border: "none", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" },

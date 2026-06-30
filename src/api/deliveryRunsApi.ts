@@ -52,4 +52,11 @@ export const deliveryRunsApi = {
     deliveryOrderId: string,
     req: { lines: { speciesId: string; deliveredQty: number; unitPrice: number }[]; paymentType: string },
   ) => api.post<DeliveryRunDto>(`/api/delivery-runs/${id}/allocations/${deliveryOrderId}/confirm-delivery`, req),
+  /** Owner/Admin/Finance: move surplus stock from one not-yet-delivered allocation to another
+   * (existing delivery on the same run, or a brand-new client) while the driver is out. */
+  reallocateStock: (
+    id: string,
+    fromDeliveryOrderId: string,
+    req: { speciesId: string; qty: number; toDeliveryOrderId?: string; toClientId?: string; unitPrice?: number },
+  ) => api.post<DeliveryRunDto>(`/api/delivery-runs/${id}/allocations/${fromDeliveryOrderId}/reallocate`, req),
 };
