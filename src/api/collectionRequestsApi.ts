@@ -27,6 +27,8 @@ export type CollectionDeliveryAllocationDto = {
   deliveryStatus: string;
   /** Payment type from the linked invoice once invoiced (Cash / EFT / Credit / "") */
   paymentType: string;
+  /** Populated when paymentType === "Split" — the per-method breakdown (e.g. Cash 4000, EFT 2000) */
+  splitPayments: { method: string; amount: number }[];
   /** For HUB allocations: "" or "Accepted" once hub staff have verified the stock */
   hubAcceptanceStatus: string;
   lines: CollectionAllocationLineDto[];

@@ -661,19 +661,30 @@ export default function CollectionRequestsPage() {
       return acc;
     }, {});
 
-    // Combined payment summary: client invoices + roadside sales grouped by payment type
+    // Combined payment summary: client invoices + roadside sales grouped by payment type.
+    // Split sales are broken out into their actual Cash/EFT/Card components rather than
+    // lumped under one "Split" bucket, so the strip reflects what was physically collected.
     const paymentSummary = (() => {
       const map: Record<string, { qty: number; value: number }> = {};
+      const addTo = (pt: string, qty: number, value: number) => {
+        if (!map[pt]) map[pt] = { qty: 0, value: 0 };
+        map[pt].qty   += qty;
+        map[pt].value += value;
+      };
       // Client invoices (only when paymentType is set, i.e. invoice exists)
       allocations.forEach(a => {
         if (!a.paymentType) return;
-        const pt = a.paymentType;
-        if (!map[pt]) map[pt] = { qty: 0, value: 0 };
-        a.lines.forEach(l => {
-          const dQty = l.deliveredQty > 0 ? l.deliveredQty : l.qty;
-          map[pt].qty   += dQty;
-          map[pt].value += dQty * l.unitPrice;
-        });
+        const totalQty   = a.lines.reduce((s, l) => s + (l.deliveredQty > 0 ? l.deliveredQty : l.qty), 0);
+        const totalValue = a.lines.reduce((s, l) => s + (l.deliveredQty > 0 ? l.deliveredQty : l.qty) * l.unitPrice, 0);
+
+        if (a.paymentType === "Split" && a.splitPayments?.length > 0) {
+          a.splitPayments.forEach(sp => {
+            const ratio = totalValue > 0 ? sp.amount / totalValue : 0;
+            addTo(sp.method, totalQty * ratio, sp.amount);
+          });
+        } else {
+          addTo(a.paymentType, totalQty, totalValue);
+        }
       });
       // Roadside sales
       roadsales.forEach(r => {
@@ -787,6 +798,13 @@ export default function CollectionRequestsPage() {
                       ) : a.deliveryStatus ? (
                         <div style={{ fontSize: 10, fontWeight: 500, color: "#94a3b8" }}>{a.deliveryStatus}</div>
                       ) : null}
+                      {a.paymentType === "Split" && a.splitPayments?.length > 0 && (
+                        <div style={{ fontSize: 9, color: "#475569", marginTop: 2, lineHeight: 1.5 }}>
+                          {a.splitPayments.map((sp, i) => (
+                            <div key={i}>{sp.method}: R{sp.amount.toFixed(2)}</div>
+                          ))}
+                        </div>
+                      )}
                       <div style={{ fontSize: 10, fontWeight: 500, color: "#94a3b8" }}>DO-{a.deliveryOrderId.split("-")[0].toUpperCase()}</div>
                     </th>
                   );
