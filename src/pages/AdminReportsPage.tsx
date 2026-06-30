@@ -1199,8 +1199,8 @@ function InvoicesTab({
   const clientFullMap = Object.fromEntries(clients.map((c) => [c.clientId, c]));
 
   async function handleConfirm(invoiceId: string, customerId: string, paymentType: string) {
-    // For AccountCredit invoices, block if the client's balance is negative
-    if (paymentType === "AccountCredit") {
+    // For Credit/AccountCredit invoices, block if the client's balance is negative
+    if (paymentType === "AccountCredit" || paymentType === "Credit") {
       setConfirming(invoiceId);
       try {
         const { balance } = await clientCreditApi.getBalance(customerId);
@@ -1412,7 +1412,7 @@ function InvoicesTab({
                 const payColor = inv.paymentStatus === "Paid" ? "#166534" : "#854d0e";
                 const payBg    = inv.paymentStatus === "Paid" ? "#dcfce7" : "#fef9c3";
                 const hasReceipt = !!inv.receiptS3Key;
-                const isAccountCredit = inv.paymentType === "AccountCredit";
+                const isAccountCredit = inv.paymentType === "AccountCredit" || inv.paymentType === "Credit";
                 // Trigger lazy credit balance fetch for AccountCredit pending invoices
                 if (isAccountCredit && inv.paymentStatus === "Pending") fetchCreditBalance(inv.customerId);
                 const creditBal = isAccountCredit ? creditBalances[inv.customerId] : undefined;
