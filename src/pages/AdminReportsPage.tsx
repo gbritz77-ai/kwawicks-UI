@@ -962,10 +962,10 @@ export default function AdminReportsPage() {
                       </Td>
                       <Td>
                         {isSettled ? (
-                          <span style={{ color: "#16a34a", fontSize: 13 }}>✓ Settled</span>
+                          <span style={{ color: "#16a34a", fontSize: 12, fontWeight: 600 }}>✓ Settled</span>
                         ) : (
                           <button
-                            style={{ ...s.btn, background: "#0f172a", color: "#fff", fontSize: 12, padding: "4px 10px" }}
+                            style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid #15803d", cursor: "pointer", background: "#f0fdf4", color: "#15803d", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}
                             onClick={() => setSettleTarget({ staffMemberId: row.staffMemberId, staffName: row.staffName, balance: row.currentBalance })}
                           >
                             Mark Salary Deducted
@@ -1016,8 +1016,8 @@ export default function AdminReportsPage() {
 
             {/* ── Settle Salary Deduction Confirmation Modal ── */}
             {settleTarget && (
-              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-                <div style={{ background: "#fff", borderRadius: 10, padding: 28, width: 400, maxWidth: "90vw", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+              <div style={s.modalOverlay}>
+                <div style={{ background: "#fff", borderRadius: 12, padding: 28, width: 420, maxWidth: "90vw", boxShadow: "0 8px 32px rgba(15,23,42,0.18)" }}>
                   <h3 style={{ margin: "0 0 12px", fontSize: 17 }}>Confirm Salary Deduction</h3>
                   <p style={{ margin: "0 0 8px", fontSize: 14 }}>
                     Mark salary deduction as processed for <strong>{settleTarget.staffName}</strong>?
@@ -1030,14 +1030,14 @@ export default function AdminReportsPage() {
                   </p>
                   <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                     <button
-                      style={{ ...s.btn, background: "#e2e8f0", color: "#1e293b" }}
+                      style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #cbd5e1", cursor: "pointer", background: "#f8fafc", color: "#475569", fontSize: 13, fontWeight: 600 }}
                       onClick={() => setSettleTarget(null)}
                       disabled={settleLoading}
                     >
                       Cancel
                     </button>
                     <button
-                      style={{ ...s.btn, background: "#0f172a", color: "#fff" }}
+                      style={s.confirmBtn}
                       disabled={settleLoading}
                       onClick={async () => {
                         setSettleLoading(true);
