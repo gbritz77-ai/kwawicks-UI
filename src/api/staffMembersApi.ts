@@ -23,9 +23,19 @@ export type UpdateStaffMemberRequest = {
   isActive: boolean;
 };
 
+export type SettleDeductionsResponse = {
+  staffMemberId: string;
+  staffName: string;
+  amountSettled: number;
+  newBalance: number;
+  message: string;
+};
+
 export const staffMembersApi = {
   list: () => api.get<StaffMemberDto[]>("/api/staff-members"),
   getById: (id: string) => api.get<StaffMemberDto>(`/api/staff-members/${id}`),
   create: (req: CreateStaffMemberRequest) => api.post<StaffMemberDto>("/api/staff-members", req),
   update: (id: string, req: UpdateStaffMemberRequest) => api.put<StaffMemberDto>(`/api/staff-members/${id}`, req),
+  settleDeductions: (staffMemberId: string) =>
+    api.post<SettleDeductionsResponse>(`/api/staff-members/${staffMemberId}/settle-deductions`, {}),
 };

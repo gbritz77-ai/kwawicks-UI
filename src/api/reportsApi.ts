@@ -228,6 +228,7 @@ export type StaffStockDeductionSummaryItem = {
   department: string;
   transactionCount: number;
   totalAmount: number;
+  currentBalance: number;
 };
 
 export type StaffStockDeductionsReportResponse = {

@@ -83,6 +83,9 @@ export default function AdminReportsPage() {
   // ── Staff Stock Deductions tab state ────────────────────────────────────────
   const [staffDeductions, setStaffDeductions] = useState<StaffStockDeductionsReportResponse | null>(null);
   const [staffDeductFilter, setStaffDeductFilter] = useState("");
+  const [settleTarget, setSettleTarget] = useState<{ staffMemberId: string; staffName: string; balance: number } | null>(null);
+  const [settleLoading, setSettleLoading] = useState(false);
+  const [settleMessage, setSettleMessage] = useState("");
 
   async function load() {
     setLoading(true);
@@ -940,22 +943,47 @@ export default function AdminReportsPage() {
             <ScrollTable>
               <thead>
                 <tr>
-                  <Th>Staff</Th><Th>Department</Th><Th>Transactions</Th><Th>Total to Deduct</Th>
+                  <Th>Staff</Th><Th>Department</Th><Th>Transactions</Th><Th>Total to Deduct</Th><Th>Current Balance</Th><Th>Action</Th>
                 </tr>
               </thead>
               <tbody>
                 {filteredSummary.length === 0 ? (
-                  <tr><Td>No staff stock deductions in this period.</Td><Td>{""}</Td><Td>{""}</Td><Td>{""}</Td></tr>
-                ) : filteredSummary.map(row => (
-                  <tr key={row.staffMemberId}>
-                    <Td>{row.staffName}</Td>
-                    <Td>{row.department || "—"}</Td>
-                    <Td>{row.transactionCount}</Td>
-                    <Td><strong>{fmt(row.totalAmount)}</strong></Td>
-                  </tr>
-                ))}
+                  <tr><Td>No staff stock deductions in this period.</Td><Td>{""}</Td><Td>{""}</Td><Td>{""}</Td><Td>{""}</Td><Td>{""}</Td></tr>
+                ) : filteredSummary.map(row => {
+                  const isSettled = row.currentBalance >= 0;
+                  return (
+                    <tr key={row.staffMemberId}>
+                      <Td>{row.staffName}</Td>
+                      <Td>{row.department || "—"}</Td>
+                      <Td>{row.transactionCount}</Td>
+                      <Td><strong>{fmt(row.totalAmount)}</strong></Td>
+                      <Td style={{ color: row.currentBalance < 0 ? "#dc2626" : "#16a34a", fontWeight: 600 }}>
+                        {fmt(row.currentBalance)}
+                      </Td>
+                      <Td>
+                        {isSettled ? (
+                          <span style={{ color: "#16a34a", fontSize: 13 }}>✓ Settled</span>
+                        ) : (
+                          <button
+                            style={{ ...s.btn, background: "#0f172a", color: "#fff", fontSize: 12, padding: "4px 10px" }}
+                            onClick={() => setSettleTarget({ staffMemberId: row.staffMemberId, staffName: row.staffName, balance: row.currentBalance })}
+                          >
+                            Mark Salary Deducted
+                          </button>
+                        )}
+                      </Td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </ScrollTable>
+
+            {settleMessage && (
+              <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 6, padding: "10px 14px", marginBottom: 12, color: "#166534", fontSize: 13 }}>
+                {settleMessage}
+                <button style={{ marginLeft: 12, background: "none", border: "none", cursor: "pointer", color: "#166534", fontWeight: 700 }} onClick={() => setSettleMessage("")}>✕</button>
+              </div>
+            )}
 
             <h3 style={s.subHeading}>Detail — what stock, cost, and date</h3>
             <ScrollTable>
@@ -985,6 +1013,54 @@ export default function AdminReportsPage() {
                 ))}
               </tbody>
             </ScrollTable>
+
+            {/* ── Settle Salary Deduction Confirmation Modal ── */}
+            {settleTarget && (
+              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+                <div style={{ background: "#fff", borderRadius: 10, padding: 28, width: 400, maxWidth: "90vw", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+                  <h3 style={{ margin: "0 0 12px", fontSize: 17 }}>Confirm Salary Deduction</h3>
+                  <p style={{ margin: "0 0 8px", fontSize: 14 }}>
+                    Mark salary deduction as processed for <strong>{settleTarget.staffName}</strong>?
+                  </p>
+                  <p style={{ margin: "0 0 20px", fontSize: 14 }}>
+                    Outstanding balance: <strong style={{ color: "#dc2626" }}>{fmt(settleTarget.balance)}</strong> will be cleared to <strong style={{ color: "#16a34a" }}>R0</strong>.
+                  </p>
+                  <p style={{ margin: "0 0 20px", fontSize: 12, color: "#64748b" }}>
+                    This records a SalaryDeduction credit entry in the staff member's account. Only do this after the deduction has been processed from their pay.
+                  </p>
+                  <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                    <button
+                      style={{ ...s.btn, background: "#e2e8f0", color: "#1e293b" }}
+                      onClick={() => setSettleTarget(null)}
+                      disabled={settleLoading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      style={{ ...s.btn, background: "#0f172a", color: "#fff" }}
+                      disabled={settleLoading}
+                      onClick={async () => {
+                        setSettleLoading(true);
+                        try {
+                          const res = await staffMembersApi.settleDeductions(settleTarget.staffMemberId);
+                          setSettleMessage(res.message);
+                          setSettleTarget(null);
+                          // Reload the report so balances refresh
+                          setStaffDeductions(await reportsApi.getStaffStockDeductions({ from: from || undefined, to: to || undefined }));
+                        } catch {
+                          setSettleMessage("Failed to process settlement. Please try again.");
+                          setSettleTarget(null);
+                        } finally {
+                          setSettleLoading(false);
+                        }
+                      }}
+                    >
+                      {settleLoading ? "Processing…" : "Confirm — Mark as Deducted"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}
