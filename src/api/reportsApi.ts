@@ -135,6 +135,7 @@ export type InvoiceItem = {
 // ── Admin: Customer Statement ─────────────────────────────────────────────────
 export type CustomerStatementLine = {
   invoiceId: string;
+  invoiceNumber: string;
   date: string;
   paymentType: string;
   paymentStatus: string;
