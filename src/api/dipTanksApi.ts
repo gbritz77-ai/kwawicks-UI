@@ -46,10 +46,17 @@ export type TankSummaryDto = {
   lastReadingAt: string | null;
 };
 
+export type LoadTankRequest = {
+  litres: number;
+  costPerLitre?: number | null;
+  notes?: string;
+};
+
 export const dipTanksApi = {
   listTanks: () => api.get<DipTankDto[]>("/api/dip-tanks"),
   createTank: (req: CreateDipTankRequest) => api.post<DipTankDto>("/api/dip-tanks", req),
   getSummary: () => api.get<TankSummaryDto[]>("/api/dip-tanks/summary"),
   listReadings: () => api.get<DipReadingDto[]>("/api/dip-tanks/readings"),
   createReading: (req: CreateDipReadingRequest) => api.post<DipReadingDto>("/api/dip-tanks/readings", req),
+  loadTank: (tankId: string, req: LoadTankRequest) => api.post<DipReadingDto>(`/api/dip-tanks/${tankId}/load`, req),
 };

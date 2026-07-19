@@ -1,5 +1,13 @@
 import { api } from "./apiClient";
 
+export type LicenceHistoryEntry = {
+  previousExpiry: string | null;
+  newExpiry: string;
+  cost: number | null;
+  renewedAt: string;
+  renewedBy: string;
+};
+
 export type VehicleDto = {
   vehicleId: string;
   fleetNumber: string;
@@ -20,6 +28,7 @@ export type VehicleDto = {
   isActive: boolean;
   createdAtUtc: string;
   updatedAtUtc: string;
+  licenceHistory: LicenceHistoryEntry[];
 };
 
 export type CreateVehicleRequest = {
@@ -33,6 +42,7 @@ export type CreateVehicleRequest = {
   odometerKm?: number | null;
   expectedConsumption?: number | null;
   licenceExpiry?: string | null;
+  licenceCost?: number | null;
   licenceRemindDays?: number | null;
   lastServiceOdo?: number | null;
   serviceInterval?: number | null;

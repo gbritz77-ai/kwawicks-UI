@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { dipTanksApi } from "../api/dipTanksApi";
 import { sitesApi } from "../api/sitesApi";
-import type { DipTankDto, DipReadingDto, TankSummaryDto, CreateDipTankRequest, CreateDipReadingRequest } from "../api/dipTanksApi";
+import type { DipTankDto, DipReadingDto, TankSummaryDto, CreateDipTankRequest, CreateDipReadingRequest, LoadTankRequest } from "../api/dipTanksApi";
 import type { SiteDto } from "../api/sitesApi";
 import { hasAnyRole } from "../api/auth";
 
@@ -44,6 +44,11 @@ export default function DipTanksPage() {
   const [readingForm, setReadingForm] = useState<CreateDipReadingRequest>(emptyReadingForm());
   const [readingFormError, setReadingFormError] = useState("");
   const [readingBusy, setReadingBusy] = useState(false);
+
+  const [loadingTankId, setLoadingTankId] = useState<string | null>(null);
+  const [loadForm, setLoadForm] = useState<LoadTankRequest>({ litres: 0, costPerLitre: null, notes: "" });
+  const [loadError, setLoadError] = useState("");
+  const [loadBusy, setLoadBusy] = useState(false);
 
   useEffect(() => { loadAll(); }, []);
   useEffect(() => { if (tab === "readings" && readings.length === 0) loadReadings(); }, [tab]);
@@ -95,6 +100,23 @@ export default function DipTanksPage() {
       setReadingForm(emptyReadingForm());
     } catch (e: any) { setReadingFormError(e?.message ?? "Save failed."); }
     finally { setReadingBusy(false); }
+  }
+
+  async function loadTank(tankId: string) {
+    if (!loadForm.litres || loadForm.litres <= 0) { setLoadError("Litres must be > 0."); return; }
+    setLoadBusy(true); setLoadError("");
+    try {
+      await dipTanksApi.loadTank(tankId, loadForm);
+      const sumRefresh = await dipTanksApi.getSummary();
+      setSummary(Object.fromEntries(sumRefresh.map(x => [x.tankId, x])));
+      if (tab === "readings") {
+        const updatedReadings = await dipTanksApi.listReadings();
+        setReadings(updatedReadings);
+      }
+      setLoadingTankId(null);
+      setLoadForm({ litres: 0, costPerLitre: null, notes: "" });
+    } catch (e: any) { setLoadError(e?.message ?? "Load failed."); }
+    finally { setLoadBusy(false); }
   }
 
   const siteName = (siteId: string) => sites.find(s => s.siteId === siteId)?.name ?? "—";
@@ -202,6 +224,34 @@ export default function DipTanksPage() {
                         {tank.lowQtyLitres && <div style={s.tankSub}>Alert below: {tank.lowQtyLitres}L</div>}
                         {sum?.lastReadingAt && (
                           <div style={s.tankSub}>Last dip: {new Date(sum.lastReadingAt).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</div>
+                        )}
+                        <button
+                          style={{ ...s.loadBtn, marginTop: 10 }}
+                          onClick={() => { setLoadingTankId(loadingTankId === tank.tankId ? null : tank.tankId); setLoadError(""); setLoadForm({ litres: 0, costPerLitre: null, notes: "" }); }}
+                        >
+                          {loadingTankId === tank.tankId ? "✕ Cancel" : "⛽ Load Fuel"}
+                        </button>
+                        {loadingTankId === tank.tankId && (
+                          <div style={{ marginTop: 10, borderTop: "1px solid #e2e8f0", paddingTop: 10 }}>
+                            <div style={s.formGrid}>
+                              <div>
+                                <label style={s.label}>Litres Received *</label>
+                                <input style={s.input} type="number" step="0.01" min="0" value={loadForm.litres || ""} onChange={e => setLoadForm(f => ({ ...f, litres: Number(e.target.value) }))} placeholder="e.g. 5000" />
+                              </div>
+                              <div>
+                                <label style={s.label}>Cost per Litre (R)</label>
+                                <input style={s.input} type="number" step="0.0001" min="0" value={loadForm.costPerLitre ?? ""} onChange={e => setLoadForm(f => ({ ...f, costPerLitre: e.target.value ? Number(e.target.value) : null }))} placeholder="e.g. 22.50" />
+                              </div>
+                              <div style={{ gridColumn: "span 2" }}>
+                                <label style={s.label}>Notes</label>
+                                <input style={s.input} value={loadForm.notes ?? ""} onChange={e => setLoadForm(f => ({ ...f, notes: e.target.value }))} placeholder="e.g. Supplier, delivery ref" />
+                              </div>
+                            </div>
+                            {loadError && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 6 }}>{loadError}</div>}
+                            <button style={{ ...s.btnPrimary, marginTop: 10 }} onClick={() => loadTank(tank.tankId)} disabled={loadBusy}>
+                              {loadBusy ? "Saving…" : "Record Delivery"}
+                            </button>
+                          </div>
                         )}
                       </div>
                     );
@@ -311,6 +361,7 @@ const s: Record<string, React.CSSProperties> = {
   input: { width: "100%", padding: "8px 10px", borderRadius: 6, border: "1px solid #d1d5db", fontSize: 14, boxSizing: "border-box" as const },
   btnPrimary: { background: "#166534", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer" },
   btnSecondary: { background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 8, padding: "9px 18px", fontSize: 14, cursor: "pointer" },
+  loadBtn: { background: "#f0fdf4", color: "#166534", border: "1px solid #86efac", borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", width: "100%" },
   tableWrap: { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" },
   table: { width: "100%", borderCollapse: "collapse" as const, fontSize: 13 },
   th: { textAlign: "left" as const, padding: "10px 14px", fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.05em", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" as const },

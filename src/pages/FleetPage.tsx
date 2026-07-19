@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { fleetApi } from "../api/fleetApi";
-import type { VehicleDto, CreateVehicleRequest, UpdateVehicleRequest } from "../api/fleetApi";
+import type { VehicleDto, CreateVehicleRequest, UpdateVehicleRequest, LicenceHistoryEntry } from "../api/fleetApi";
 import { hasAnyRole } from "../api/auth";
 
 const canManage = () => hasAnyRole("Owner", "Admin");
@@ -16,6 +16,7 @@ type FormState = {
   odometerKm: string;
   expectedConsumption: string;
   licenceExpiry: string;
+  licenceCost: string;
   licenceRemindDays: string;
   lastServiceOdo: string;
   serviceInterval: string;
@@ -34,12 +35,39 @@ const emptyForm = (): FormState => ({
   odometerKm: "",
   expectedConsumption: "",
   licenceExpiry: "",
+  licenceCost: "",
   licenceRemindDays: "",
   lastServiceOdo: "",
   serviceInterval: "",
   serviceNotifyBefore: "",
   notes: "",
 });
+
+const CSV_HEADERS = [
+  "fleet_number","registration","make","model","year","fuel_type",
+  "odo_type","odometer_km","expected_consumption",
+  "licence_expiry","licence_remind_days",
+  "service_interval","service_notify_before","last_service_odo","notes",
+];
+
+function downloadTemplate() {
+  const example = ["KW-01","CA 123-456","Toyota","Hilux","2022","diesel","km","45000","12.5","2026-12-31","30","10000","500","45000","Main farm vehicle"];
+  const csv = [CSV_HEADERS.join(","), example.join(",")].join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = "vehicle_import_template.csv";
+  a.click();
+}
+
+function parseCSV(text: string): Record<string, string>[] {
+  const lines = text.trim().split("\n").map(l => l.replace(/\r/g, ""));
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",").map(h => h.trim());
+  return lines.slice(1).map(line => {
+    const vals = line.split(",").map(v => v.trim());
+    return Object.fromEntries(headers.map((h, i) => [h, vals[i] ?? ""]));
+  });
+}
 
 function vehicleToForm(v: VehicleDto): FormState {
   return {
@@ -53,6 +81,7 @@ function vehicleToForm(v: VehicleDto): FormState {
     odometerKm: v.odometerKm != null ? String(v.odometerKm) : "",
     expectedConsumption: v.expectedConsumption != null ? String(v.expectedConsumption) : "",
     licenceExpiry: v.licenceExpiry ?? "",
+    licenceCost: "",
     licenceRemindDays: v.licenceRemindDays != null ? String(v.licenceRemindDays) : "",
     lastServiceOdo: v.lastServiceOdo != null ? String(v.lastServiceOdo) : "",
     serviceInterval: v.serviceInterval != null ? String(v.serviceInterval) : "",
@@ -74,6 +103,7 @@ function formToRequest(f: FormState): CreateVehicleRequest {
     odometerKm: num(f.odometerKm),
     expectedConsumption: num(f.expectedConsumption),
     licenceExpiry: f.licenceExpiry || undefined,
+    licenceCost: num(f.licenceCost),
     licenceRemindDays: num(f.licenceRemindDays),
     lastServiceOdo: num(f.lastServiceOdo),
     serviceInterval: num(f.serviceInterval),
@@ -94,6 +124,10 @@ export default function FleetPage() {
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState("");
   const [confirmDeactivate, setConfirmDeactivate] = useState<VehicleDto | null>(null);
+  const [historyVehicleId, setHistoryVehicleId] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ ok: number; failed: string[] } | null>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -152,6 +186,46 @@ export default function FleetPage() {
     } catch { setError("Failed to deactivate vehicle."); }
   }
 
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setImporting(true);
+    setImportResult(null);
+    const text = await file.text();
+    const rows = parseCSV(text);
+    let ok = 0;
+    const failed: string[] = [];
+    for (const row of rows) {
+      if (!row.fleet_number) continue;
+      try {
+        const created = await fleetApi.create({
+          fleetNumber: row.fleet_number,
+          registration: row.registration || undefined,
+          make: row.make || undefined,
+          model: row.model || undefined,
+          year: row.year ? parseInt(row.year) : undefined,
+          fuelType: row.fuel_type || "diesel",
+          odoType: row.odo_type || "km",
+          odometerKm: row.odometer_km ? parseFloat(row.odometer_km) : undefined,
+          expectedConsumption: row.expected_consumption ? parseFloat(row.expected_consumption) : undefined,
+          licenceExpiry: row.licence_expiry || undefined,
+          licenceRemindDays: row.licence_remind_days ? parseInt(row.licence_remind_days) : undefined,
+          serviceInterval: row.service_interval ? parseFloat(row.service_interval) : undefined,
+          serviceNotifyBefore: row.service_notify_before ? parseFloat(row.service_notify_before) : undefined,
+          lastServiceOdo: row.last_service_odo ? parseFloat(row.last_service_odo) : undefined,
+          notes: row.notes || undefined,
+        });
+        setVehicles(vs => [created, ...vs]);
+        ok++;
+      } catch {
+        failed.push(row.fleet_number);
+      }
+    }
+    setImportResult({ ok, failed });
+    setImporting(false);
+  }
+
   const q = search.toLowerCase();
   const filtered = vehicles.filter(v =>
     !q ||
@@ -171,9 +245,25 @@ export default function FleetPage() {
           <div style={s.sub}>Manage vehicles, licence renewals, and service intervals</div>
         </div>
         {canManage() && (
-          <button style={s.btnPrimary} onClick={openCreate}>+ Add Vehicle</button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
+            <button style={s.btnSecondary} onClick={downloadTemplate} title="Download CSV template">⬇ Template</button>
+            <label style={{ ...s.btnSecondary, cursor: "pointer", opacity: importing ? 0.6 : 1, pointerEvents: importing ? "none" : "auto" }} title="Import vehicles from CSV">
+              ⬆ {importing ? "Importing…" : "Import CSV"}
+              <input ref={csvInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleImport} />
+            </label>
+            <button style={s.btnPrimary} onClick={openCreate}>+ Add Vehicle</button>
+          </div>
         )}
       </div>
+
+      {importResult && (
+        <div style={{ background: importResult.failed.length ? "#fffbeb" : "#f0fdf4", border: `1px solid ${importResult.failed.length ? "#fcd34d" : "#86efac"}`, borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ color: importResult.failed.length ? "#92400e" : "#166534" }}>
+            Import complete: <strong>{importResult.ok}</strong> added{importResult.failed.length > 0 && <>, <strong>{importResult.failed.length}</strong> failed ({importResult.failed.join(", ")})</>}
+          </span>
+          <button onClick={() => setImportResult(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", fontSize: 16 }}>✕</button>
+        </div>
+      )}
 
       <input
         style={s.searchInput}
@@ -200,6 +290,8 @@ export default function FleetPage() {
                     canManage={canManage()}
                     onEdit={openEdit}
                     onDeactivate={setConfirmDeactivate}
+                    historyOpen={historyVehicleId === v.vehicleId}
+                    onToggleHistory={() => setHistoryVehicleId(id => id === v.vehicleId ? null : v.vehicleId)}
                   />
                 ))}
               </div>
@@ -216,6 +308,8 @@ export default function FleetPage() {
                     canManage={canManage()}
                     onEdit={openEdit}
                     onDeactivate={setConfirmDeactivate}
+                    historyOpen={historyVehicleId === v.vehicleId}
+                    onToggleHistory={() => setHistoryVehicleId(id => id === v.vehicleId ? null : v.vehicleId)}
                   />
                 ))}
               </div>
@@ -285,6 +379,10 @@ export default function FleetPage() {
               <div>
                 <label style={s.label}>Licence Expiry</label>
                 <input style={s.input} type="date" value={form.licenceExpiry} onChange={e => setF("licenceExpiry", e.target.value)} />
+              </div>
+              <div>
+                <label style={s.label}>Renewal Cost (R)</label>
+                <input style={s.input} type="number" step="0.01" min="0" value={form.licenceCost} onChange={e => setF("licenceCost", e.target.value)} placeholder="e.g. 450.00" />
               </div>
               <div>
                 <label style={s.label}>Remind Me (days before)</label>
@@ -365,12 +463,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function VehicleCard({
-  vehicle, canManage, onEdit, onDeactivate,
+  vehicle, canManage, onEdit, onDeactivate, historyOpen, onToggleHistory,
 }: {
   vehicle: VehicleDto;
   canManage: boolean;
   onEdit: (v: VehicleDto) => void;
   onDeactivate: (v: VehicleDto) => void;
+  historyOpen: boolean;
+  onToggleHistory: () => void;
 }) {
   const odo = vehicle.odometerKm != null ? `${vehicle.odometerKm.toLocaleString()} ${vehicle.odoType}` : null;
 
@@ -415,12 +515,52 @@ function VehicleCard({
       <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", fontSize: 12, color: "#64748b" }}>
         {odo && <span>📏 {odo}</span>}
         <span>⛽ {vehicle.fuelType}</span>
-        {vehicle.licenceExpiry && <span>📋 Licence: {vehicle.licenceExpiry}</span>}
+        {vehicle.licenceExpiry && (
+          <button
+            onClick={onToggleHistory}
+            style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 4 }}
+            title="View licence history"
+          >
+            <span style={{ ...s.licenceBadge, background: licenceWarning ? (licenceWarning.color === "#dc2626" ? "#fee2e2" : "#fff7ed") : "#dcfce7", color: licenceWarning ? licenceWarning.color : "#166534" }}>
+              📋 {vehicle.licenceExpiry} {historyOpen ? "▲" : "▼"}
+            </span>
+          </button>
+        )}
       </div>
 
       {licenceWarning && (
         <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: licenceWarning.color }}>
           ⚠ {licenceWarning.text}
+        </div>
+      )}
+
+      {historyOpen && (
+        <div style={{ marginTop: 10, borderTop: "1px solid #e2e8f0", paddingTop: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.05em", marginBottom: 6 }}>Licence Renewal History</div>
+          {(vehicle.licenceHistory ?? []).length === 0 ? (
+            <div style={{ fontSize: 12, color: "#94a3b8" }}>No renewal history recorded yet.</div>
+          ) : (
+            <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse" as const }}>
+              <thead>
+                <tr style={{ color: "#64748b" }}>
+                  <th style={{ textAlign: "left", paddingBottom: 4, paddingRight: 8, fontWeight: 600 }}>New Expiry</th>
+                  <th style={{ textAlign: "left", paddingBottom: 4, paddingRight: 8, fontWeight: 600 }}>Previous</th>
+                  <th style={{ textAlign: "left", paddingBottom: 4, paddingRight: 8, fontWeight: 600 }}>Cost</th>
+                  <th style={{ textAlign: "left", paddingBottom: 4, fontWeight: 600 }}>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...(vehicle.licenceHistory ?? [])].reverse().map((h: LicenceHistoryEntry, i: number) => (
+                  <tr key={i} style={{ borderTop: i > 0 ? "1px solid #f1f5f9" : undefined }}>
+                    <td style={{ paddingTop: 3, paddingRight: 8, fontWeight: 600 }}>{h.newExpiry}</td>
+                    <td style={{ paddingTop: 3, paddingRight: 8, color: "#64748b" }}>{h.previousExpiry ?? "—"}</td>
+                    <td style={{ paddingTop: 3, paddingRight: 8, color: "#64748b" }}>{h.cost != null ? `R${h.cost.toFixed(2)}` : "—"}</td>
+                    <td style={{ paddingTop: 3, color: "#64748b" }}>{new Date(h.renewedAt).toLocaleDateString("en-ZA")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
       {serviceWarning && (
@@ -454,6 +594,7 @@ const s: Record<string, React.CSSProperties> = {
   fleetNum: { fontSize: 16, fontWeight: 800, color: "#1e293b" },
   vehicleSub: { fontSize: 12, color: "#64748b", marginTop: 2 },
   badge: { display: "inline-block", fontSize: 11, fontWeight: 600, borderRadius: 4, padding: "2px 6px" },
+  licenceBadge: { display: "inline-block", fontSize: 11, fontWeight: 600, borderRadius: 4, padding: "2px 7px" },
   editBtn: { fontSize: 12, padding: "4px 10px", borderRadius: 6, border: "1px solid #cbd5e1", background: "#f8fafc", cursor: "pointer" },
   btnPrimary: { background: "#166534", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer" },
   btnSecondary: { background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 8, padding: "9px 18px", fontSize: 14, cursor: "pointer" },
