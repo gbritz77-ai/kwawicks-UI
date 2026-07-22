@@ -521,7 +521,7 @@ export default function AdminReportsPage() {
 
       {/* ── Supplier Spend by Month ── */}
       {tab === "supplier-spend" && poData && !loading && (() => {
-        const nonDraft = poData.filter(p => p.status !== "Draft");
+        const nonDraft = poData.filter(p => p.status !== "Draft" && (p.supplierName || "").toLowerCase() !== "hub");
         const filtered = nonDraft.filter(p => {
           const d = p.createdAt.slice(0, 10);
           if (from && d < from) return false;
