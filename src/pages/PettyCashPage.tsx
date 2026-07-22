@@ -46,6 +46,9 @@ export default function PettyCashPage() {
   const [cashupBusy, setCashupBusy] = useState(false);
   const [cashupError, setCashupError] = useState("");
   const [cashupDone, setCashupDone] = useState<PettyCashupDto | null>(null);
+  const [freshBusy, setFreshBusy] = useState(false);
+  const [freshError, setFreshError] = useState("");
+  const [freshDone, setFreshDone] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -118,6 +121,23 @@ export default function PettyCashPage() {
       setCashupError(msg);
     } finally {
       setCashupBusy(false);
+    }
+  }
+
+  async function handleStartFresh() {
+    if (!window.confirm("This will reset all petty cash data and set the opening float to R2 000. Continue?")) return;
+    setFreshBusy(true);
+    setFreshError("");
+    try {
+      await pettyCashApi.createCashup({ actualBalance: 0, notes: "System reset — start fresh", cashupDate: today() });
+      await pettyCashApi.createEntry({ type: "In", amount: 2000, description: "Opening float", category: "Other", recipientName: "", entryDate: today() });
+      const [s, e, c] = await Promise.all([pettyCashApi.getSummary(), pettyCashApi.listEntries(), pettyCashApi.listCashups()]);
+      setSummary(s); setEntries(e); setCashups(c);
+      setFreshDone(true);
+    } catch (e: unknown) {
+      setFreshError(e instanceof Error ? e.message : "Reset failed.");
+    } finally {
+      setFreshBusy(false);
     }
   }
 
@@ -449,6 +469,23 @@ export default function PettyCashPage() {
                 <div style={s.infoBox}>No open entries. There is nothing to cash up right now.</div>
               )}
 
+              {/* Start Fresh */}
+              <div style={{ marginTop: 32, padding: "20px 24px", borderRadius: 10, border: "1px solid #ef4444", background: "rgba(239,68,68,0.06)" }}>
+                <h3 style={{ margin: "0 0 6px", color: "#ef4444", fontSize: 15 }}>Start Fresh</h3>
+                <p style={{ margin: "0 0 14px", color: "#94a3b8", fontSize: 13 }}>
+                  Resets all accumulated data and sets the opening petty cash float to <strong style={{ color: "#fff" }}>R 2 000,00</strong>. This cannot be undone.
+                </p>
+                {freshDone && <p style={{ color: "#22c55e", marginBottom: 10, fontSize: 13 }}>✓ Reset complete — float is now R 2 000,00</p>}
+                {freshError && <p style={{ color: "#ef4444", marginBottom: 10, fontSize: 13 }}>{freshError}</p>}
+                <button
+                  style={{ ...s.btnDanger, opacity: freshBusy ? 0.6 : 1 }}
+                  onClick={handleStartFresh}
+                  disabled={freshBusy}
+                >
+                  {freshBusy ? "Resetting…" : "Reset & Set Float to R2 000"}
+                </button>
+              </div>
+
               {summary && summary.openEntryCount > 0 && (
                 <div style={s.summaryPreview}>
                   <div style={s.previewRow}>
@@ -722,6 +759,16 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     cursor: "pointer",
   },
+  btnDanger: {
+    background: "#ef4444",
+    color: "#fff",
+    border: "none",
+    borderRadius: 7,
+    padding: "9px 18px",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+  } as React.CSSProperties,
   btnSecondary: {
     background: "#1e293b",
     color: "#94a3b8",
