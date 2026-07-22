@@ -683,7 +683,18 @@ function BankStatementsTab() {
                                 {txMatch && <div style={{ fontSize: 11, color: "#15803d", fontWeight: 700 }}>✓ exact match</div>}
                                 {txPartial && <div style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700 }}>⚠ partial payment</div>}
                               </div>
-                              <span style={{ ...s.badge, ...(inv.paymentType==="EFT"?s.badgeEFT:s.badgeCash), fontSize: 11 }}>{inv.paymentType}</span>
+                              <div style={{ textAlign: "right" as const }}>
+                                <span style={{ ...s.badge, ...(inv.paymentType==="EFT"?s.badgeEFT:s.badgeCash), fontSize: 11 }}>{inv.paymentType}</span>
+                                {inv.paymentType === "Split" && inv.splitPayments?.length > 0 && (
+                                  <div style={{ marginTop: 3 }}>
+                                    {inv.splitPayments.map((sp, i) => (
+                                      <div key={i} style={{ fontSize: 10, color: "#374151", lineHeight: 1.5 }}>
+                                        <span style={{ fontWeight: 600 }}>{sp.method}</span>{" "}{fmt(sp.amount)}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                               <button
                                 style={{ ...sp.allocBtn, opacity: busy ? 0.6 : 1 }}
                                 disabled={!!allocBusy}

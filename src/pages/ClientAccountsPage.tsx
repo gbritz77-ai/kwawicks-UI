@@ -61,6 +61,9 @@ export default function ClientAccountsPage() {
   const [resendInvoice, setResendInvoice] = useState<InvoiceResponse | null>(null);
   const [resendInvoiceLoading, setResendInvoiceLoading] = useState(false);
 
+  // Invoice map for showing species/qty in Reference/Notes column
+  const [invoiceMap, setInvoiceMap] = useState<Record<string, InvoiceResponse>>({});
+
   useEffect(() => {
     clientsApi.list().then(data => setClients(data.filter((c: ClientDto) => !c.isWalkIn))).catch(() => setError("Failed to load clients."));
   }, []);
@@ -68,11 +71,18 @@ export default function ClientAccountsPage() {
   const [refreshing, setRefreshing] = useState(false);
 
   async function loadLedger(clientId: string, opts?: { silent?: boolean }) {
-    if (!clientId) { setLedger(null); return; }
+    if (!clientId) { setLedger(null); setInvoiceMap({}); return; }
     if (opts?.silent) setRefreshing(true); else setLoadingLedger(true);
     setError("");
     try {
-      setLedger(await clientCreditApi.getLedger(clientId));
+      const [ledgerData, invoices] = await Promise.all([
+        clientCreditApi.getLedger(clientId),
+        invoicesApi.listByClient(clientId).catch(() => [] as InvoiceResponse[]),
+      ]);
+      setLedger(ledgerData);
+      const map: Record<string, InvoiceResponse> = {};
+      invoices.forEach(inv => { map[inv.invoiceId] = inv; });
+      setInvoiceMap(map);
     } catch {
       setError("Failed to load credit ledger.");
     } finally {
@@ -385,17 +395,36 @@ export default function ClientAccountsPage() {
                             <td style={s.td}>
                               {row.paymentMethod || (row.entryType === "InvoiceCharge" ? "Invoice" : "—")}
                             </td>
-                            <td style={{ ...s.td, maxWidth: 220 }}>
-                              {row.reference && (
+                            <td style={{ ...s.td, maxWidth: 260 }}>
+                              {row.entryType === "InvoiceCharge" && row.reference && (() => {
+                                const inv = invoiceMap[row.reference];
+                                return (
+                                  <div style={{ marginBottom: 3 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
+                                      <span style={{ fontSize: 12, fontWeight: 700, color: "#2563eb", fontFamily: "monospace" }}>
+                                        {inv ? inv.invoiceNumber : row.reference.slice(0, 12) + "…"}
+                                      </span>
+                                      <button style={s.viewRefBtn} title="View full reference" onClick={() => { setRefCopied(false); setViewRefRow(row); }}>👁</button>
+                                    </div>
+                                    {inv && inv.lines.length > 0 && (
+                                      <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.6 }}>
+                                        {inv.lines.map((l, i) => (
+                                          <div key={i}>
+                                            <span style={{ fontWeight: 600 }}>{l.speciesId}</span>
+                                            {" × "}{l.quantity}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                              {row.entryType !== "InvoiceCharge" && row.reference && (
                                 <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
                                   <div style={{ fontSize: 12, color: "#2563eb", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const, maxWidth: 160 }}>
                                     {row.reference}
                                   </div>
-                                  <button
-                                    style={s.viewRefBtn}
-                                    title="View full reference"
-                                    onClick={() => { setRefCopied(false); setViewRefRow(row); }}
-                                  >👁</button>
+                                  <button style={s.viewRefBtn} title="View full reference" onClick={() => { setRefCopied(false); setViewRefRow(row); }}>👁</button>
                                 </div>
                               )}
                               {row.notes && <div style={{ fontSize: 13, color: "#374151", wordBreak: "break-word" as const }}>{row.notes}</div>}
