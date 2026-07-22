@@ -82,4 +82,5 @@ export const pettyCashApi = {
     api.get<{ uploadUrl: string; s3Key: string }>(`/api/petty-cash/entries/${entryId}/slip-upload-url`),
   confirmSlipUploaded: (entryId: string, s3Key: string) =>
     api.put<PettyCashEntryDto>(`/api/petty-cash/entries/${entryId}/slip`, { s3Key }),
+  clearAll: () => api.del<void>("/api/petty-cash/clear"),
 };

@@ -50,6 +50,10 @@ export default function PettyCashPage() {
   const [freshError, setFreshError] = useState("");
   const [freshDone, setFreshDone] = useState(false);
   const [showFreshConfirm, setShowFreshConfirm] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [clearBusy, setClearBusy] = useState(false);
+  const [clearError, setClearError] = useState("");
+  const [clearDone, setClearDone] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -122,6 +126,21 @@ export default function PettyCashPage() {
       setCashupError(msg);
     } finally {
       setCashupBusy(false);
+    }
+  }
+
+  async function handleClearAll() {
+    setClearBusy(true);
+    setClearError("");
+    try {
+      await pettyCashApi.clearAll();
+      const [s, e, c] = await Promise.all([pettyCashApi.getSummary(), pettyCashApi.listEntries(), pettyCashApi.listCashups()]);
+      setSummary(s); setEntries(e); setCashups(c);
+      setClearDone(true);
+    } catch (e: unknown) {
+      setClearError(e instanceof Error ? e.message : "Clear failed.");
+    } finally {
+      setClearBusy(false);
     }
   }
 
@@ -469,8 +488,25 @@ export default function PettyCashPage() {
                 <div style={s.infoBox}>No open entries. There is nothing to cash up right now.</div>
               )}
 
+              {/* Clear History */}
+              <div style={{ marginTop: 20, padding: "20px 24px", borderRadius: 10, border: "1px solid #ef4444", background: "rgba(239,68,68,0.06)" }}>
+                <h3 style={{ margin: "0 0 6px", color: "#ef4444", fontSize: 15 }}>Clear All History</h3>
+                <p style={{ margin: "0 0 14px", color: "#94a3b8", fontSize: 13 }}>
+                  Permanently deletes all cash book entries and cashup history. The system will start completely empty.
+                </p>
+                {clearDone && <p style={{ color: "#22c55e", marginBottom: 10, fontSize: 13 }}>✓ All history cleared successfully</p>}
+                {clearError && <p style={{ color: "#ef4444", marginBottom: 10, fontSize: 13 }}>{clearError}</p>}
+                <button
+                  style={{ ...s.btnDanger, opacity: clearBusy ? 0.6 : 1 }}
+                  onClick={() => setShowClearConfirm(true)}
+                  disabled={clearBusy}
+                >
+                  {clearBusy ? "Clearing…" : "Clear Cash Book & History"}
+                </button>
+              </div>
+
               {/* Start Fresh */}
-              <div style={{ marginTop: 32, padding: "20px 24px", borderRadius: 10, border: "1px solid #ef4444", background: "rgba(239,68,68,0.06)" }}>
+              <div style={{ marginTop: 20, padding: "20px 24px", borderRadius: 10, border: "1px solid #ef4444", background: "rgba(239,68,68,0.06)" }}>
                 <h3 style={{ margin: "0 0 6px", color: "#ef4444", fontSize: 15 }}>Start Fresh</h3>
                 <p style={{ margin: "0 0 14px", color: "#94a3b8", fontSize: 13 }}>
                   Resets all accumulated data and sets the opening petty cash float to <strong style={{ color: "#fff" }}>R 2 000,00</strong>. This cannot be undone.
@@ -606,6 +642,32 @@ export default function PettyCashPage() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── CLEAR HISTORY CONFIRMATION MODAL ── */}
+      {showClearConfirm && (
+        <div style={s.modalOverlay}>
+          <div style={s.modalCard}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>🗑️</div>
+            <h2 style={{ margin: "0 0 8px", color: "#f1f5f9", fontSize: 18 }}>Clear All History?</h2>
+            <p style={{ margin: "0 0 20px", color: "#94a3b8", fontSize: 14, lineHeight: 1.6 }}>
+              This will permanently delete all cash book entries and all cashup records.<br />
+              <strong style={{ color: "#ef4444" }}>This cannot be undone.</strong>
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button style={s.btnSecondary} onClick={() => setShowClearConfirm(false)} disabled={clearBusy}>
+                Cancel
+              </button>
+              <button
+                style={{ ...s.btnDanger, opacity: clearBusy ? 0.6 : 1 }}
+                disabled={clearBusy}
+                onClick={() => { setShowClearConfirm(false); handleClearAll(); }}
+              >
+                {clearBusy ? "Clearing…" : "Yes, Delete All"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
