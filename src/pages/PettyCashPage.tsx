@@ -49,6 +49,7 @@ export default function PettyCashPage() {
   const [freshBusy, setFreshBusy] = useState(false);
   const [freshError, setFreshError] = useState("");
   const [freshDone, setFreshDone] = useState(false);
+  const [showFreshConfirm, setShowFreshConfirm] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -125,7 +126,6 @@ export default function PettyCashPage() {
   }
 
   async function handleStartFresh() {
-    if (!window.confirm("This will reset all petty cash data and set the opening float to R2 000. Continue?")) return;
     setFreshBusy(true);
     setFreshError("");
     try {
@@ -479,7 +479,7 @@ export default function PettyCashPage() {
                 {freshError && <p style={{ color: "#ef4444", marginBottom: 10, fontSize: 13 }}>{freshError}</p>}
                 <button
                   style={{ ...s.btnDanger, opacity: freshBusy ? 0.6 : 1 }}
-                  onClick={handleStartFresh}
+                  onClick={() => setShowFreshConfirm(true)}
                   disabled={freshBusy}
                 >
                   {freshBusy ? "Resetting…" : "Reset & Set Float to R2 000"}
@@ -606,6 +606,33 @@ export default function PettyCashPage() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── START FRESH CONFIRMATION MODAL ── */}
+      {showFreshConfirm && (
+        <div style={s.modalOverlay}>
+          <div style={s.modalCard}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+            <h2 style={{ margin: "0 0 8px", color: "#f1f5f9", fontSize: 18 }}>Reset Petty Cash?</h2>
+            <p style={{ margin: "0 0 20px", color: "#94a3b8", fontSize: 14, lineHeight: 1.6 }}>
+              This will close all existing entries and set the opening petty cash float to{" "}
+              <strong style={{ color: "#fff" }}>R 2 000,00</strong>.<br />
+              This action cannot be undone.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button style={s.btnSecondary} onClick={() => setShowFreshConfirm(false)} disabled={freshBusy}>
+                Cancel
+              </button>
+              <button
+                style={{ ...s.btnDanger, opacity: freshBusy ? 0.6 : 1 }}
+                disabled={freshBusy}
+                onClick={() => { setShowFreshConfirm(false); handleStartFresh(); }}
+              >
+                {freshBusy ? "Resetting…" : "Yes, Reset"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -759,6 +786,25 @@ const s: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     cursor: "pointer",
   },
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.6)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+  } as React.CSSProperties,
+  modalCard: {
+    background: "#1e293b",
+    border: "1px solid #334155",
+    borderRadius: 14,
+    padding: "32px 28px",
+    maxWidth: 420,
+    width: "90%",
+    textAlign: "center",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+  } as React.CSSProperties,
   btnDanger: {
     background: "#ef4444",
     color: "#fff",
