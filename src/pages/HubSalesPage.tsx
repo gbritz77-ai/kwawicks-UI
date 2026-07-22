@@ -17,6 +17,7 @@ const VAT_RATE = 0.15;
 type CustomerMode = "existing" | "walkin" | "staff" | "credit";
 
 type SaleLine = {
+  lineId: string;
   speciesId: string;
   speciesName: string;
   quantity: number;
@@ -115,30 +116,25 @@ export default function HubSalesPage() {
     const parsedQty = parseInt(addQty);
     const parsedPrice = Number(addPrice);
     if (!sp || !addQty || parsedQty <= 0 || !addPrice || parsedPrice <= 0) return;
-    if (lines.find(l => l.speciesId === addSpeciesId)) {
-      setLines(ls => ls.map(l => l.speciesId === addSpeciesId
-        ? { ...l, quantity: l.quantity + parsedQty, unitPrice: parsedPrice }
-        : l));
-    } else {
-      setLines(ls => [...ls, {
-        speciesId: addSpeciesId,
-        speciesName: sp.name,
-        quantity: parsedQty,
-        unitPrice: parsedPrice,
-        vatRate: VAT_RATE,
-      }]);
-    }
+    setLines(ls => [...ls, {
+      lineId: `${addSpeciesId}-${Date.now()}`,
+      speciesId: addSpeciesId,
+      speciesName: sp.name,
+      quantity: parsedQty,
+      unitPrice: parsedPrice,
+      vatRate: VAT_RATE,
+    }]);
     setAddSpeciesId("");
     setAddQty("");
     setAddPrice("");
   }
 
-  function removeLine(speciesId: string) {
-    setLines(ls => ls.filter(l => l.speciesId !== speciesId));
+  function removeLine(lineId: string) {
+    setLines(ls => ls.filter(l => l.lineId !== lineId));
   }
 
-  function updateLine(speciesId: string, field: "quantity" | "unitPrice", value: number) {
-    setLines(ls => ls.map(l => l.speciesId === speciesId ? { ...l, [field]: value } : l));
+  function updateLine(lineId: string, field: "quantity" | "unitPrice", value: number) {
+    setLines(ls => ls.map(l => l.lineId === lineId ? { ...l, [field]: value } : l));
   }
 
   // Prices are entered inclusive of VAT; back-calculate ex-VAT components for display
@@ -631,13 +627,13 @@ export default function HubSalesPage() {
                 </thead>
                 <tbody>
                   {lines.map(l => (
-                    <tr key={l.speciesId}>
+                    <tr key={l.lineId}>
                       <td style={s.td}>{l.speciesName}</td>
                       <td style={s.td}>
                         <NumericInput
                           style={{ ...s.input, width: 60, padding: "4px 6px" }}
                            min={1} value={l.quantity}
-                          onChange={e => updateLine(l.speciesId, "quantity", Number(e.target.value))}
+                          onChange={e => updateLine(l.lineId, "quantity", Number(e.target.value))}
                           onFocus={e => e.target.select()}
                         />
                       </td>
@@ -645,14 +641,14 @@ export default function HubSalesPage() {
                         <NumericInput
                           style={{ ...s.input, width: 90, padding: "4px 6px" }}
                            min={0} step={0.01} value={l.unitPrice}
-                          onChange={e => updateLine(l.speciesId, "unitPrice", Number(e.target.value))}
+                          onChange={e => updateLine(l.lineId, "unitPrice", Number(e.target.value))}
                           onFocus={e => e.target.select()}
                         />
                       </td>
                       <td style={{ ...s.td, color: "#64748b" }}>{(l.vatRate * 100).toFixed(0)}%</td>
                       <td style={{ ...s.td, fontWeight: 600 }}>{fmt(l.quantity * l.unitPrice)}</td>
                       <td style={s.td}>
-                        <button style={s.removeBtn} onClick={() => removeLine(l.speciesId)}>✕</button>
+                        <button style={s.removeBtn} onClick={() => removeLine(l.lineId)}>✕</button>
                       </td>
                     </tr>
                   ))}

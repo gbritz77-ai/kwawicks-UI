@@ -895,6 +895,7 @@ const s: Record<string, React.CSSProperties> = {
     overflowX: "auto",
     borderRadius: 8,
     border: "1px solid #334155",
+    background: "#ffffff",
   },
   table: {
     width: "100%",
@@ -911,12 +912,14 @@ const s: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid #334155",
   },
   tr: {
-    borderBottom: "1px solid #1e293b",
+    borderBottom: "1px solid #e2e8f0",
+    background: "#ffffff",
   },
   td: {
     padding: "10px 12px",
     color: "#1e293b",
     verticalAlign: "middle",
+    background: "#ffffff",
   },
   badgeIn: {
     background: "rgba(34,197,94,0.15)",
