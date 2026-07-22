@@ -760,7 +760,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   td: {
     padding: "10px 12px",
-    color: "#e2e8f0",
+    color: "#f8fafc",
     verticalAlign: "middle",
   },
   badgeIn: {
