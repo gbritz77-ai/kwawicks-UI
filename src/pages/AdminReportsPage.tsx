@@ -79,6 +79,7 @@ export default function AdminReportsPage() {
   const [salesClientId,    setSalesClientId]    = useState("");
   const [salesView,        setSalesView]        = useState<"client" | "walkin">("client");
   const [salesCostRecords, setSalesCostRecords] = useState<CostAverageRecordDto[]>([]);
+  const [marginSalesRows,  setMarginSalesRows]  = useState<SalesReportRow[]>([]);
 
   // ── Staff Stock Deductions tab state ────────────────────────────────────────
   const [staffDeductions, setStaffDeductions] = useState<StaffStockDeductionsReportResponse | null>(null);
@@ -116,7 +117,16 @@ export default function AdminReportsPage() {
       }
       if (tab === "species") setSpeciesRevenue(await reportsApi.getSpeciesRevenue(from || undefined, to || undefined));
       if (tab === "supplier-spend") setPoData(await procurementOrdersApi.list());
-      if (tab === "margin" && !allSpecies.length) setAllSpecies(await speciesApi.list());
+      if (tab === "margin") {
+        const [spc, costData, salesData] = await Promise.all([
+          allSpecies.length ? Promise.resolve(allSpecies) : speciesApi.list(),
+          costAveragesApi.getHistory(),
+          reportsApi.getSalesReport(from || undefined, to || undefined),
+        ]);
+        if (!allSpecies.length) setAllSpecies(spc);
+        setSalesCostRecords(costData);
+        setMarginSalesRows(salesData.rows);
+      }
       if (["load-discrepancy","transit-discrepancy","supplier-reliability"].includes(tab)) setCrData(await collectionRequestsApi.list());
       if (tab === "delivery-runs") setRunReport(await deliveryRunsApi.list());
       if (tab === "client-orders") {
@@ -589,14 +599,45 @@ export default function AdminReportsPage() {
 
       {/* ── Cost vs Sell Price Margin ── */}
       {tab === "margin" && !loading && (() => {
+        // Build avg cost per species from cost records within the date range
+        const fromMonth = from ? from.slice(0, 7) : null;
+        const toMonth   = to   ? to.slice(0, 7)   : null;
+        const filteredCostRecs = salesCostRecords.filter(r => {
+          if (fromMonth && r.month < fromMonth) return false;
+          if (toMonth   && r.month > toMonth)   return false;
+          return true;
+        });
+        const costBySpecies: Record<string, { totalQty: number; weightedCost: number }> = {};
+        for (const rec of filteredCostRecs) {
+          if (!costBySpecies[rec.speciesId]) costBySpecies[rec.speciesId] = { totalQty: 0, weightedCost: 0 };
+          costBySpecies[rec.speciesId].totalQty     += rec.totalQty;
+          costBySpecies[rec.speciesId].weightedCost += rec.totalQty * rec.avgCostIncVat;
+        }
+
+        // Build avg sell price per species from sales in the date range
+        const sellBySpecies: Record<string, { totalQty: number; weightedSell: number }> = {};
+        for (const row of marginSalesRows) {
+          if (!sellBySpecies[row.speciesId]) sellBySpecies[row.speciesId] = { totalQty: 0, weightedSell: 0 };
+          sellBySpecies[row.speciesId].totalQty     += row.qty;
+          sellBySpecies[row.speciesId].weightedSell += row.qty * row.unitPrice;
+        }
+
         const rows = allSpecies
           .filter(sp => sp.isActive)
           .map(sp => {
-            const cost   = Number(sp.unitCost   ?? 0);
-            const sell   = Number(sp.sellPrice  ?? 0);
+            const costEntry = costBySpecies[sp.speciesId];
+            const sellEntry = sellBySpecies[sp.speciesId];
+            const cost = costEntry && costEntry.totalQty > 0
+              ? costEntry.weightedCost / costEntry.totalQty
+              : Number(sp.unitCost ?? 0);
+            const sell = sellEntry && sellEntry.totalQty > 0
+              ? sellEntry.weightedSell / sellEntry.totalQty
+              : Number(sp.sellPrice ?? 0);
             const margin = sell > 0 ? ((sell - cost) / sell) * 100 : null;
             const rand   = sell - cost;
-            return { name: sp.name, cost, sell, rand, margin };
+            const hasCostData = !!costEntry;
+            const hasSellData = !!sellEntry;
+            return { name: sp.name, cost, sell, rand, margin, hasCostData, hasSellData };
           })
           .sort((a, b) => (b.margin ?? -999) - (a.margin ?? -999));
 
@@ -611,14 +652,14 @@ export default function AdminReportsPage() {
               <KpiCard label="Lowest Margin"    value={rows[rows.length - 1]?.margin != null ? `${rows[rows.length - 1].margin!.toFixed(1)}%` : "—"} />
             </div>
             <p style={{ fontSize: 12, color: "#94a3b8", marginBottom: 12 }}>
-              Unit cost and sell price are incl. VAT. Margin = (Sell − Cost) / Sell × 100.
+              Avg unit cost and sell price incl. VAT for selected date range. Falls back to configured price if no data in range. Margin = (Sell − Cost) / Sell × 100.
             </p>
             <ScrollTable>
               <thead>
                 <tr>
                   <Th>Species</Th>
-                  <Th>Unit Cost (incl. VAT)</Th>
-                  <Th>Sell Price (incl. VAT)</Th>
+                  <Th>Avg Unit Cost (incl. VAT)</Th>
+                  <Th>Avg Sell Price (incl. VAT)</Th>
                   <Th>Margin (R)</Th>
                   <Th>Margin (%)</Th>
                 </tr>
@@ -632,8 +673,15 @@ export default function AdminReportsPage() {
                   return (
                     <tr key={i}>
                       <Td style={{ fontWeight: 600 }}>{r.name}</Td>
-                      <Td>{fmt(r.cost)}</Td>
-                      <Td>{r.sell > 0 ? fmt(r.sell) : <span style={{ color: "#94a3b8" }}>Not set</span>}</Td>
+                      <Td>
+                        {fmt(r.cost)}
+                        {!r.hasCostData && <span style={{ fontSize: 10, color: "#94a3b8", marginLeft: 4 }}>(configured)</span>}
+                      </Td>
+                      <Td>
+                        {r.sell > 0
+                          ? <>{fmt(r.sell)}{!r.hasSellData && <span style={{ fontSize: 10, color: "#94a3b8", marginLeft: 4 }}>(configured)</span>}</>
+                          : <span style={{ color: "#94a3b8" }}>Not set</span>}
+                      </Td>
                       <Td style={{ fontWeight: 700, color }}>{r.sell > 0 ? fmt(r.rand) : "—"}</Td>
                       <Td>
                         {r.margin !== null ? (
@@ -1495,6 +1543,7 @@ function InvoicesTab({
           <option value="EFT">EFT</option>
           <option value="Card">Card</option>
           <option value="CardMachine">Card Machine</option>
+          <option value="Split">Split</option>
           <option value="AccountCredit">Account Credit</option>
           <option value="Credit">Credit</option>
           <option value="OnAccount">On Account</option>
