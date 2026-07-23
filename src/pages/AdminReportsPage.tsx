@@ -1632,7 +1632,7 @@ function InvoicesTab({
                     <Td>
                       {inv.staffMemberId
                         ? <>{staffMap[inv.staffMemberId] ?? inv.staffMemberId}<span style={{ ...s.badge, background: "#ede9fe", color: "#6d28d9", marginLeft: 6, fontSize: 10 }}>Staff</span></>
-                        : (clientMap[inv.customerId] ?? inv.customerId)}
+                        : (inv.customerName || clientMap[inv.customerId] || inv.customerId)}
                     </Td>
                     <Td>
                       <span style={{ fontSize: 12, fontWeight: 600, padding: "2px 8px", borderRadius: 6,
@@ -1646,12 +1646,11 @@ function InvoicesTab({
                     <Td>
                       <div>{inv.paymentType || "—"}</div>
                       {inv.paymentType === "Split" && inv.splitPayments?.length > 0 && (
-                        <div style={{ marginTop: 4 }}>
+                        <div style={{ marginTop: 5, paddingTop: 4, borderTop: "1px solid #e2e8f0" }}>
                           {inv.splitPayments.map((sp, i) => (
-                            <div key={i} style={{ fontSize: 11, color: "#374151", lineHeight: 1.6 }}>
-                              <span style={{ fontWeight: 600, color: "#1e40af" }}>{sp.method}</span>
-                              {" — "}
-                              <span>{fmt(sp.amount)}</span>
+                            <div key={i} style={{ fontSize: 12, color: "#374151", lineHeight: 1.8, display: "flex", gap: 6, alignItems: "center" }}>
+                              <span style={{ fontWeight: 700, color: "#1e40af", background: "#eff6ff", borderRadius: 4, padding: "1px 6px", fontSize: 11 }}>{sp.method}</span>
+                              <span style={{ fontWeight: 600 }}>{fmt(sp.amount)}</span>
                             </div>
                           ))}
                         </div>
