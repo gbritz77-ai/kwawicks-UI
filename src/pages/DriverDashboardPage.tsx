@@ -20,9 +20,7 @@ type ReturnLine = {
   speciesId: string;
   orderedQty: number;
   deliveredQty: string;
-  returnedDeadQty: string;
-  returnedMutilatedQty: string;
-  returnedNotWantedQty: string;
+  totalReturnedQty: string;
 };
 
 type CompletionStep = "returns" | "receipt" | "done";
@@ -216,8 +214,7 @@ export default function DriverDashboardPage() {
     setClientPhone("");
     setReturnLines(order.lines.map(l => ({
       speciesId: l.speciesId, orderedQty: l.quantity,
-      deliveredQty: String(l.quantity), returnedDeadQty: "0",
-      returnedMutilatedQty: "0", returnedNotWantedQty: "0",
+      deliveredQty: String(l.quantity), totalReturnedQty: "0",
     })));
     // Check if client has a WhatsApp number saved
     try {
@@ -255,12 +252,10 @@ export default function DriverDashboardPage() {
     for (let i = 0; i < returnLines.length; i++) {
       const rl = returnLines[i];
       const del = parseInt(rl.deliveredQty) || 0;
-      const dead = parseInt(rl.returnedDeadQty) || 0;
-      const mut = parseInt(rl.returnedMutilatedQty) || 0;
-      const nw = parseInt(rl.returnedNotWantedQty) || 0;
-      if (del < 0 || dead < 0 || mut < 0 || nw < 0) return `Line ${i + 1}: quantities cannot be negative.`;
-      if (del + dead + mut + nw !== rl.orderedQty)
-        return `Line ${i + 1} (${speciesName(rl.speciesId)}): total must equal ordered (${rl.orderedQty}).`;
+      const ret = parseInt(rl.totalReturnedQty) || 0;
+      if (del < 0 || ret < 0) return `Line ${i + 1}: quantities cannot be negative.`;
+      if (del + ret > rl.orderedQty)
+        return `Line ${i + 1} (${speciesName(rl.speciesId)}): delivered + returned cannot exceed ordered (${rl.orderedQty}).`;
     }
     if (paymentType === "Split") {
       const validSplitLines = splitLines.filter(l => parseFloat(l.amount) > 0);
@@ -285,9 +280,7 @@ export default function DriverDashboardPage() {
         return {
           speciesId: rl.speciesId,
           deliveredQty: parseInt(rl.deliveredQty) || 0,
-          returnedDeadQty: parseInt(rl.returnedDeadQty) || 0,
-          returnedMutilatedQty: parseInt(rl.returnedMutilatedQty) || 0,
-          returnedNotWantedQty: parseInt(rl.returnedNotWantedQty) || 0,
+          totalReturnedQty: parseInt(rl.totalReturnedQty) || 0,
           unitPrice: (doLine?.unitPrice ?? sp?.sellPrice ?? 0) / (1 + (sp?.vat ?? 0)),
           vatRate: sp?.vat ?? 0,
         };
@@ -668,30 +661,37 @@ export default function DriverDashboardPage() {
                 <div style={s.stepNote}>Enter actual quantities delivered and any returns.</div>
                 {returnLines.map((rl, idx) => {
                   const del = parseInt(rl.deliveredQty) || 0;
-                  const dead = parseInt(rl.returnedDeadQty) || 0;
-                  const mut = parseInt(rl.returnedMutilatedQty) || 0;
-                  const nw = parseInt(rl.returnedNotWantedQty) || 0;
-                  const acc = del + dead + mut + nw;
-                  const ok = acc === rl.orderedQty;
+                  const ret = parseInt(rl.totalReturnedQty) || 0;
+                  const short = rl.orderedQty - del - ret;
                   return (
                     <div key={rl.speciesId} style={s.returnBlock}>
                       <div style={s.returnSpecies}>
                         {speciesName(rl.speciesId)}
                         <span style={s.returnOrdered}>Ordered: {rl.orderedQty}</span>
-                        <span style={ok ? s.returnOk : s.returnBad}>{ok ? `✓ ${acc}/${rl.orderedQty}` : `${acc}/${rl.orderedQty}`}</span>
+                        {short > 0
+                          ? <span style={{ ...s.returnBad, fontSize: 11 }}>Short: {short}</span>
+                          : <span style={s.returnOk}>✓ All accounted</span>
+                        }
                       </div>
                       <div style={s.returnFields}>
-                        {(["deliveredQty", "returnedDeadQty", "returnedMutilatedQty", "returnedNotWantedQty"] as const).map((field, fi) => (
-                          <label key={field} style={s.returnLabel}>
-                            {["Delivered", "Dead", "Mutilated", "Not Wanted"][fi]}
-                            <NumericInput style={s.returnInput} allowDecimal={false} 
-                              value={(rl as any)[field]}
-                              onChange={e => updateReturnLine(idx, field, e.target.value)}
-                              onFocus={e => e.target.select()}
-                              disabled={completionBusy}
-                            />
-                          </label>
-                        ))}
+                        <label style={s.returnLabel}>
+                          Delivered
+                          <NumericInput style={s.returnInput} allowDecimal={false}
+                            value={rl.deliveredQty}
+                            onChange={e => updateReturnLine(idx, "deliveredQty", e.target.value)}
+                            onFocus={e => e.target.select()}
+                            disabled={completionBusy}
+                          />
+                        </label>
+                        <label style={s.returnLabel}>
+                          Returned
+                          <NumericInput style={s.returnInput} allowDecimal={false}
+                            value={rl.totalReturnedQty}
+                            onChange={e => updateReturnLine(idx, "totalReturnedQty", e.target.value)}
+                            onFocus={e => e.target.select()}
+                            disabled={completionBusy}
+                          />
+                        </label>
                       </div>
                     </div>
                   );

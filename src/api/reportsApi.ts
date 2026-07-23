@@ -42,7 +42,8 @@ export type DriverPerformanceItem = {
   totalValue: number;
   totalDeadReturns: number;
   totalMutilatedReturns: number;
-  totalNotWantedReturns: number;
+  totalShortQty: number;
+  totalOverQty: number;
 };
 
 export type DriverPerformanceResponse = {
@@ -53,10 +54,11 @@ export type DriverPerformanceResponse = {
 
 export type ReturnsSummaryItem = {
   speciesId: string;
+  totalReturnedQty: number;
   deadQty: number;
   mutilatedQty: number;
-  notWantedQty: number;
-  totalReturns: number;
+  shortQty: number;
+  overQty: number;
 };
 
 export type ReturnsSummaryResponse = {

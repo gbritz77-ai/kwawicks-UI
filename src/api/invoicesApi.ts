@@ -25,9 +25,7 @@ export type CreateInvoiceRequest = {
 export type CreateInvoiceFromDeliveryLine = {
   speciesId: string;
   deliveredQty: number;
-  returnedDeadQty: number;
-  returnedMutilatedQty: number;
-  returnedNotWantedQty: number;
+  totalReturnedQty: number;
   unitPrice: number;
   vatRate: number;
 };

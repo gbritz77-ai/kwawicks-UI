@@ -7,10 +7,11 @@ export type DeliveryOrderLineDto = {
   quantity: number;
   unitPrice: number;
   deliveredQty: number;
-  returnedDeadQty: number;
-  returnedMutilatedQty: number;
-  returnedNotWantedQty: number;
+  totalReturnedQty: number;
   returnedToHubQty: number;
+  returnsInspected: boolean;
+  inspectedDeadQty: number;
+  inspectedMutilatedQty: number;
 };
 
 export type DeliveryOrderResponse = {
@@ -85,6 +86,8 @@ export const deliveryOrdersApi = {
     api.post<void>(`/api/delivery-orders/${id}/check-in`, {}),
   editLines: (id: string, lines: EditDeliveryOrderLine[]) =>
     api.put<void>(`/api/delivery-orders/${id}/lines`, { lines }),
+  recordReturnsInspection: (id: string, lines: { speciesId: string; deadQty: number; mutilatedQty: number }[]) =>
+    api.put<void>(`/api/delivery-orders/${id}/returns-inspection`, { lines }),
   delete: (id: string) =>
     api.del<void>(`/api/delivery-orders/${id}`),
 };

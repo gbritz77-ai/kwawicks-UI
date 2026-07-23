@@ -284,7 +284,7 @@ export default function AdminReportsPage() {
           <ScrollTable>
             <thead>
               <tr>
-                <Th>Driver</Th><Th>Deliveries</Th><Th>Total Value</Th><Th>Dead</Th><Th>Mutilated</Th><Th>Not Wanted</Th>
+                <Th>Driver</Th><Th>Deliveries</Th><Th>Total Value</Th><Th>Dead (inspected)</Th><Th>Mutilated (inspected)</Th><Th>Short</Th><Th>Over</Th>
               </tr>
             </thead>
             <tbody>
@@ -295,7 +295,8 @@ export default function AdminReportsPage() {
                   <Td>{fmt(d.totalValue)}</Td>
                   <Td style={{ color: d.totalDeadReturns > 0 ? "#dc2626" : undefined }}>{d.totalDeadReturns}</Td>
                   <Td style={{ color: d.totalMutilatedReturns > 0 ? "#d97706" : undefined }}>{d.totalMutilatedReturns}</Td>
-                  <Td>{d.totalNotWantedReturns}</Td>
+                  <Td style={{ color: d.totalShortQty > 0 ? "#dc2626" : undefined }}>{d.totalShortQty}</Td>
+                  <Td style={{ color: d.totalOverQty > 0 ? "#2563eb" : undefined }}>{d.totalOverQty}</Td>
                 </tr>
               ))}
               {drivers.drivers.length === 0 && (
@@ -408,17 +409,18 @@ export default function AdminReportsPage() {
           <ScrollTable>
             <thead>
               <tr>
-                <Th>Species</Th><Th>Dead</Th><Th>Mutilated</Th><Th>Not Wanted</Th><Th>Total</Th>
+                <Th>Species</Th><Th>Returned</Th><Th>Dead</Th><Th>Mutilated</Th><Th>Short</Th><Th>Over</Th>
               </tr>
             </thead>
             <tbody>
               {returns.items.map((r) => (
                 <tr key={r.speciesId}>
                   <Td>{allSpecies.find((s) => s.speciesId === r.speciesId)?.name ?? r.speciesId}</Td>
+                  <Td>{r.totalReturnedQty}</Td>
                   <Td style={{ color: r.deadQty > 0 ? "#dc2626" : undefined }}>{r.deadQty}</Td>
                   <Td style={{ color: r.mutilatedQty > 0 ? "#d97706" : undefined }}>{r.mutilatedQty}</Td>
-                  <Td>{r.notWantedQty}</Td>
-                  <Td><strong>{r.totalReturns}</strong></Td>
+                  <Td style={{ color: r.shortQty > 0 ? "#dc2626" : undefined }}>{r.shortQty}</Td>
+                  <Td style={{ color: r.overQty > 0 ? "#2563eb" : undefined }}>{r.overQty}</Td>
                 </tr>
               ))}
               {returns.items.length === 0 && (
@@ -2140,7 +2142,7 @@ function ClientOrdersTab({ clients, species, fmt }: {
       for (const l of o.lines) {
         rows.push([invNum, client, addr, city, date, driver, status, spName(l.speciesId),
           String(l.quantity), String(l.deliveredQty || 0),
-          String(l.returnedDeadQty || 0), String(l.returnedMutilatedQty || 0), String(l.returnedNotWantedQty || 0)]);
+          String(l.totalReturnedQty || 0), String(l.inspectedDeadQty || 0), String(l.inspectedMutilatedQty || 0)]);
       }
       if (o.lines.length === 0) {
         rows.push([invNum, client, addr, city, date, driver, status, "", "0", "0", "0", "0", "0"]);
@@ -2166,9 +2168,9 @@ function ClientOrdersTab({ clients, species, fmt }: {
           <td>${spName(l.speciesId)}</td>
           <td style="text-align:right">${l.quantity}</td>
           ${hasRet ? `<td style="text-align:right;color:#166534">${l.deliveredQty || 0}</td>
-            <td style="text-align:right;color:#dc2626">${l.returnedDeadQty || 0}</td>
-            <td style="text-align:right;color:#d97706">${l.returnedMutilatedQty || 0}</td>
-            <td style="text-align:right;color:#0891b2">${l.returnedNotWantedQty || 0}</td>` : ""}
+            <td style="text-align:right;color:#dc2626">${l.inspectedDeadQty || 0}</td>
+            <td style="text-align:right;color:#d97706">${l.inspectedMutilatedQty || 0}</td>
+            <td style="text-align:right;color:#0891b2">${l.totalReturnedQty || 0}</td>` : ""}
         </tr>`).join("");
       return `<div style="margin-bottom:24px;page-break-inside:avoid">
         <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #15803d;padding-bottom:4px;margin-bottom:8px">
@@ -2213,17 +2215,17 @@ function ClientOrdersTab({ clients, species, fmt }: {
         <td style="padding:6px 10px 6px 0">${spName(l.speciesId)}</td>
         <td style="text-align:right;padding:6px 10px">${l.quantity}</td>
         ${hasRet ? `<td style="text-align:right;padding:6px 10px;color:#166534;font-weight:700">${l.deliveredQty || 0}</td>
-          <td style="text-align:right;padding:6px 10px;color:${(l.returnedDeadQty||0)>0?"#dc2626":"#cbd5e1"}">${l.returnedDeadQty || 0}</td>
-          <td style="text-align:right;padding:6px 10px;color:${(l.returnedMutilatedQty||0)>0?"#d97706":"#cbd5e1"}">${l.returnedMutilatedQty || 0}</td>
-          <td style="text-align:right;padding:6px 10px;color:${(l.returnedNotWantedQty||0)>0?"#0891b2":"#cbd5e1"}">${l.returnedNotWantedQty || 0}</td>
+          <td style="text-align:right;padding:6px 10px;color:${(l.inspectedDeadQty||0)>0?"#dc2626":"#cbd5e1"}">${l.inspectedDeadQty || 0}</td>
+          <td style="text-align:right;padding:6px 10px;color:${(l.inspectedMutilatedQty||0)>0?"#d97706":"#cbd5e1"}">${l.inspectedMutilatedQty || 0}</td>
+          <td style="text-align:right;padding:6px 10px;color:${(l.totalReturnedQty||0)>0?"#0891b2":"#cbd5e1"}">${l.totalReturnedQty || 0}</td>
           <td style="text-align:right;padding:6px 0 6px 10px">${fmt(l.unitPrice * (1 + vatRate))}</td>` : ""}
       </tr>`;
     }).join("");
     const totOrd  = o.lines.reduce((t, l) => t + l.quantity, 0);
     const totDel  = o.lines.reduce((t, l) => t + (l.deliveredQty || 0), 0);
-    const totDead = o.lines.reduce((t, l) => t + (l.returnedDeadQty || 0), 0);
-    const totMut  = o.lines.reduce((t, l) => t + (l.returnedMutilatedQty || 0), 0);
-    const totNW   = o.lines.reduce((t, l) => t + (l.returnedNotWantedQty || 0), 0);
+    const totDead = o.lines.reduce((t, l) => t + (l.inspectedDeadQty || 0), 0);
+    const totMut  = o.lines.reduce((t, l) => t + (l.inspectedMutilatedQty || 0), 0);
+    const totNW   = o.lines.reduce((t, l) => t + (l.totalReturnedQty || 0), 0);
     const totalsRow = hasRet && o.lines.length > 1 ? `
       <tfoot><tr style="border-top:2px solid #e2e8f0;font-weight:800">
         <td style="padding:8px 10px 4px 0">Total</td>
@@ -2340,9 +2342,9 @@ function ClientOrdersTab({ clients, species, fmt }: {
         const hasReturns   = order.status === "Delivered" || order.status === "MarkedAtHub";
         const totOrdered   = order.lines.reduce((t, l) => t + l.quantity, 0);
         const totDelivered = order.lines.reduce((t, l) => t + (l.deliveredQty   || 0), 0);
-        const totDead      = order.lines.reduce((t, l) => t + (l.returnedDeadQty      || 0), 0);
-        const totMut       = order.lines.reduce((t, l) => t + (l.returnedMutilatedQty || 0), 0);
-        const totNW        = order.lines.reduce((t, l) => t + (l.returnedNotWantedQty || 0), 0);
+        const totDead      = order.lines.reduce((t, l) => t + (l.inspectedDeadQty      || 0), 0);
+        const totMut       = order.lines.reduce((t, l) => t + (l.inspectedMutilatedQty || 0), 0);
+        const totNW        = order.lines.reduce((t, l) => t + (l.totalReturnedQty      || 0), 0);
         const badge        = STATUS_COLORS_CO[order.status] ?? {};
         const date         = new Date(order.createdAt).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" });
         // Try deliveryOrderId map first (driver flow + new hub-direct), fall back to invoiceId on the order (legacy hub-direct)
@@ -2446,9 +2448,9 @@ function ClientOrdersTab({ clients, species, fmt }: {
                           <td style={{ textAlign: "right" as const, padding: "7px 10px", color: "#374151" }}>{l.quantity}</td>
                           {hasReturns && <>
                             <td style={{ textAlign: "right" as const, padding: "7px 10px", fontWeight: 700, color: "#166534" }}>{l.deliveredQty}</td>
-                            <td style={{ textAlign: "right" as const, padding: "7px 10px", color: l.returnedDeadQty      > 0 ? "#dc2626" : "#cbd5e1" }}>{l.returnedDeadQty}</td>
-                            <td style={{ textAlign: "right" as const, padding: "7px 10px", color: l.returnedMutilatedQty > 0 ? "#d97706" : "#cbd5e1" }}>{l.returnedMutilatedQty}</td>
-                            <td style={{ textAlign: "right" as const, padding: "7px 10px", color: l.returnedNotWantedQty > 0 ? "#0891b2" : "#cbd5e1" }}>{l.returnedNotWantedQty}</td>
+                            <td style={{ textAlign: "right" as const, padding: "7px 10px", color: l.inspectedDeadQty      > 0 ? "#dc2626" : "#cbd5e1" }}>{l.inspectedDeadQty}</td>
+                            <td style={{ textAlign: "right" as const, padding: "7px 10px", color: l.inspectedMutilatedQty > 0 ? "#d97706" : "#cbd5e1" }}>{l.inspectedMutilatedQty}</td>
+                            <td style={{ textAlign: "right" as const, padding: "7px 10px", color: l.totalReturnedQty      > 0 ? "#0891b2" : "#cbd5e1" }}>{l.totalReturnedQty}</td>
                             <td style={{ textAlign: "right" as const, padding: "7px 0 7px 10px", color: "#374151" }}>{fmt(l.unitPrice * (1 + vatRate))}</td>
                           </>}
                         </tr>

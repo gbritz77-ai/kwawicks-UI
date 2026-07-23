@@ -104,6 +104,13 @@ export default function DeliveryOrdersPage() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Returns inspection modal state
+  const [inspectOrder, setInspectOrder] = useState<DeliveryOrderResponse | null>(null);
+  const [inspectLines, setInspectLines] = useState<{ speciesId: string; deadQty: string; mutilatedQty: string }[]>([]);
+  const [inspectBusy, setInspectBusy] = useState(false);
+  const [inspectError, setInspectError] = useState<string | null>(null);
+  const canInspect = hasAnyRole("Owner", "Admin", "Finance");
+
   // ── Loaders ──────────────────────────────────────────────────────────────
 
   async function loadOrders() {
@@ -193,7 +200,7 @@ export default function DeliveryOrdersPage() {
     // Client-side filter for pending returns
     if (statusFilter === "pending-return") {
       result = result.filter(o =>
-        o.returnSubmitted && !o.returnCheckedIn && o.lines.some(l => l.returnedNotWantedQty > 0)
+        o.returnSubmitted && !o.returnCheckedIn && o.lines.some(l => l.totalReturnedQty > 0)
       );
     }
     const q = searchQuery.trim().toLowerCase();
@@ -464,9 +471,9 @@ export default function DeliveryOrdersPage() {
                         {(order.status === "Delivered" || order.status === "MarkedAtHub") && (
                           <>
                             <div style={{ textAlign: "right" }}>Delivered</div>
+                            <div style={{ textAlign: "right" }}>Returned</div>
                             <div style={{ textAlign: "right" }}>Dead</div>
                             <div style={{ textAlign: "right" }}>Mutilated</div>
-                            <div style={{ textAlign: "right" }}>Not Wanted</div>
                             {order.returnSubmitted && <div style={{ textAlign: "right" }}>Returning</div>}
                           </>
                         )}
@@ -483,9 +490,9 @@ export default function DeliveryOrdersPage() {
                           {(order.status === "Delivered" || order.status === "MarkedAtHub") && (
                             <>
                               <div style={{ textAlign: "right", color: "#14532d", fontWeight: 700 }}>{line.deliveredQty}</div>
-                              <div style={{ textAlign: "right", color: "#7f1d1d" }}>{line.returnedDeadQty}</div>
-                              <div style={{ textAlign: "right", color: "#78350f" }}>{line.returnedMutilatedQty}</div>
-                              <div style={{ textAlign: "right", color: "#1e3a8a" }}>{line.returnedNotWantedQty}</div>
+                              <div style={{ textAlign: "right", color: "#1e3a8a" }}>{line.totalReturnedQty}</div>
+                              <div style={{ textAlign: "right", color: "#7f1d1d" }}>{line.returnsInspected ? line.inspectedDeadQty : "—"}</div>
+                              <div style={{ textAlign: "right", color: "#78350f" }}>{line.returnsInspected ? line.inspectedMutilatedQty : "—"}</div>
                               {order.returnSubmitted && (
                                 <div style={{ textAlign: "right", color: "#166534", fontWeight: 700 }}>{line.returnedToHubQty}</div>
                               )}
@@ -497,7 +504,7 @@ export default function DeliveryOrdersPage() {
 
                     {/* Return status banner */}
                     {(order.status === "Delivered" || order.status === "MarkedAtHub") &&
-                      order.lines.some(l => l.returnedNotWantedQty > 0) && (
+                      order.lines.some(l => l.totalReturnedQty > 0) && (
                       <div style={{
                         marginTop: 14,
                         padding: "10px 14px",
@@ -545,6 +552,22 @@ export default function DeliveryOrdersPage() {
                           {checkingInId === order.deliveryOrderId ? "Checking in…" : "📦 Check In Returns"}
                         </button>
                       )}
+                      {canInspect && (order.status === "Delivered" || order.status === "MarkedAtHub") && order.lines.some(l => l.totalReturnedQty > 0) && (
+                        <button
+                          style={{ ...s.markAtHubBtn, background: "#92400e", borderColor: "#92400e", color: "#fff" }}
+                          onClick={() => {
+                            setInspectOrder(order);
+                            setInspectError(null);
+                            setInspectLines(order.lines.filter(l => l.totalReturnedQty > 0).map(l => ({
+                              speciesId: l.speciesId,
+                              deadQty: String(l.inspectedDeadQty || 0),
+                              mutilatedQty: String(l.inspectedMutilatedQty || 0),
+                            })));
+                          }}
+                        >
+                          🔍 Record Inspection
+                        </button>
+                      )}
                       {canMarkAtHub && order.status === "Delivered" && (
                         <button
                           style={s.markAtHubBtn}
@@ -587,6 +610,108 @@ export default function DeliveryOrdersPage() {
                 disabled={deleteBusy}
               >
                 {deleteBusy ? "Deleting…" : "Delete Order"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Returns Inspection Modal ── */}
+      {inspectOrder && (
+        <div style={s.backdrop} onClick={() => !inspectBusy && setInspectOrder(null)}>
+          <div style={{ ...s.modal, maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>🔍 Returns Inspection</div>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>
+              Driver: <strong>{inspectOrder.assignedDriverName}</strong>
+            </div>
+            <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(146,64,14,0.06)", border: "1px solid rgba(146,64,14,0.2)", fontSize: 13, color: "#92400e", marginBottom: 14 }}>
+              Record how many of the returned items were dead or mutilated. This adjusts stock accordingly.
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 8, fontWeight: 700, fontSize: 12, textTransform: "uppercase" as const, color: "#64748b", padding: "0 2px 6px" }}>
+              <div>Species</div>
+              <div style={{ textAlign: "center" }}>Returned</div>
+              <div style={{ textAlign: "center" }}>Dead</div>
+              <div style={{ textAlign: "center" }}>Mutilated</div>
+            </div>
+            {inspectLines.map((il, idx) => {
+              const doLine = inspectOrder.lines.find(l => l.speciesId === il.speciesId);
+              const returned = doLine?.totalReturnedQty ?? 0;
+              const dead = parseInt(il.deadQty) || 0;
+              const mutilated = parseInt(il.mutilatedQty) || 0;
+              const overDamaged = dead + mutilated > returned;
+              return (
+                <div key={il.speciesId} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                  <div style={{ padding: "10px 12px", background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0", fontSize: 14, fontWeight: 700 }}>
+                    {getSpeciesName(il.speciesId)}
+                  </div>
+                  <div style={{ textAlign: "center", fontWeight: 700, color: "#1e40af", fontSize: 16, padding: "10px 0" }}>{returned}</div>
+                  <NumericInput
+                    style={{ ...s.input, textAlign: "center" as const, borderColor: overDamaged ? "#dc2626" : undefined }}
+                    allowDecimal={false}
+                    min={0}
+                    value={il.deadQty}
+                    onChange={e => setInspectLines(prev => prev.map((x, i) => i === idx ? { ...x, deadQty: e.target.value } : x))}
+                    disabled={inspectBusy}
+                  />
+                  <NumericInput
+                    style={{ ...s.input, textAlign: "center" as const, borderColor: overDamaged ? "#dc2626" : undefined }}
+                    allowDecimal={false}
+                    min={0}
+                    value={il.mutilatedQty}
+                    onChange={e => setInspectLines(prev => prev.map((x, i) => i === idx ? { ...x, mutilatedQty: e.target.value } : x))}
+                    disabled={inspectBusy}
+                  />
+                </div>
+              );
+            })}
+            {inspectError && <div style={{ ...s.error, marginBottom: 10 }}>{inspectError}</div>}
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
+              <button style={s.secondaryBtn} onClick={() => setInspectOrder(null)} disabled={inspectBusy}>Cancel</button>
+              <button
+                style={{ ...s.markAtHubBtn, background: "#92400e", borderColor: "#92400e", color: "#fff", padding: "9px 20px" }}
+                disabled={inspectBusy}
+                onClick={async () => {
+                  // Validate dead+mutilated <= returned for each line
+                  for (const il of inspectLines) {
+                    const doLine = inspectOrder.lines.find(l => l.speciesId === il.speciesId);
+                    const returned = doLine?.totalReturnedQty ?? 0;
+                    const dead = parseInt(il.deadQty) || 0;
+                    const mutilated = parseInt(il.mutilatedQty) || 0;
+                    if (dead + mutilated > returned) {
+                      setInspectError(`Dead + mutilated (${dead + mutilated}) cannot exceed returned qty (${returned}) for ${getSpeciesName(il.speciesId)}.`);
+                      return;
+                    }
+                  }
+                  setInspectBusy(true);
+                  setInspectError(null);
+                  try {
+                    await deliveryOrdersApi.recordReturnsInspection(
+                      inspectOrder.deliveryOrderId,
+                      inspectLines.map(il => ({
+                        speciesId: il.speciesId,
+                        deadQty: parseInt(il.deadQty) || 0,
+                        mutilatedQty: parseInt(il.mutilatedQty) || 0,
+                      }))
+                    );
+                    setOrders(prev => prev.map(o => o.deliveryOrderId === inspectOrder.deliveryOrderId
+                      ? {
+                          ...o,
+                          lines: o.lines.map(l => {
+                            const il = inspectLines.find(x => x.speciesId === l.speciesId);
+                            return il ? { ...l, returnsInspected: true, inspectedDeadQty: parseInt(il.deadQty) || 0, inspectedMutilatedQty: parseInt(il.mutilatedQty) || 0 } : l;
+                          })
+                        }
+                      : o
+                    ));
+                    setInspectOrder(null);
+                  } catch (e: any) {
+                    setInspectError(e?.message || "Could not save inspection.");
+                  } finally {
+                    setInspectBusy(false);
+                  }
+                }}
+              >
+                {inspectBusy ? "Saving…" : "Save Inspection"}
               </button>
             </div>
           </div>

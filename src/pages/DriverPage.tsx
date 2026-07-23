@@ -18,9 +18,7 @@ type ReturnLine = {
   speciesId: string;
   orderedQty: number;
   deliveredQty: string;
-  returnedDeadQty: string;
-  returnedMutilatedQty: string;
-  returnedNotWantedQty: string;
+  totalReturnedQty: string;
 };
 
 type CompletionStep = "returns" | "payment" | "receipt" | "done";
@@ -127,7 +125,7 @@ export default function DriverPage() {
       setLoadingReturns(true);
       const data = await deliveryOrdersApi.list({ driverId, status: "Delivered" });
       setPendingReturnOrders(
-        data.filter(o => !o.returnSubmitted && o.lines.some(l => l.returnedNotWantedQty > 0))
+        data.filter(o => !o.returnSubmitted && o.lines.some(l => l.totalReturnedQty > 0))
       );
     } catch {
       // non-fatal
@@ -191,9 +189,7 @@ export default function DriverPage() {
         speciesId: l.speciesId,
         orderedQty: l.quantity,
         deliveredQty: String(l.quantity),
-        returnedDeadQty: "0",
-        returnedMutilatedQty: "0",
-        returnedNotWantedQty: "0",
+        totalReturnedQty: "0",
       }))
     );
     // Check if client has a WhatsApp number saved
@@ -224,14 +220,11 @@ export default function DriverPage() {
     for (let i = 0; i < returnLines.length; i++) {
       const rl = returnLines[i];
       const delivered = parseInt(rl.deliveredQty) || 0;
-      const dead = parseInt(rl.returnedDeadQty) || 0;
-      const mutilated = parseInt(rl.returnedMutilatedQty) || 0;
-      const notWanted = parseInt(rl.returnedNotWantedQty) || 0;
-      const total = delivered + dead + mutilated + notWanted;
-      if (delivered < 0 || dead < 0 || mutilated < 0 || notWanted < 0)
+      const returned = parseInt(rl.totalReturnedQty) || 0;
+      if (delivered < 0 || returned < 0)
         return `Line ${i + 1}: quantities cannot be negative.`;
-      if (total !== rl.orderedQty)
-        return `Line ${i + 1} (${getSpeciesName(rl.speciesId)}): delivered (${delivered}) + returns (${dead + mutilated + notWanted}) must equal ordered quantity (${rl.orderedQty}).`;
+      if (delivered + returned > rl.orderedQty)
+        return `Line ${i + 1} (${getSpeciesName(rl.speciesId)}): delivered (${delivered}) + returned (${returned}) cannot exceed ordered quantity (${rl.orderedQty}).`;
     }
     return null;
   }
@@ -272,9 +265,7 @@ export default function DriverPage() {
         return {
           speciesId: rl.speciesId,
           deliveredQty: parseInt(rl.deliveredQty) || 0,
-          returnedDeadQty: parseInt(rl.returnedDeadQty) || 0,
-          returnedMutilatedQty: parseInt(rl.returnedMutilatedQty) || 0,
-          returnedNotWantedQty: parseInt(rl.returnedNotWantedQty) || 0,
+          totalReturnedQty: parseInt(rl.totalReturnedQty) || 0,
           unitPrice: (doLine?.unitPrice ?? sp?.sellPrice ?? 0) / (1 + (sp?.vat ?? 0)),
           vatRate: sp?.vat ?? 0,
         };
@@ -383,7 +374,7 @@ export default function DriverPage() {
   function openReturnModal(order: DeliveryOrderResponse) {
     const initial: Record<string, string> = {};
     order.lines.forEach(l => {
-      if (l.returnedNotWantedQty > 0) initial[l.speciesId] = String(l.returnedNotWantedQty);
+      if (l.totalReturnedQty > 0) initial[l.speciesId] = String(l.totalReturnedQty);
     });
     setReturnQtys(initial);
     setReturnError(null);
@@ -393,7 +384,7 @@ export default function DriverPage() {
   async function submitReturn() {
     if (!returningOrder) return;
     const lines = returningOrder.lines
-      .filter(l => l.returnedNotWantedQty > 0)
+      .filter(l => l.totalReturnedQty > 0)
       .map(l => ({ speciesId: l.speciesId, qty: parseInt(returnQtys[l.speciesId] ?? "0") || 0 }))
       .filter(l => l.qty > 0);
 
@@ -402,11 +393,11 @@ export default function DriverPage() {
       return;
     }
 
-    // Validate qtys don't exceed not-wanted
+    // Validate qtys don't exceed total returned
     for (const line of lines) {
-      const ordered = returningOrder.lines.find(l => l.speciesId === line.speciesId)?.returnedNotWantedQty ?? 0;
-      if (line.qty > ordered) {
-        setReturnError(`Return qty for ${getSpeciesName(line.speciesId)} (${line.qty}) exceeds not-wanted qty (${ordered}).`);
+      const maxQty = returningOrder.lines.find(l => l.speciesId === line.speciesId)?.totalReturnedQty ?? 0;
+      if (line.qty > maxQty) {
+        setReturnError(`Return qty for ${getSpeciesName(line.speciesId)} (${line.qty}) exceeds recorded returned qty (${maxQty}).`);
         return;
       }
     }
@@ -629,25 +620,24 @@ export default function DriverPage() {
                 <div style={s.stepNote}>Enter the actual quantities delivered and any returns.</div>
                 {returnLines.map((rl, idx) => {
                   const delivered = parseInt(rl.deliveredQty) || 0;
-                  const dead = parseInt(rl.returnedDeadQty) || 0;
-                  const mutilated = parseInt(rl.returnedMutilatedQty) || 0;
-                  const notWanted = parseInt(rl.returnedNotWantedQty) || 0;
-                  const accounted = delivered + dead + mutilated + notWanted;
-                  const ok = accounted === rl.orderedQty;
+                  const returned = parseInt(rl.totalReturnedQty) || 0;
+                  const accounted = delivered + returned;
+                  const short = rl.orderedQty - accounted;
                   return (
                     <div key={rl.speciesId} style={s.returnBlock}>
                       <div style={s.returnSpecies}>
                         {getSpeciesName(rl.speciesId)}
                         <span style={s.returnOrdered}>Ordered: {rl.orderedQty}</span>
-                        <span style={ok ? s.returnOk : s.returnBad}>
-                          {ok ? `✓ ${accounted}/${rl.orderedQty}` : `${accounted}/${rl.orderedQty}`}
-                        </span>
+                        {short > 0 && (
+                          <span style={{ ...s.returnBad, fontSize: 11 }}>Short: {short}</span>
+                        )}
+                        {short === 0 && (
+                          <span style={s.returnOk}>✓ All accounted</span>
+                        )}
                       </div>
                       <div style={s.returnFields}>
                         <label style={s.returnLabel}>Delivered<NumericInput style={s.returnInput} inputMode="numeric" value={rl.deliveredQty} onChange={(e) => updateReturnLine(idx, "deliveredQty", e.target.value)} disabled={completionBusy} /></label>
-                        <label style={s.returnLabel}>Dead<NumericInput style={s.returnInput} allowDecimal={false}  value={rl.returnedDeadQty} onChange={(e) => updateReturnLine(idx, "returnedDeadQty", e.target.value)} disabled={completionBusy} /></label>
-                        <label style={s.returnLabel}>Mutilated<NumericInput style={s.returnInput} allowDecimal={false}  value={rl.returnedMutilatedQty} onChange={(e) => updateReturnLine(idx, "returnedMutilatedQty", e.target.value)} disabled={completionBusy} /></label>
-                        <label style={s.returnLabel}>Not Wanted<NumericInput style={s.returnInput} allowDecimal={false}  value={rl.returnedNotWantedQty} onChange={(e) => updateReturnLine(idx, "returnedNotWantedQty", e.target.value)} disabled={completionBusy} /></label>
+                        <label style={s.returnLabel}>Returned<NumericInput style={s.returnInput} allowDecimal={false} value={rl.totalReturnedQty} onChange={(e) => updateReturnLine(idx, "totalReturnedQty", e.target.value)} disabled={completionBusy} /></label>
                       </div>
                     </div>
                   );
@@ -816,7 +806,7 @@ export default function DriverPage() {
           ) : (
             <div style={s.list}>
               {pendingReturnOrders.map(order => {
-                const returnLines = order.lines.filter(l => l.returnedNotWantedQty > 0);
+                const returnLines = order.lines.filter(l => l.totalReturnedQty > 0);
                 return (
                   <div key={order.deliveryOrderId} style={s.orderCard}>
                     <div style={s.cardHeader}>
@@ -828,7 +818,7 @@ export default function DriverPage() {
                           </span>
                         </div>
                         <div style={s.cardMeta}>
-                          <span>{returnLines.reduce((s, l) => s + l.returnedNotWantedQty, 0)} items to return</span>
+                          <span>{returnLines.reduce((s, l) => s + l.totalReturnedQty, 0)} items to return</span>
                           <span style={s.dot}>·</span>
                           <span style={s.mono}>{order.deliveryOrderId.slice(0, 8)}…</span>
                         </div>
@@ -838,7 +828,7 @@ export default function DriverPage() {
                       {returnLines.map(l => (
                         <div key={l.speciesId} style={s.lineItem}>
                           <span style={s.lineSpecies}>{getSpeciesName(l.speciesId)}</span>
-                          <span style={{ ...s.lineQty, color: "#92400e" }}>{l.returnedNotWantedQty} not wanted</span>
+                          <span style={{ ...s.lineQty, color: "#92400e" }}>{l.totalReturnedQty} to return</span>
                         </div>
                       ))}
                       <button
@@ -864,11 +854,11 @@ export default function DriverPage() {
             <div style={s.modalSub}>Enter how many of each species you are physically returning.</div>
             {returnError && <div style={s.completionError}>{returnError}</div>}
 
-            {returningOrder.lines.filter(l => l.returnedNotWantedQty > 0).map(l => (
+            {returningOrder.lines.filter(l => l.totalReturnedQty > 0).map(l => (
               <div key={l.speciesId} style={s.returnBlock}>
                 <div style={s.returnSpecies}>
                   {getSpeciesName(l.speciesId)}
-                  <span style={s.returnOrdered}>Not-wanted: {l.returnedNotWantedQty}</span>
+                  <span style={s.returnOrdered}>To return: {l.totalReturnedQty}</span>
                 </div>
                 <div style={s.returnFields}>
                   <label style={s.returnLabel}>
@@ -877,7 +867,7 @@ export default function DriverPage() {
                       style={s.returnInput}
                       allowDecimal={false} 
                       value={returnQtys[l.speciesId] ?? "0"}
-                      max={l.returnedNotWantedQty}
+                      max={l.totalReturnedQty}
                       onChange={e => setReturnQtys(q => ({ ...q, [l.speciesId]: e.target.value }))}
                       disabled={returnBusy}
                     />
