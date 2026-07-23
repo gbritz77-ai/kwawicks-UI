@@ -48,6 +48,11 @@ export type InvoiceLineResponse = {
   lineTotal: number;
 };
 
+export type SplitPaymentLine = {
+  method: string;
+  amount: number;
+};
+
 export type InvoiceResponse = {
   invoiceId: string;
   invoiceNumber: string;
@@ -63,6 +68,7 @@ export type InvoiceResponse = {
   vatTotal: number;
   grandTotal: number;
   lines: InvoiceLineResponse[];
+  splitPayments: SplitPaymentLine[];
   createdAt: string;
   updatedAt: string;
   amountPaid: number;

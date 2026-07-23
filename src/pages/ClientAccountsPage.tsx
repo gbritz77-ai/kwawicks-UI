@@ -426,6 +426,16 @@ export default function ClientAccountsPage() {
                                         ))}
                                       </div>
                                     )}
+                                    {inv && inv.paymentType === "Split" && inv.splitPayments?.length > 0 && (
+                                      <div style={{ marginTop: 4, paddingTop: 4, borderTop: "1px solid #f1f5f9" }}>
+                                        <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>Split Payment</div>
+                                        {inv.splitPayments.map((sp, i) => (
+                                          <div key={i} style={{ fontSize: 12, color: "#374151", lineHeight: 1.6 }}>
+                                            <span style={{ fontWeight: 600 }}>{sp.method}</span>{" — R "}{sp.amount.toFixed(2)}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })()}
@@ -683,6 +693,16 @@ export default function ClientAccountsPage() {
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, fontWeight: 800, color: "#0f172a" }}>
                     <span>Grand Total</span><span>R {resendInvoice.grandTotal.toFixed(2)}</span>
                   </div>
+                  {resendInvoice.paymentType === "Split" && resendInvoice.splitPayments?.length > 0 && (
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #e2e8f0" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" as const, letterSpacing: "0.04em", marginBottom: 4 }}>Split Payment Breakdown</div>
+                      {resendInvoice.splitPayments.map((sp, i) => (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#374151", marginBottom: 2 }}>
+                          <span style={{ fontWeight: 600 }}>{sp.method}</span><span>R {sp.amount.toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
