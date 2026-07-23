@@ -1633,6 +1633,7 @@ function InvoicesTab({
                       {inv.staffMemberId
                         ? <>{staffMap[inv.staffMemberId] ?? inv.staffMemberId}<span style={{ ...s.badge, background: "#ede9fe", color: "#6d28d9", marginLeft: 6, fontSize: 10 }}>Staff</span></>
                         : (inv.customerName || clientMap[inv.customerId] || inv.customerId)}
+
                     </Td>
                     <Td>
                       <span style={{ fontSize: 12, fontWeight: 600, padding: "2px 8px", borderRadius: 6,

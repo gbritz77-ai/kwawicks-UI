@@ -111,6 +111,7 @@ export type InvoiceItem = {
   invoiceNumber: string;
   staffMemberId: string;
   customerId: string;
+  customerName: string;
   hubId: string;
   deliveryOrderId: string;
   createdByDriverId: string;
