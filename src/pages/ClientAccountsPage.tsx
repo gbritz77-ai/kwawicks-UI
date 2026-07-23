@@ -6,6 +6,7 @@ import type { ClientDto } from "../api/clientsApi";
 import { whatsappApi } from "../api/whatsappApi";
 import { invoicesApi } from "../api/invoicesApi";
 import type { InvoiceResponse } from "../api/invoicesApi";
+import { speciesApi } from "../api/speciesApi";
 import { NumericInput } from "../components/NumericInput";
 
 function todayIso() { return new Date().toISOString().slice(0, 10); }
@@ -64,8 +65,16 @@ export default function ClientAccountsPage() {
   // Invoice map for showing species/qty in Reference/Notes column
   const [invoiceMap, setInvoiceMap] = useState<Record<string, InvoiceResponse>>({});
 
+  // Species name map for displaying names instead of IDs
+  const [speciesNameMap, setSpeciesNameMap] = useState<Record<string, string>>({});
+
   useEffect(() => {
     clientsApi.list().then(data => setClients(data.filter((c: ClientDto) => !c.isWalkIn))).catch(() => setError("Failed to load clients."));
+    speciesApi.list().then(data => {
+      const map: Record<string, string> = {};
+      data.forEach((sp: { speciesId: string; name: string }) => { map[sp.speciesId] = sp.name; });
+      setSpeciesNameMap(map);
+    }).catch(() => {});
   }, []);
 
   const [refreshing, setRefreshing] = useState(false);
@@ -407,11 +416,12 @@ export default function ClientAccountsPage() {
                                       <button style={s.viewRefBtn} title="View full reference" onClick={() => { setRefCopied(false); setViewRefRow(row); }}>👁</button>
                                     </div>
                                     {inv && inv.lines.length > 0 && (
-                                      <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.6 }}>
+                                      <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.7 }}>
                                         {inv.lines.map((l, i) => (
                                           <div key={i}>
-                                            <span style={{ fontWeight: 600 }}>{l.speciesId}</span>
+                                            <span style={{ fontWeight: 600 }}>{speciesNameMap[l.speciesId] || l.speciesId}</span>
                                             {" × "}{l.quantity}
+                                            <span style={{ color: "#64748b" }}>{" @ R"}{(l.unitPrice * (1 + l.vatRate)).toFixed(2)}</span>
                                           </div>
                                         ))}
                                       </div>
@@ -653,7 +663,7 @@ export default function ClientAccountsPage() {
                   <tbody>
                     {resendInvoice.lines.map((l, i) => (
                       <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                        <td style={{ padding: "5px 6px", color: "#1e293b" }}>{l.speciesId}</td>
+                        <td style={{ padding: "5px 6px", color: "#1e293b" }}>{speciesNameMap[l.speciesId] || l.speciesId}</td>
                         <td style={{ padding: "5px 6px", textAlign: "right" as const, color: "#374151" }}>{l.quantity}</td>
                         <td style={{ padding: "5px 6px", textAlign: "right" as const, color: "#374151" }}>R {l.unitPrice.toFixed(2)}</td>
                         <td style={{ padding: "5px 6px", textAlign: "right" as const, fontWeight: 600, color: "#0f172a" }}>R {l.lineTotal.toFixed(2)}</td>
