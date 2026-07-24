@@ -146,13 +146,12 @@ export default function PettyCashPage() {
     setFreshBusy(true);
     setFreshError("");
     try {
-      await pettyCashApi.createCashup({ actualBalance: 0, notes: "System reset — start fresh", cashupDate: today() });
-      await pettyCashApi.createEntry({ type: "In", amount: 2000, description: "Opening float", category: "Other", recipientName: "", entryDate: today() });
+      await pettyCashApi.setFloat(FLOAT);
       const [s, e, c] = await Promise.all([pettyCashApi.getSummary(), pettyCashApi.listEntries(), pettyCashApi.listCashups()]);
       setSummary(s); setEntries(e); setCashups(c);
       setFreshDone(true);
     } catch (e: unknown) {
-      setFreshError(e instanceof Error ? e.message : "Reset failed.");
+      setFreshError(e instanceof Error ? e.message : "Set float failed.");
     } finally {
       setFreshBusy(false);
     }
@@ -514,18 +513,18 @@ export default function PettyCashPage() {
 
               {/* Start Fresh */}
               <div style={{ marginTop: 20, padding: "20px 24px", borderRadius: 10, border: "1px solid #ef4444", background: "rgba(239,68,68,0.06)" }}>
-                <h3 style={{ margin: "0 0 6px", color: "#ef4444", fontSize: 15 }}>Start Fresh</h3>
+                <h3 style={{ margin: "0 0 6px", color: "#ef4444", fontSize: 15 }}>Set Petty Cash Float to R2 000</h3>
                 <p style={{ margin: "0 0 14px", color: "#94a3b8", fontSize: 13 }}>
-                  Resets all accumulated data and sets the opening petty cash float to <strong style={{ color: "#fff" }}>R 2 000,00</strong>. This cannot be undone.
+                  Corrects the petty cash opening balance to <strong style={{ color: "#fff" }}>R 2 000,00</strong>. Cash In the Safe (hub sales, deposits, expenses) is <strong style={{ color: "#fff" }}>not affected</strong>.
                 </p>
-                {freshDone && <p style={{ color: "#22c55e", marginBottom: 10, fontSize: 13 }}>✓ Reset complete — float is now R 2 000,00</p>}
+                {freshDone && <p style={{ color: "#22c55e", marginBottom: 10, fontSize: 13 }}>✓ Float set to R 2 000,00 — Cash In the Safe unchanged</p>}
                 {freshError && <p style={{ color: "#ef4444", marginBottom: 10, fontSize: 13 }}>{freshError}</p>}
                 <button
                   style={{ ...s.btnDanger, opacity: freshBusy ? 0.6 : 1 }}
                   onClick={() => setShowFreshConfirm(true)}
                   disabled={freshBusy}
                 >
-                  {freshBusy ? "Resetting…" : "Reset & Set Float to R2 000"}
+                  {freshBusy ? "Setting…" : "Set Float to R2 000"}
                 </button>
               </div>
 
@@ -677,9 +676,9 @@ export default function PettyCashPage() {
             <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
             <h2 style={{ margin: "0 0 8px", color: "#f1f5f9", fontSize: 18 }}>Reset Petty Cash?</h2>
             <p style={{ margin: "0 0 20px", color: "#94a3b8", fontSize: 14, lineHeight: 1.6 }}>
-              This will close all existing entries and set the opening petty cash float to{" "}
+              This will set the petty cash opening balance to{" "}
               <strong style={{ color: "#fff" }}>R 2 000,00</strong>.<br />
-              This action cannot be undone.
+              Cash in the safe (hub sales, deposits, expenses) will <strong style={{ color: "#fff" }}>not be affected</strong>.
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button style={s.btnSecondary} onClick={() => setShowFreshConfirm(false)} disabled={freshBusy}>
@@ -690,7 +689,7 @@ export default function PettyCashPage() {
                 disabled={freshBusy}
                 onClick={() => { setShowFreshConfirm(false); handleStartFresh(); }}
               >
-                {freshBusy ? "Resetting…" : "Yes, Reset"}
+                {freshBusy ? "Setting…" : "Yes, Set Float to R2 000"}
               </button>
             </div>
           </div>

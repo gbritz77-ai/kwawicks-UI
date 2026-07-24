@@ -83,4 +83,5 @@ export const pettyCashApi = {
   confirmSlipUploaded: (entryId: string, s3Key: string) =>
     api.put<PettyCashEntryDto>(`/api/petty-cash/entries/${entryId}/slip`, { s3Key }),
   clearAll: () => api.del<void>("/api/petty-cash/clear"),
+  setFloat: (floatAmount: number) => api.post<void>("/api/petty-cash/set-float", { floatAmount }),
 };
