@@ -64,7 +64,7 @@ export default function CollectionRequestsPage() {
 
   // Hub confirm modal
   const [confirmItem, setConfirmItem] = useState<CollectionRequestDto | null>(null);
-  const [confirmLines, setConfirmLines] = useState<{ speciesId: string; receivedQty: number; discrepancyNotes: string }[]>([]);
+  const [confirmLines, setConfirmLines] = useState<{ speciesId: string; receivedQty: number; discrepancyNotes: string; deadQty: number }[]>([]);
   const [confirmError, setConfirmError] = useState("");
 
   // Finance acknowledge modal
@@ -228,7 +228,7 @@ export default function CollectionRequestsPage() {
 
   function openConfirm(item: CollectionRequestDto) {
     setConfirmItem(item);
-    setConfirmLines(item.lines.map(l => ({ speciesId: l.speciesId, receivedQty: l.loadedQty, discrepancyNotes: "" })));
+    setConfirmLines(item.lines.map(l => ({ speciesId: l.speciesId, receivedQty: l.loadedQty, discrepancyNotes: "", deadQty: l.deadQty || 0 })));
     setConfirmError("");
   }
 
@@ -576,6 +576,7 @@ export default function CollectionRequestsPage() {
 
   function renderLine(line: CollectionRequestLineDto, cr: CollectionRequestDto) {
     const hasDiscrepancy = line.loadedQty !== line.orderedQty || line.receivedQty !== line.loadedQty;
+    const confirmed = cr.status === "HubConfirmed" || cr.status === "FinanceAcknowledged";
     return (
       <div key={line.speciesId} style={s.lineCard}>
         <div style={s.lineName}>{line.speciesName || line.speciesId}</div>
@@ -584,9 +585,24 @@ export default function CollectionRequestsPage() {
           <span style={{ ...s.lineStat, color: line.loadedQty < line.orderedQty ? "#dc2626" : "#16a34a" }}>
             <span style={s.lineStatLabel}>Loaded</span> {line.loadedQty}
           </span>
-          {(cr.status === "HubConfirmed" || cr.status === "FinanceAcknowledged") && (
+          {confirmed && (
             <span style={{ ...s.lineStat, color: line.receivedQty < line.loadedQty ? "#dc2626" : "#16a34a" }}>
               <span style={s.lineStatLabel}>Received</span> {line.receivedQty}
+            </span>
+          )}
+          {confirmed && line.deadQty > 0 && (
+            <span style={{ ...s.lineStat, color: "#dc2626" }}>
+              <span style={s.lineStatLabel}>Dead</span> {line.deadQty}
+            </span>
+          )}
+          {confirmed && line.shortQty > 0 && (
+            <span style={{ ...s.lineStat, color: "#f59e0b" }}>
+              <span style={s.lineStatLabel}>Short</span> {line.shortQty}
+            </span>
+          )}
+          {confirmed && line.overQty > 0 && (
+            <span style={{ ...s.lineStat, color: "#22c55e" }}>
+              <span style={s.lineStatLabel}>Over</span> {line.overQty}
             </span>
           )}
         </div>
@@ -1336,8 +1352,12 @@ export default function CollectionRequestsPage() {
                   <div style={s.loadLineOrdered}>Loaded: {origLine?.loadedQty} · Ordered: {origLine?.orderedQty}</div>
                   <div style={s.loadLineInputs}>
                     <label style={s.label}>Received Qty
-                      <NumericInput style={s.input} allowDecimal={false}  value={cl.receivedQty}
+                      <NumericInput style={s.input} allowDecimal={false} value={cl.receivedQty}
                         onChange={e => setConfirmLines(ls => ls.map((x, j) => j === i ? { ...x, receivedQty: parseInt(e.target.value) || 0 } : x))} disabled={busy} onFocus={e => e.target.select()} />
+                    </label>
+                    <label style={s.label}>Dead Qty
+                      <NumericInput style={s.input} allowDecimal={false} value={cl.deadQty}
+                        onChange={e => setConfirmLines(ls => ls.map((x, j) => j === i ? { ...x, deadQty: parseInt(e.target.value) || 0 } : x))} disabled={busy} onFocus={e => e.target.select()} />
                     </label>
                     <label style={s.label}>Discrepancy Notes
                       <input style={s.input} value={cl.discrepancyNotes} placeholder="If different from loaded"

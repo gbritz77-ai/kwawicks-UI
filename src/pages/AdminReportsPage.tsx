@@ -34,7 +34,7 @@ import type { CostAverageRecordDto } from "../api/costAveragesApi";
 import type { ClientDto } from "../api/clientsApi";
 import { NumericInput } from "../components/NumericInput";
 
-type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability" | "client-orders" | "sales" | "delivery-runs" | "staff-deductions";
+type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability" | "collection-returns" | "client-orders" | "sales" | "delivery-runs" | "staff-deductions";
 
 export default function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -127,7 +127,7 @@ export default function AdminReportsPage() {
         setSalesCostRecords(costData);
         setMarginSalesRows(salesData.rows);
       }
-      if (["load-discrepancy","transit-discrepancy","supplier-reliability"].includes(tab)) setCrData(await collectionRequestsApi.list());
+      if (["load-discrepancy","transit-discrepancy","supplier-reliability","collection-returns"].includes(tab)) setCrData(await collectionRequestsApi.list());
       if (tab === "delivery-runs") setRunReport(await deliveryRunsApi.list());
       if (tab === "client-orders") {
         if (!clients.length) setClients((await clientsApi.list()).filter((c: ClientDto) => !c.isWalkIn));
@@ -164,10 +164,10 @@ export default function AdminReportsPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["revenue", "outstanding", "invoices", "sales", "staff-deductions", "client-orders", "drivers", "returns", "deliveries", "delivery-runs", "species", "statement", "supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability"] as Tab[])
+        {(["revenue", "outstanding", "invoices", "sales", "staff-deductions", "client-orders", "drivers", "returns", "deliveries", "delivery-runs", "species", "statement", "supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability", "collection-returns"] as Tab[])
           .filter(t => {
             const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "statement", "sales", "staff-deductions"];
-            const procurementTabs: Tab[] = ["supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability"];
+            const procurementTabs: Tab[] = ["supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability", "collection-returns"];
             if (procurementTabs.includes(t)) return isProcurementUser;
             return isFinancialUser || !financialTabs.includes(t);
           })
@@ -189,6 +189,7 @@ export default function AdminReportsPage() {
             {t === "load-discrepancy"      && "⚠️ Load Discrepancy"}
             {t === "transit-discrepancy"   && "🚛 Transit Loss"}
             {t === "supplier-reliability"  && "⭐ Supplier Reliability"}
+            {t === "collection-returns"    && "💀 Dead / Short / Over"}
             {t === "client-orders"         && "📦 Client Orders"}
           </button>
         ))}
@@ -932,6 +933,114 @@ export default function AdminReportsPage() {
                       </tr>
                     );
                   })}
+                </tbody>
+              </ScrollTable>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Collection Returns — Dead / Short / Over */}
+      {tab === "collection-returns" && !loading && crData && (() => {
+        const fFrom = from ? new Date(from) : null;
+        const fTo   = to   ? new Date(to)   : null;
+        const confirmed = crData.filter(cr => {
+          if (!["HubConfirmed","FinanceAcknowledged"].includes(cr.status)) return false;
+          const d = new Date(cr.createdAt);
+          if (fFrom && d < fFrom) return false;
+          if (fTo   && d > fTo)   return false;
+          return true;
+        });
+
+        // Per-order rows
+        type OrderRow = {
+          id: string; supplier: string; driver: string; date: string;
+          species: string; orderedQty: number; loadedQty: number;
+          receivedQty: number; deadQty: number; shortQty: number; overQty: number;
+        };
+        const orderRows: OrderRow[] = [];
+        for (const cr of confirmed) {
+          for (const l of cr.lines) {
+            orderRows.push({
+              id: cr.collectionRequestId,
+              supplier: cr.supplierName,
+              driver: cr.assignedDriverName || cr.assignedDriverId || "Unknown",
+              date: cr.collectionDate ? cr.collectionDate.slice(0, 10) : cr.createdAt.slice(0, 10),
+              species: l.speciesName || l.speciesId,
+              orderedQty: l.orderedQty,
+              loadedQty: l.loadedQty,
+              receivedQty: l.receivedQty,
+              deadQty: l.deadQty || 0,
+              shortQty: l.shortQty || Math.max(0, l.orderedQty - l.loadedQty),
+              overQty: l.overQty || Math.max(0, l.loadedQty - l.orderedQty),
+            });
+          }
+        }
+
+        // Per-driver summary
+        type DriverRow = { driver: string; collections: number; dead: number; short: number; over: number };
+        const driverMap = new Map<string, DriverRow>();
+        for (const cr of confirmed) {
+          const key = cr.assignedDriverName || cr.assignedDriverId || "Unknown";
+          const dead  = cr.lines.reduce((s, l) => s + (l.deadQty || 0), 0);
+          const short = cr.lines.reduce((s, l) => s + (l.shortQty || Math.max(0, l.orderedQty - l.loadedQty)), 0);
+          const over  = cr.lines.reduce((s, l) => s + (l.overQty  || Math.max(0, l.loadedQty - l.orderedQty)), 0);
+          const ex = driverMap.get(key) ?? { driver: key, collections: 0, dead: 0, short: 0, over: 0 };
+          driverMap.set(key, { driver: key, collections: ex.collections + 1, dead: ex.dead + dead, short: ex.short + short, over: ex.over + over });
+        }
+        const driverRows = [...driverMap.values()].sort((a, b) => b.dead - a.dead);
+
+        const totalDead  = driverRows.reduce((s, r) => s + r.dead,  0);
+        const totalShort = driverRows.reduce((s, r) => s + r.short, 0);
+        const totalOver  = driverRows.reduce((s, r) => s + r.over,  0);
+
+        return (
+          <div>
+            <div style={s.kpiRow}>
+              <KpiCard label="Collections" value={String(confirmed.length)} />
+              <KpiCard label="Total Dead"  value={totalDead.toLocaleString()}  highlight />
+              <KpiCard label="Total Short" value={totalShort.toLocaleString()} highlight />
+              <KpiCard label="Total Over"  value={totalOver.toLocaleString()} />
+            </div>
+
+            <h3 style={s.subHeading}>By Driver</h3>
+            {driverRows.length === 0 ? <p style={s.muted}>No confirmed collections in this period.</p> : (
+              <ScrollTable>
+                <thead><tr><Th>Driver</Th><Th>Collections</Th><Th>Dead</Th><Th>Short</Th><Th>Over</Th></tr></thead>
+                <tbody>
+                  {driverRows.map((r, i) => (
+                    <tr key={i}>
+                      <Td style={{ fontWeight: 600 }}>{r.driver}</Td>
+                      <Td>{r.collections}</Td>
+                      <Td style={{ fontWeight: 700, color: r.dead  > 0 ? "#dc2626" : "#166534" }}>{r.dead}</Td>
+                      <Td style={{ fontWeight: 700, color: r.short > 0 ? "#f59e0b" : "#166534" }}>{r.short}</Td>
+                      <Td style={{ fontWeight: 700, color: r.over  > 0 ? "#22c55e" : "#94a3b8" }}>{r.over}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </ScrollTable>
+            )}
+
+            <h3 style={s.subHeading}>Per Order</h3>
+            {orderRows.length === 0 ? <p style={s.muted}>No data.</p> : (
+              <ScrollTable>
+                <thead><tr><Th>Date</Th><Th>Order ID</Th><Th>Supplier</Th><Th>Driver</Th><Th>Species</Th><Th>Ordered</Th><Th>Loaded</Th><Th>Received</Th><Th>Dead</Th><Th>Short</Th><Th>Over</Th></tr></thead>
+                <tbody>
+                  {orderRows.map((r, i) => (
+                    <tr key={i}>
+                      <Td>{r.date}</Td>
+                      <Td style={{ fontSize: 11, color: "#64748b" }}>{r.id.split("-")[0].toUpperCase()}</Td>
+                      <Td>{r.supplier}</Td>
+                      <Td style={{ fontWeight: 600 }}>{r.driver}</Td>
+                      <Td>{r.species}</Td>
+                      <Td>{r.orderedQty}</Td>
+                      <Td>{r.loadedQty}</Td>
+                      <Td>{r.receivedQty}</Td>
+                      <Td style={{ fontWeight: 700, color: r.deadQty  > 0 ? "#dc2626" : "#94a3b8" }}>{r.deadQty  || "—"}</Td>
+                      <Td style={{ fontWeight: 700, color: r.shortQty > 0 ? "#f59e0b" : "#94a3b8" }}>{r.shortQty || "—"}</Td>
+                      <Td style={{ fontWeight: 700, color: r.overQty  > 0 ? "#22c55e" : "#94a3b8" }}>{r.overQty  || "—"}</Td>
+                    </tr>
+                  ))}
                 </tbody>
               </ScrollTable>
             )}
