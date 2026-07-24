@@ -84,11 +84,6 @@ export type ReceiptUploadUrlResponse = {
 
 // ── Recon ──────────────────────────────────────────────────────────────────
 
-export type SplitPaymentLine = {
-  method: string;
-  amount: number;
-};
-
 export type ReconInvoiceItem = {
   invoiceId: string;
   invoiceNumber: string;
