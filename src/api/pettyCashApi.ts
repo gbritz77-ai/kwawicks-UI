@@ -26,6 +26,8 @@ export type PettyCashSummaryDto = {
   cashFromHubSales: number;
   cashFromCreditDeposits: number;
   totalCashInCustody: number;
+  hubSalesCashOverride: number | null;
+  clientDepositsCashOverride: number | null;
 };
 
 export type PettyCashupDto = {
@@ -84,4 +86,6 @@ export const pettyCashApi = {
     api.put<PettyCashEntryDto>(`/api/petty-cash/entries/${entryId}/slip`, { s3Key }),
   clearAll: () => api.del<void>("/api/petty-cash/clear"),
   setFloat: (floatAmount: number) => api.post<void>("/api/petty-cash/set-float", { floatAmount }),
+  setCashOverrides: (hubSalesCash: number | null, clientDepositsCash: number | null) =>
+    api.put<void>("/api/petty-cash/cash-overrides", { hubSalesCash, clientDepositsCash }),
 };

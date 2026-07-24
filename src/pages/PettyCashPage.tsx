@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useState } from "react";
 import { pettyCashApi, CATEGORIES } from "../api/pettyCashApi";
+import { hasAnyRole } from "../api/auth";
 import type {
   PettyCashSummaryDto,
   PettyCashEntryDto,
@@ -54,6 +55,14 @@ export default function PettyCashPage() {
   const [clearBusy, setClearBusy] = useState(false);
   const [clearError, setClearError] = useState("");
   const [clearDone, setClearDone] = useState(false);
+
+  // Cash override modal
+  const [overrideField, setOverrideField] = useState<"hub" | "deposits" | null>(null);
+  const [overrideValue, setOverrideValue] = useState("");
+  const [overrideBusy, setOverrideBusy] = useState(false);
+  const [overrideError, setOverrideError] = useState("");
+
+  const canOverride = hasAnyRole("Owner");
 
   useEffect(() => { load(); }, []);
 
@@ -157,6 +166,45 @@ export default function PettyCashPage() {
     }
   }
 
+  async function handleSetOverride() {
+    if (!summary) return;
+    const parsed = parseFloat(overrideValue);
+    if (isNaN(parsed) || parsed < 0) { setOverrideError("Enter a valid non-negative amount."); return; }
+    setOverrideBusy(true);
+    setOverrideError("");
+    try {
+      await pettyCashApi.setCashOverrides(
+        overrideField === "hub" ? parsed : summary.hubSalesCashOverride,
+        overrideField === "deposits" ? parsed : summary.clientDepositsCashOverride,
+      );
+      const s2 = await pettyCashApi.getSummary();
+      setSummary(s2);
+      setOverrideField(null);
+      setOverrideValue("");
+    } catch (e: unknown) {
+      setOverrideError(e instanceof Error ? e.message : "Failed to set override.");
+    } finally {
+      setOverrideBusy(false);
+    }
+  }
+
+  async function handleClearOverride(field: "hub" | "deposits") {
+    if (!summary) return;
+    setOverrideBusy(true);
+    try {
+      await pettyCashApi.setCashOverrides(
+        field === "hub" ? null : summary.hubSalesCashOverride,
+        field === "deposits" ? null : summary.clientDepositsCashOverride,
+      );
+      const s2 = await pettyCashApi.getSummary();
+      setSummary(s2);
+    } catch {
+      // silent
+    } finally {
+      setOverrideBusy(false);
+    }
+  }
+
   if (loading) return <div style={s.page}><p style={{ color: "#94a3b8" }}>Loading…</p></div>;
   if (error) return <div style={s.page}><p style={{ color: "#ef4444" }}>{error}</p></div>;
 
@@ -177,11 +225,49 @@ export default function PettyCashPage() {
               <div style={s.custodySub}>Total cash in safe — excludes R2,000 petty cash float in the till</div>
               <div style={s.custodyBreakdown}>
                 <div style={s.breakdownRow}>
-                  <span style={s.breakdownLabel}>Hub Sales (Cash)</span>
+                  <span style={s.breakdownLabel}>
+                    Hub Sales (Cash)
+                    {summary.hubSalesCashOverride != null && (
+                      <span style={s.manualBadge}>Manual</span>
+                    )}
+                    {canOverride && (
+                      <>
+                        <button style={s.pencilBtn} title="Override Hub Sales Cash"
+                          onClick={() => { setOverrideField("hub"); setOverrideValue(String(summary.cashFromHubSales)); setOverrideError(""); }}>
+                          ✏️
+                        </button>
+                        {summary.hubSalesCashOverride != null && (
+                          <button style={s.clearOverrideBtn} title="Clear override"
+                            onClick={() => handleClearOverride("hub")} disabled={overrideBusy}>
+                            ✕
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </span>
                   <span style={{ color: "#4ade80" }}>{fmt(summary.cashFromHubSales)}</span>
                 </div>
                 <div style={s.breakdownRow}>
-                  <span style={s.breakdownLabel}>Client Deposits (Cash)</span>
+                  <span style={s.breakdownLabel}>
+                    Client Deposits (Cash)
+                    {summary.clientDepositsCashOverride != null && (
+                      <span style={s.manualBadge}>Manual</span>
+                    )}
+                    {canOverride && (
+                      <>
+                        <button style={s.pencilBtn} title="Override Client Deposits Cash"
+                          onClick={() => { setOverrideField("deposits"); setOverrideValue(String(summary.cashFromCreditDeposits)); setOverrideError(""); }}>
+                          ✏️
+                        </button>
+                        {summary.clientDepositsCashOverride != null && (
+                          <button style={s.clearOverrideBtn} title="Clear override"
+                            onClick={() => handleClearOverride("deposits")} disabled={overrideBusy}>
+                            ✕
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </span>
                   <span style={{ color: "#4ade80" }}>{fmt(summary.cashFromCreditDeposits)}</span>
                 </div>
                 {summary.totalInSinceLastCashup > 0 && (
@@ -669,6 +755,40 @@ export default function PettyCashPage() {
         </div>
       )}
 
+      {/* ── CASH OVERRIDE MODAL ── */}
+      {overrideField && summary && (
+        <div style={s.modalOverlay}>
+          <div style={s.modalCard}>
+            <div style={{ fontSize: 28, marginBottom: 10 }}>✏️</div>
+            <h2 style={{ margin: "0 0 6px", color: "#f1f5f9", fontSize: 18 }}>
+              Override {overrideField === "hub" ? "Hub Sales Cash" : "Client Deposits Cash"}
+            </h2>
+            <p style={{ margin: "0 0 18px", color: "#94a3b8", fontSize: 13, lineHeight: 1.5 }}>
+              Set a manual amount. The calculated value will be replaced until the override is cleared.
+            </p>
+            {overrideError && <p style={{ ...s.errText, textAlign: "left" }}>{overrideError}</p>}
+            <label style={{ ...s.label, textAlign: "left", marginBottom: 16 }}>
+              Amount (R)
+              <NumericInput
+                min={0}
+                step={0.01}
+                style={s.input}
+                value={overrideValue}
+                onChange={e => setOverrideValue(e.target.value)}
+              />
+            </label>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button style={s.btnSecondary} onClick={() => { setOverrideField(null); setOverrideValue(""); }} disabled={overrideBusy}>
+                Cancel
+              </button>
+              <button style={s.btnPrimary} onClick={handleSetOverride} disabled={overrideBusy}>
+                {overrideBusy ? "Saving…" : "Save Override"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── START FRESH CONFIRMATION MODAL ── */}
       {showFreshConfirm && (
         <div style={s.modalOverlay}>
@@ -1046,5 +1166,35 @@ const s: Record<string, React.CSSProperties> = {
   cashupResultVal: {
     fontWeight: 600,
     fontSize: 15,
+  },
+  pencilBtn: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    fontSize: 12,
+    padding: "0 4px",
+    opacity: 0.7,
+    verticalAlign: "middle",
+  },
+  clearOverrideBtn: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    fontSize: 11,
+    padding: "0 3px",
+    color: "#ef4444",
+    opacity: 0.8,
+    verticalAlign: "middle",
+  },
+  manualBadge: {
+    background: "rgba(245,158,11,0.15)",
+    color: "#f59e0b",
+    border: "1px solid rgba(245,158,11,0.3)",
+    borderRadius: 4,
+    padding: "1px 5px",
+    fontSize: 10,
+    fontWeight: 600,
+    marginLeft: 6,
+    verticalAlign: "middle",
   },
 };
