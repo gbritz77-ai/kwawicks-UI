@@ -171,15 +171,12 @@ export default function PettyCashPage() {
       {summary && (
         <>
           {/* Total Cash In Custody — hero card */}
+          {/* Hero — Cash In the Safe */}
           <div style={s.custodyCard}>
             <div style={s.custodyLeft}>
-              <div style={s.custodyLabel}>💵 Total Cash In Custody</div>
-              <div style={s.custodySub}>All physical cash on hand since last cashup</div>
+              <div style={s.custodyLabel}>🏦 Cash In the Safe</div>
+              <div style={s.custodySub}>Total cash in safe — excludes R2,000 petty cash float in the till</div>
               <div style={s.custodyBreakdown}>
-                <div style={s.breakdownRow}>
-                  <span style={s.breakdownLabel}>Petty Cash Float</span>
-                  <span style={{ color: "#4ade80" }}>{fmt(FLOAT)}</span>
-                </div>
                 <div style={s.breakdownRow}>
                   <span style={s.breakdownLabel}>Hub Sales (Cash)</span>
                   <span style={{ color: "#4ade80" }}>{fmt(summary.cashFromHubSales)}</span>
@@ -188,30 +185,53 @@ export default function PettyCashPage() {
                   <span style={s.breakdownLabel}>Client Deposits (Cash)</span>
                   <span style={{ color: "#4ade80" }}>{fmt(summary.cashFromCreditDeposits)}</span>
                 </div>
+                {summary.totalInSinceLastCashup > 0 && (
+                  <div style={s.breakdownRow}>
+                    <span style={s.breakdownLabel}>Other Cash Received</span>
+                    <span style={{ color: "#4ade80" }}>{fmt(summary.totalInSinceLastCashup)}</span>
+                  </div>
+                )}
+                {summary.totalOutSinceLastCashup > 0 && (
+                  <div style={s.breakdownRow}>
+                    <span style={s.breakdownLabel}>Expenses Paid Out</span>
+                    <span style={{ color: "#f87171" }}>−{fmt(summary.totalOutSinceLastCashup)}</span>
+                  </div>
+                )}
+                <div style={{ ...s.breakdownRow, borderTop: "1px solid rgba(255,255,255,0.1)", marginTop: 6, paddingTop: 6, opacity: 0.6, fontSize: 12 }}>
+                  <span style={s.breakdownLabel}>Petty Cash Float (till)</span>
+                  <span style={{ color: "#94a3b8" }}>{fmt(FLOAT)}</span>
+                </div>
               </div>
             </div>
             <div style={s.custodyRight}>
-              <div style={{ ...s.custodyTotal, color: summary.totalCashInCustody >= 0 ? "#22c55e" : "#ef4444" }}>
-                {fmt(summary.totalCashInCustody)}
-              </div>
-              {summary.totalCashInCustody < 0 && (
-                <div style={{ fontSize: 12, color: "#ef4444", marginTop: 4 }}>⚠ Negative — check entries</div>
-              )}
+              {(() => {
+                const safeTotal = summary.totalCashInCustody - FLOAT;
+                return (
+                  <>
+                    <div style={{ ...s.custodyTotal, color: safeTotal >= 0 ? "#22c55e" : "#ef4444" }}>
+                      {fmt(safeTotal)}
+                    </div>
+                    {safeTotal < 0 && (
+                      <div style={{ fontSize: 12, color: "#ef4444", marginTop: 4 }}>⚠ Negative — check entries</div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
 
           {/* Secondary KPI row */}
           <div style={s.kpiRow}>
             <div style={s.kpiCard}>
-              <div style={s.kpiLabel}>Petty Cash Float</div>
+              <div style={s.kpiLabel}>Petty Cash Float (till)</div>
               <div style={{ ...s.kpiValue, color: "#22c55e" }}>{fmt(FLOAT)}</div>
             </div>
             <div style={s.kpiCard}>
-              <div style={s.kpiLabel}>Cash In (since cashup)</div>
-              <div style={{ ...s.kpiValue, color: "#22c55e" }}>{fmt(summary.totalInSinceLastCashup)}</div>
+              <div style={s.kpiLabel}>Hub Sales Cash</div>
+              <div style={{ ...s.kpiValue, color: "#22c55e" }}>{fmt(summary.cashFromHubSales)}</div>
             </div>
             <div style={s.kpiCard}>
-              <div style={s.kpiLabel}>Cash Out (since cashup)</div>
+              <div style={s.kpiLabel}>Expenses Paid Out</div>
               <div style={{ ...s.kpiValue, color: "#ef4444" }}>{fmt(summary.totalOutSinceLastCashup)}</div>
             </div>
             <div style={s.kpiCard}>
@@ -444,40 +464,22 @@ export default function PettyCashPage() {
               <p style={{ color: "#94a3b8", margin: "0 0 20px" }}>Date: {cashupDone.cashupDate}</p>
               <div style={s.cashupResultGrid}>
                 <div style={s.cashupResultItem}>
-                  <span style={s.cashupResultLabel}>Opening Balance</span>
-                  <span style={s.cashupResultVal}>{fmt(cashupDone.openingBalance)}</span>
-                </div>
-                <div style={s.cashupResultItem}>
-                  <span style={s.cashupResultLabel}>+ Cash In</span>
-                  <span style={{ ...s.cashupResultVal, color: "#22c55e" }}>{fmt(cashupDone.totalIn)}</span>
-                </div>
-                <div style={s.cashupResultItem}>
-                  <span style={s.cashupResultLabel}>− Cash Out</span>
-                  <span style={{ ...s.cashupResultVal, color: "#ef4444" }}>{fmt(cashupDone.totalOut)}</span>
-                </div>
-                <div style={s.cashupResultItem}>
-                  <span style={s.cashupResultLabel}>Expected Balance</span>
-                  <span style={s.cashupResultVal}>{fmt(cashupDone.expectedBalance)}</span>
-                </div>
-                <div style={s.cashupResultItem}>
-                  <span style={s.cashupResultLabel}>Actual Balance</span>
-                  <span style={s.cashupResultVal}>{fmt(cashupDone.actualBalance)}</span>
-                </div>
-                <div style={{ ...s.cashupResultItem, borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 12 }}>
-                  <span style={s.cashupResultLabel}>Variance</span>
-                  <span style={{ ...s.cashupResultVal, color: cashupDone.variance === 0 ? "#22c55e" : "#f59e0b", fontWeight: 700 }}>
-                    {cashupDone.variance >= 0 ? "+" : ""}{fmt(cashupDone.variance)}
-                  </span>
-                </div>
-                <div style={{ ...s.cashupResultItem, borderTop: "1px solid rgba(245,158,11,0.3)", paddingTop: 12, marginTop: 4 }}>
-                  <span style={{ ...s.cashupResultLabel, color: "#fbbf24" }}>Amount Banked / Removed</span>
+                  <span style={s.cashupResultLabel}>Cash In Safe (banked)</span>
                   <span style={{ ...s.cashupResultVal, color: "#f59e0b", fontSize: 24, fontWeight: 700 }}>
                     {fmt(Math.max(0, preCashupCustody - FLOAT))}
                   </span>
                 </div>
                 <div style={s.cashupResultItem}>
-                  <span style={{ ...s.cashupResultLabel, color: "#94a3b8" }}>Float left in till</span>
+                  <span style={{ ...s.cashupResultLabel, color: "#94a3b8" }}>Petty Cash Float (stays in till)</span>
                   <span style={{ ...s.cashupResultVal, color: "#94a3b8" }}>{fmt(FLOAT)}</span>
+                </div>
+                <div style={{ ...s.cashupResultItem, borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: 12, marginTop: 4 }}>
+                  <span style={s.cashupResultLabel}>Expenses this period</span>
+                  <span style={{ ...s.cashupResultVal, color: "#ef4444" }}>{fmt(cashupDone.totalOut)}</span>
+                </div>
+                <div style={s.cashupResultItem}>
+                  <span style={s.cashupResultLabel}>Hub Sales + Deposits collected</span>
+                  <span style={{ ...s.cashupResultVal, color: "#22c55e" }}>{fmt(Math.max(0, preCashupCustody - FLOAT + cashupDone.totalOut))}</span>
                 </div>
               </div>
               {cashupDone.notes && <p style={{ color: "#94a3b8", marginTop: 16 }}>Notes: {cashupDone.notes}</p>}
@@ -530,12 +532,8 @@ export default function PettyCashPage() {
               {summary && summary.openEntryCount > 0 && (
                 <div style={s.summaryPreview}>
                   <div style={s.previewRow}>
-                    <span>Total Cash in Custody</span>
-                    <strong style={{ color: "#22c55e", fontSize: 18 }}>{fmt(summary.totalCashInCustody)}</strong>
-                  </div>
-                  <div style={{ ...s.previewRow, opacity: 0.7, fontSize: 13 }}>
-                    <span style={{ paddingLeft: 12 }}>Petty Cash Float</span>
-                    <span>{fmt(FLOAT)}</span>
+                    <span>Cash In the Safe</span>
+                    <strong style={{ color: "#22c55e", fontSize: 18 }}>{fmt(summary.totalCashInCustody - FLOAT)}</strong>
                   </div>
                   <div style={{ ...s.previewRow, opacity: 0.7, fontSize: 13 }}>
                     <span style={{ paddingLeft: 12 }}>Hub Sales (Cash)</span>
@@ -545,12 +543,24 @@ export default function PettyCashPage() {
                     <span style={{ paddingLeft: 12 }}>Client Deposits (Cash)</span>
                     <span>{fmt(summary.cashFromCreditDeposits)}</span>
                   </div>
-                  <div style={{ ...s.previewRow, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 10, marginTop: 4 }}>
-                    <span>Float to Leave</span>
-                    <strong style={{ color: "#94a3b8" }}>{fmt(FLOAT)}</strong>
+                  {summary.totalInSinceLastCashup > 0 && (
+                    <div style={{ ...s.previewRow, opacity: 0.7, fontSize: 13 }}>
+                      <span style={{ paddingLeft: 12 }}>Other Cash In</span>
+                      <span>{fmt(summary.totalInSinceLastCashup)}</span>
+                    </div>
+                  )}
+                  {summary.totalOutSinceLastCashup > 0 && (
+                    <div style={{ ...s.previewRow, opacity: 0.7, fontSize: 13 }}>
+                      <span style={{ paddingLeft: 12 }}>Expenses Paid Out</span>
+                      <span style={{ color: "#f87171" }}>−{fmt(summary.totalOutSinceLastCashup)}</span>
+                    </div>
+                  )}
+                  <div style={{ ...s.previewRow, opacity: 0.6, fontSize: 12, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 8, marginTop: 4 }}>
+                    <span>Petty Cash Float (stays in till)</span>
+                    <span style={{ color: "#94a3b8" }}>{fmt(FLOAT)}</span>
                   </div>
                   <div style={{ ...s.previewRow, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 10, marginTop: 4 }}>
-                    <span>Amount to Bank / Remove</span>
+                    <span>Amount to Bank</span>
                     <strong style={{ fontSize: 20, color: "#f59e0b" }}>{fmt(Math.max(0, summary.totalCashInCustody - FLOAT))}</strong>
                   </div>
                 </div>
