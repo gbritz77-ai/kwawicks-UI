@@ -163,9 +163,11 @@ export default function PettyCashPage() {
   if (loading) return <div style={s.page}><p style={{ color: "#94a3b8" }}>Loading…</p></div>;
   if (error) return <div style={s.page}><p style={{ color: "#ef4444" }}>{error}</p></div>;
 
+  const FLOAT = 2000;
   const expectedBalance = summary ? summary.currentBalance : 0;
   const actualNum = parseFloat(actualBalance);
   const variance = !isNaN(actualNum) ? actualNum - expectedBalance : null;
+  const amountToBank = !isNaN(actualNum) ? Math.max(0, actualNum - FLOAT) : (summary ? Math.max(0, summary.totalCashInCustody - FLOAT) : 0);
 
   return (
     <div style={s.page}>
@@ -240,7 +242,11 @@ export default function PettyCashPage() {
           <button
             key={t}
             style={tab === t ? { ...s.tab, ...s.tabActive } : s.tab}
-            onClick={() => { setTab(t); setCashupDone(null); }}
+            onClick={() => {
+              setTab(t);
+              setCashupDone(null);
+              if (t === "cashup" && summary) setActualBalance(String(summary.totalCashInCustody));
+            }}
           >
             {t === "cashbook" ? "Cash Book" : t === "cashup" ? "Do Cashup" : "Cashup History"}
           </button>
@@ -474,6 +480,16 @@ export default function PettyCashPage() {
                     {cashupDone.variance >= 0 ? "+" : ""}{fmt(cashupDone.variance)}
                   </span>
                 </div>
+                <div style={{ ...s.cashupResultItem, borderTop: "1px solid rgba(245,158,11,0.3)", paddingTop: 12, marginTop: 4 }}>
+                  <span style={{ ...s.cashupResultLabel, color: "#fbbf24" }}>Amount Banked / Removed</span>
+                  <span style={{ ...s.cashupResultVal, color: "#f59e0b", fontSize: 24, fontWeight: 700 }}>
+                    {fmt(Math.max(0, cashupDone.actualBalance - FLOAT))}
+                  </span>
+                </div>
+                <div style={s.cashupResultItem}>
+                  <span style={{ ...s.cashupResultLabel, color: "#94a3b8" }}>Float left in till</span>
+                  <span style={{ ...s.cashupResultVal, color: "#94a3b8" }}>{fmt(FLOAT)}</span>
+                </div>
               </div>
               {cashupDone.notes && <p style={{ color: "#94a3b8", marginTop: 16 }}>Notes: {cashupDone.notes}</p>}
               <button style={{ ...s.btnPrimary, marginTop: 20 }} onClick={() => setCashupDone(null)}>
@@ -525,20 +541,28 @@ export default function PettyCashPage() {
               {summary && summary.openEntryCount > 0 && (
                 <div style={s.summaryPreview}>
                   <div style={s.previewRow}>
-                    <span>Opening Balance</span>
-                    <strong>{fmt((cashups[0]?.actualBalance) ?? 0)}</strong>
+                    <span>Total Cash in Custody</span>
+                    <strong style={{ color: "#22c55e", fontSize: 18 }}>{fmt(summary.totalCashInCustody)}</strong>
                   </div>
-                  <div style={s.previewRow}>
-                    <span>+ Cash In</span>
-                    <strong style={{ color: "#22c55e" }}>{fmt(summary.totalInSinceLastCashup)}</strong>
+                  <div style={{ ...s.previewRow, opacity: 0.7, fontSize: 13 }}>
+                    <span style={{ paddingLeft: 12 }}>Petty Cash Float</span>
+                    <span>{fmt(summary.currentBalance)}</span>
                   </div>
-                  <div style={s.previewRow}>
-                    <span>− Cash Out</span>
-                    <strong style={{ color: "#ef4444" }}>{fmt(summary.totalOutSinceLastCashup)}</strong>
+                  <div style={{ ...s.previewRow, opacity: 0.7, fontSize: 13 }}>
+                    <span style={{ paddingLeft: 12 }}>Hub Sales (Cash)</span>
+                    <span>{fmt(summary.cashFromHubSales)}</span>
+                  </div>
+                  <div style={{ ...s.previewRow, opacity: 0.7, fontSize: 13 }}>
+                    <span style={{ paddingLeft: 12 }}>Client Deposits (Cash)</span>
+                    <span>{fmt(summary.cashFromCreditDeposits)}</span>
                   </div>
                   <div style={{ ...s.previewRow, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 10, marginTop: 4 }}>
-                    <span>Expected Balance</span>
-                    <strong style={{ fontSize: 18 }}>{fmt(expectedBalance)}</strong>
+                    <span>Float to Leave</span>
+                    <strong style={{ color: "#94a3b8" }}>{fmt(FLOAT)}</strong>
+                  </div>
+                  <div style={{ ...s.previewRow, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 10, marginTop: 4 }}>
+                    <span>Amount to Bank / Remove</span>
+                    <strong style={{ fontSize: 20, color: "#f59e0b" }}>{fmt(Math.max(0, summary.totalCashInCustody - FLOAT))}</strong>
                   </div>
                 </div>
               )}
@@ -546,19 +570,32 @@ export default function PettyCashPage() {
               {summary && summary.openEntryCount > 0 && (
                 <>
                   <label style={{ ...s.label, marginTop: 20 }}>
-                    Actual Cash Count (R) *
+                    Total Cash in Custody (R) — physical count *
                     <NumericInput
                       min={0}
                       step={0.01}
                       style={s.input}
-                      placeholder="Enter the physical cash amount"
+                      placeholder="Enter the total physical cash amount"
                       value={actualBalance}
                       onChange={e => setActualBalance(e.target.value)}
                     />
                   </label>
 
+                  {actualBalance !== "" && !isNaN(actualNum) && (
+                    <>
+                      <div style={{ marginTop: 12, padding: "14px 18px", borderRadius: 10, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.4)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ color: "#fbbf24", fontWeight: 600 }}>Amount to Bank / Remove</span>
+                        <strong style={{ color: "#f59e0b", fontSize: 20 }}>{fmt(Math.max(0, actualNum - FLOAT))}</strong>
+                      </div>
+                      <div style={{ marginTop: 8, padding: "10px 18px", borderRadius: 10, background: "rgba(148,163,184,0.08)", border: "1px solid rgba(148,163,184,0.2)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ color: "#94a3b8" }}>Float remaining in till</span>
+                        <strong style={{ color: "#94a3b8" }}>{fmt(FLOAT)}</strong>
+                      </div>
+                    </>
+                  )}
+
                   {actualBalance !== "" && !isNaN(actualNum) && variance !== null && (
-                    <div style={{ ...s.varianceBox, borderColor: variance === 0 ? "#22c55e" : Math.abs(variance) < 10 ? "#f59e0b" : "#ef4444" }}>
+                    <div style={{ ...s.varianceBox, borderColor: variance === 0 ? "#22c55e" : Math.abs(variance) < 10 ? "#f59e0b" : "#ef4444", marginTop: 8 }}>
                       <span>Variance: </span>
                       <strong style={{ color: variance === 0 ? "#22c55e" : Math.abs(variance) < 10 ? "#f59e0b" : "#ef4444" }}>
                         {variance >= 0 ? "+" : ""}{fmt(variance)}
