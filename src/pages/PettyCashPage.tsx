@@ -46,6 +46,7 @@ export default function PettyCashPage() {
   const [cashupBusy, setCashupBusy] = useState(false);
   const [cashupError, setCashupError] = useState("");
   const [cashupDone, setCashupDone] = useState<PettyCashupDto | null>(null);
+  const [preCashupCustody, setPreCashupCustody] = useState(0);
   const [freshBusy, setFreshBusy] = useState(false);
   const [freshError, setFreshError] = useState("");
   const [freshDone, setFreshDone] = useState(false);
@@ -98,8 +99,9 @@ export default function PettyCashPage() {
 
   async function handleCashup() {
     const actual = parseFloat(actualBalance);
-    if (isNaN(actual) || actual < 0) { setCashupError("Enter a valid actual balance."); return; }
+    if (isNaN(actual) || actual < 0) { setCashupError("Enter a valid petty cash count."); return; }
     if (!summary || summary.openEntryCount === 0) { setCashupError("No open entries to cash up."); return; }
+    setPreCashupCustody(summary.totalCashInCustody);
     setCashupBusy(true);
     setCashupError("");
     try {
@@ -167,7 +169,6 @@ export default function PettyCashPage() {
   const expectedBalance = summary ? summary.currentBalance : 0;
   const actualNum = parseFloat(actualBalance);
   const variance = !isNaN(actualNum) ? actualNum - expectedBalance : null;
-  const amountToBank = !isNaN(actualNum) ? Math.max(0, actualNum - FLOAT) : (summary ? Math.max(0, summary.totalCashInCustody - FLOAT) : 0);
 
   return (
     <div style={s.page}>
@@ -245,7 +246,7 @@ export default function PettyCashPage() {
             onClick={() => {
               setTab(t);
               setCashupDone(null);
-              if (t === "cashup" && summary) setActualBalance(String(summary.totalCashInCustody));
+              if (t === "cashup") setActualBalance("");
             }}
           >
             {t === "cashbook" ? "Cash Book" : t === "cashup" ? "Do Cashup" : "Cashup History"}
@@ -483,7 +484,7 @@ export default function PettyCashPage() {
                 <div style={{ ...s.cashupResultItem, borderTop: "1px solid rgba(245,158,11,0.3)", paddingTop: 12, marginTop: 4 }}>
                   <span style={{ ...s.cashupResultLabel, color: "#fbbf24" }}>Amount Banked / Removed</span>
                   <span style={{ ...s.cashupResultVal, color: "#f59e0b", fontSize: 24, fontWeight: 700 }}>
-                    {fmt(Math.max(0, cashupDone.actualBalance - FLOAT))}
+                    {fmt(Math.max(0, preCashupCustody - FLOAT))}
                   </span>
                 </div>
                 <div style={s.cashupResultItem}>
@@ -570,7 +571,7 @@ export default function PettyCashPage() {
               {summary && summary.openEntryCount > 0 && (
                 <>
                   <label style={{ ...s.label, marginTop: 20 }}>
-                    Total Cash in Custody (R) — physical count *
+                    Petty Cash Physical Count (R) — count only the petty cash till *
                     <NumericInput
                       min={0}
                       step={0.01}
@@ -585,7 +586,7 @@ export default function PettyCashPage() {
                     <>
                       <div style={{ marginTop: 12, padding: "14px 18px", borderRadius: 10, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.4)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ color: "#fbbf24", fontWeight: 600 }}>Amount to Bank / Remove</span>
-                        <strong style={{ color: "#f59e0b", fontSize: 20 }}>{fmt(Math.max(0, actualNum - FLOAT))}</strong>
+                        <strong style={{ color: "#f59e0b", fontSize: 20 }}>{fmt(Math.max(0, (summary?.totalCashInCustody ?? 0) - FLOAT))}</strong>
                       </div>
                       <div style={{ marginTop: 8, padding: "10px 18px", borderRadius: 10, background: "rgba(148,163,184,0.08)", border: "1px solid rgba(148,163,184,0.2)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ color: "#94a3b8" }}>Float remaining in till</span>
