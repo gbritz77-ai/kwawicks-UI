@@ -111,8 +111,12 @@ export default function NavBar() {
     // Clients as a top-level leaf
     if (canManageClients) entries.push(leaf("Clients", "/app/hub-tasks", "clients"));
 
-    // Reports as a top-level leaf
-    if (isOperational) entries.push(leaf("Reports", "/app/reports"));
+    // Reports group
+    const reportItems: Leaf[] = [];
+    if (isOperational) reportItems.push(leaf("Reports", "/app/reports"));
+    if (isFinancial)   reportItems.push(leaf("AI Reports", "/app/ai-reports"));
+    if (reportItems.length === 1) entries.push(reportItems[0]);
+    else if (reportItems.length > 1) entries.push(group("Reports", reportItems));
 
     // Finance group
     const financeItems: Leaf[] = [];

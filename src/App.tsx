@@ -38,6 +38,7 @@ import FleetPage from "./pages/FleetPage";
 import SitesPage from "./pages/SitesPage";
 import DipTanksPage from "./pages/DipTanksPage";
 import FuelPage from "./pages/FuelPage";
+import AiReportsPage from "./pages/AiReportsPage";
 
 function AuthLayout({ children }: { children: React.ReactElement }) {
   return (
@@ -80,6 +81,7 @@ export default function App() {
       <Route path="/app/sites"              element={<AuthLayout><SitesPage /></AuthLayout>} />
       <Route path="/app/dip-tanks"          element={<AuthLayout><DipTanksPage /></AuthLayout>} />
       <Route path="/app/fuel"               element={<AuthLayout><FuelPage /></AuthLayout>} />
+      <Route path="/app/ai-reports"         element={<AuthLayout><AiReportsPage /></AuthLayout>} />
       <Route path="/app/driver-allocations"  element={<AuthLayout><DriverAllocationsPage /></AuthLayout>} />
       <Route path="/driver"              element={<AuthLayout><DriverDashboardPage /></AuthLayout>} />
       <Route path="/driver/work"         element={<AuthLayout><DriverPage /></AuthLayout>} />
