@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import * as XLSX from "xlsx";
 import { aiReportsApi } from "../api/aiReportsApi";
 import type { AiReportResult } from "../api/aiReportsApi";
 
@@ -33,19 +34,37 @@ export default function AiReportsPage() {
     }
   }
 
-  function downloadCsv() {
+  function downloadXlsx() {
     if (!result || result.columns.length === 0) return;
-    const lines = [
-      result.columns.map(c => `"${c.replace(/"/g, '""')}"`).join(","),
-      ...result.rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")),
-    ];
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `report-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+
+    const data = [result.columns, ...result.rows];
+    const ws = XLSX.utils.aoa_to_sheet(data);
+
+    // Bold + background for header row
+    const headerStyle = {
+      font: { bold: true, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: "6366F1" } },
+      alignment: { horizontal: "center" },
+    };
+    result.columns.forEach((_, ci) => {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c: ci });
+      if (ws[cellRef]) ws[cellRef].s = headerStyle;
+    });
+
+    // Auto column widths
+    const colWidths = result.columns.map((col, ci) => ({
+      wch: Math.max(
+        col.length,
+        ...result.rows.map(row => String(row[ci] ?? "").length)
+      ) + 2,
+    }));
+    ws["!cols"] = colWidths;
+
+    const wb = XLSX.utils.book_new();
+    const sheetName = prompt.slice(0, 31) || "Report";
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+    XLSX.writeFile(wb, `report-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   return (
@@ -129,8 +148,8 @@ export default function AiReportsPage() {
             <>
               <div style={s.tableHeader}>
                 <span style={s.rowCount}>{result.rows.length} row{result.rows.length !== 1 ? "s" : ""}</span>
-                <button style={s.btnDownload} onClick={downloadCsv}>
-                  ↓ Download CSV
+                <button style={s.btnDownload} onClick={downloadXlsx}>
+                  ↓ Download Excel
                 </button>
               </div>
               <div style={s.tableWrap}>
