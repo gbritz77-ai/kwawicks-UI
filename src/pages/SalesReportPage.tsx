@@ -101,7 +101,8 @@ export default function SalesReportPage() {
   const bySpeciesRows = useMemo((): SpeciesGroup[] => {
     const map = new Map<string, SpeciesGroup>();
     filtered.forEach(r => {
-      const key = `${r.date}|${r.speciesId}|${r.unitPrice}`;
+      const priceCents = Math.round(r.unitPrice * 100);
+      const key = `${r.date}|${r.speciesId}|${priceCents}`;
       if (!map.has(key)) {
         map.set(key, {
           date: r.date,
