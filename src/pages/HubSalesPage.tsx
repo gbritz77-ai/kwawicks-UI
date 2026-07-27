@@ -12,7 +12,7 @@ import { otpApi } from "../api/otpApi";
 import { hasAnyRole } from "../api/auth";
 import { NumericInput } from "../components/NumericInput";
 
-const VAT_RATE = 0.15;
+
 
 type CustomerMode = "existing" | "walkin" | "staff" | "credit";
 

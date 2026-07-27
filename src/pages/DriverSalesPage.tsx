@@ -10,7 +10,7 @@ import { deliveryOrdersApi } from "../api/deliveryOrdersApi";
 import type { DriverStockItem } from "../api/deliveryOrdersApi";
 import { NumericInput } from "../components/NumericInput";
 
-const VAT_RATE = 0.15;
+
 type CustomerMode = "existing" | "walkin";
 const PAYMENT_TYPES = ["Cash", "EFT", "Card", "Split"] as const;
 const SPLIT_METHODS = ["Cash", "Card", "EFT"] as const;
