@@ -2645,14 +2645,14 @@ function SalesTab({
     return s + (c !== null ? c * r.qty : 0);
   }, 0);
 
-  // By Species grouping: date + speciesId + unitPrice → payment breakdown
+  // By Species grouping: consolidate by date + speciesId (ignore price differences)
   type SpGroup = { date: string; speciesName: string; qty: number; unitPrice: number; cash: number; eft: number; card: number; credit: number; other: number; total: number };
   const bySpeciesRows: SpGroup[] = [];
   if (salesView === "species") {
     const map = new Map<string, SpGroup>();
     visible.forEach(r => {
-      const key = `${r.date}|${r.speciesId}|${r.unitPrice}`;
-      if (!map.has(key)) map.set(key, { date: r.date, speciesName: r.speciesName, qty: 0, unitPrice: r.unitPrice, cash: 0, eft: 0, card: 0, credit: 0, other: 0, total: 0 });
+      const key = `${r.date}|${r.speciesId}`;
+      if (!map.has(key)) map.set(key, { date: r.date, speciesName: r.speciesName, qty: 0, unitPrice: 0, cash: 0, eft: 0, card: 0, credit: 0, other: 0, total: 0 });
       const g = map.get(key)!;
       g.qty += r.qty; g.total += r.lineTotal;
       const pt = (r.paymentType || "").toLowerCase();
@@ -2662,6 +2662,8 @@ function SalesTab({
       else if (pt === "credit") g.credit += r.lineTotal;
       else g.other += r.lineTotal;
     });
+    // Avg unit price derived from consolidated totals
+    map.forEach(g => { g.unitPrice = g.qty > 0 ? g.total / g.qty : 0; });
     bySpeciesRows.push(...Array.from(map.values()).sort((a, b) => a.date === b.date ? a.speciesName.localeCompare(b.speciesName) : a.date.localeCompare(b.date)));
   }
 
