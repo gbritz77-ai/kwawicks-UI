@@ -279,7 +279,7 @@ export default function AppShell() {
   const dateLabel  = today.toLocaleDateString("en-ZA", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
   return (
-    <div style={{ ...s.page, padding: isMobile ? "16px" : "24px" }}>
+    <div style={{ ...s.page, padding: isMobile ? "16px" : "24px", minHeight: "100vh" }}>
       {/* ── Page header ── */}
       <div style={s.pageHeader}>
         <div style={{ ...s.pageTitle, fontSize: isMobile ? 20 : 26 }}>{greeting()}{profile?.username ? `, ${profile.username}` : ""} 👋</div>
@@ -714,13 +714,32 @@ const s: Record<string, React.CSSProperties> = {
   page: {
     padding: "24px",
     fontFamily: "system-ui, -apple-system, sans-serif",
+    backgroundImage: "url('/dashboard-bg.jpg')",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundAttachment: "fixed",
   },
 
-  pageHeader: { marginBottom: 32 },
+  pageHeader: {
+    marginBottom: 32,
+    background: "rgba(255,255,255,0.82)",
+    backdropFilter: "blur(8px)",
+    borderRadius: 14,
+    padding: "16px 22px",
+    display: "inline-block",
+    boxShadow: "0 2px 12px rgba(0,0,0,0.10)",
+  },
   pageTitle:  { fontSize: 26, fontWeight: 900, color: "#0f172a" },
   pageSub:    { fontSize: 14, color: "#64748b", marginTop: 4 },
 
-  section: { marginBottom: 36 },
+  section: {
+    marginBottom: 36,
+    background: "rgba(255,255,255,0.88)",
+    backdropFilter: "blur(10px)",
+    borderRadius: 16,
+    padding: "20px 20px 24px",
+    boxShadow: "0 4px 24px rgba(0,0,0,0.10)",
+  },
   sectionHeader: {
     display: "flex",
     alignItems: "center",
