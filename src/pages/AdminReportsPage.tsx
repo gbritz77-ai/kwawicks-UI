@@ -77,7 +77,8 @@ export default function AdminReportsPage() {
   const [salesTo,          setSalesTo]          = useState(salesDefaultTo);
   const [salesRows,        setSalesRows]        = useState<SalesReportRow[]>([]);
   const [salesClientId,    setSalesClientId]    = useState("");
-  const [salesView,        setSalesView]        = useState<"client" | "walkin">("client");
+  const [salesView,        setSalesView]        = useState<"client" | "walkin" | "species">("client");
+  const [salesSpeciesId,   setSalesSpeciesId]   = useState("");
   const [salesCostRecords, setSalesCostRecords] = useState<CostAverageRecordDto[]>([]);
   const [marginSalesRows,  setMarginSalesRows]  = useState<SalesReportRow[]>([]);
 
@@ -1067,6 +1068,8 @@ export default function AdminReportsPage() {
           setSalesClientId={setSalesClientId}
           salesView={salesView}
           setSalesView={setSalesView}
+          salesSpeciesId={salesSpeciesId}
+          setSalesSpeciesId={setSalesSpeciesId}
           loading={loading}
           onApply={() => load()}
           fmt={fmt}
@@ -2596,6 +2599,7 @@ function SalesTab({
   salesFrom, salesTo, setSalesFrom, setSalesTo,
   salesClientId, setSalesClientId,
   salesView, setSalesView,
+  salesSpeciesId, setSalesSpeciesId,
   loading, onApply, fmt,
 }: {
   rows: SalesReportRow[];
@@ -2604,7 +2608,8 @@ function SalesTab({
   salesFrom: string; salesTo: string;
   setSalesFrom: (v: string) => void; setSalesTo: (v: string) => void;
   salesClientId: string; setSalesClientId: (v: string) => void;
-  salesView: "client" | "walkin"; setSalesView: (v: "client" | "walkin") => void;
+  salesView: "client" | "walkin" | "species"; setSalesView: (v: "client" | "walkin" | "species") => void;
+  salesSpeciesId: string; setSalesSpeciesId: (v: string) => void;
   loading: boolean; onApply: () => void;
   fmt: (n: number) => string;
 }) {
@@ -2623,16 +2628,45 @@ function SalesTab({
   const namedClients = allClients.filter(c => !c.isWalkIn).sort((a, b) => a.clientName.localeCompare(b.clientName));
   const walkInClients = allClients.filter(c => c.isWalkIn);
 
-  // Filter rows by view type and selected client
+  // Distinct species for the species filter dropdown
+  const speciesOptions = Array.from(
+    new Map(rows.map(r => [r.speciesId, r.speciesName])).entries()
+  ).sort((a, b) => a[1].localeCompare(b[1]));
+
+  // Filter rows by view type, client, and species
   const visible = rows
-    .filter(r => salesView === "client" ? !r.isWalkIn : r.isWalkIn)
-    .filter(r => !salesClientId || r.clientId === salesClientId);
+    .filter(r => salesView === "species" ? true : salesView === "client" ? !r.isWalkIn : r.isWalkIn)
+    .filter(r => !salesClientId || r.clientId === salesClientId)
+    .filter(r => !salesSpeciesId || r.speciesId === salesSpeciesId);
 
   const totalSale = visible.reduce((s, r) => s + r.lineTotal, 0);
   const totalCost = visible.reduce((s, r) => {
     const c = unitCost(r.speciesId, r.date);
     return s + (c !== null ? c * r.qty : 0);
   }, 0);
+
+  // By Species grouping: date + speciesId + unitPrice → payment breakdown
+  type SpGroup = { date: string; speciesName: string; qty: number; unitPrice: number; cash: number; eft: number; card: number; credit: number; other: number; total: number };
+  const bySpeciesRows: SpGroup[] = [];
+  if (salesView === "species") {
+    const map = new Map<string, SpGroup>();
+    visible.forEach(r => {
+      const key = `${r.date}|${r.speciesId}|${r.unitPrice}`;
+      if (!map.has(key)) map.set(key, { date: r.date, speciesName: r.speciesName, qty: 0, unitPrice: r.unitPrice, cash: 0, eft: 0, card: 0, credit: 0, other: 0, total: 0 });
+      const g = map.get(key)!;
+      g.qty += r.qty; g.total += r.lineTotal;
+      const pt = (r.paymentType || "").toLowerCase();
+      if (pt === "cash") g.cash += r.lineTotal;
+      else if (pt === "eft") g.eft += r.lineTotal;
+      else if (pt === "card" || pt === "cardmachine") g.card += r.lineTotal;
+      else if (pt === "credit") g.credit += r.lineTotal;
+      else g.other += r.lineTotal;
+    });
+    bySpeciesRows.push(...Array.from(map.values()).sort((a, b) => a.date === b.date ? a.speciesName.localeCompare(b.speciesName) : a.date.localeCompare(b.date)));
+  }
+
+  const hasCredit = bySpeciesRows.some(r => r.credit > 0);
+  const hasOther  = bySpeciesRows.some(r => r.other > 0);
 
   function fmtDate(iso: string) {
     return new Date(iso).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" });
@@ -2654,17 +2688,29 @@ function SalesTab({
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <span style={s.label}>View</span>
-          <select value={salesView} onChange={e => { setSalesView(e.target.value as "client" | "walkin"); setSalesClientId(""); }} style={s.dateInput}>
+          <select value={salesView} onChange={e => { setSalesView(e.target.value as "client" | "walkin" | "species"); setSalesClientId(""); setSalesSpeciesId(""); }} style={s.dateInput}>
             <option value="client">By Client</option>
             <option value="walkin">By Walk-in</option>
+            <option value="species">By Species</option>
           </select>
         </div>
+        {salesView !== "species" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            <span style={s.label}>Client</span>
+            <select value={salesClientId} onChange={e => setSalesClientId(e.target.value)} style={{ ...s.dateInput, minWidth: 180 }}>
+              <option value="">All</option>
+              {clientDropdown.map(c => (
+                <option key={c.clientId} value={c.clientId}>{c.clientName}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <span style={s.label}>Client</span>
-          <select value={salesClientId} onChange={e => setSalesClientId(e.target.value)} style={{ ...s.dateInput, minWidth: 180 }}>
-            <option value="">All</option>
-            {clientDropdown.map(c => (
-              <option key={c.clientId} value={c.clientId}>{c.clientName}</option>
+          <span style={s.label}>Species</span>
+          <select value={salesSpeciesId} onChange={e => setSalesSpeciesId(e.target.value)} style={{ ...s.dateInput, minWidth: 160 }}>
+            <option value="">All Species</option>
+            {speciesOptions.map(([id, name]) => (
+              <option key={id} value={id}>{name}</option>
             ))}
           </select>
         </div>
@@ -2685,7 +2731,59 @@ function SalesTab({
       {!loading && visible.length === 0 && (
         <p style={s.muted}>No sales found for this selection.</p>
       )}
-      {!loading && visible.length > 0 && (
+
+      {/* By Species grouped table */}
+      {!loading && salesView === "species" && bySpeciesRows.length > 0 && (
+        <div style={s.tableWrap}>
+          <table style={s.table}>
+            <thead>
+              <tr>
+                <th style={s.th}>Date</th>
+                <th style={s.th}>Species</th>
+                <th style={{ ...s.th, textAlign: "right" }}>Qty</th>
+                <th style={{ ...s.th, textAlign: "right" }}>Unit Price</th>
+                <th style={{ ...s.th, textAlign: "right" }}>Cash</th>
+                <th style={{ ...s.th, textAlign: "right" }}>EFT</th>
+                <th style={{ ...s.th, textAlign: "right" }}>Card</th>
+                {hasCredit && <th style={{ ...s.th, textAlign: "right" }}>Credit</th>}
+                {hasOther  && <th style={{ ...s.th, textAlign: "right" }}>Other</th>}
+                <th style={{ ...s.th, textAlign: "right" }}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bySpeciesRows.map((r, i) => (
+                <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#f9fafb" }}>
+                  <td style={{ ...s.td, whiteSpace: "nowrap" as const }}>{fmtDate(r.date)}</td>
+                  <td style={{ ...s.td, fontWeight: 600 }}>{r.speciesName}</td>
+                  <td style={{ ...s.td, textAlign: "right" }}>{r.qty.toLocaleString()}</td>
+                  <td style={{ ...s.td, textAlign: "right" }}>{fmt(r.unitPrice)}</td>
+                  <td style={{ ...s.td, textAlign: "right", color: r.cash > 0 ? "#166534" : "#9ca3af" }}>{r.cash > 0 ? fmt(r.cash) : "—"}</td>
+                  <td style={{ ...s.td, textAlign: "right", color: r.eft > 0 ? "#1e40af" : "#9ca3af" }}>{r.eft > 0 ? fmt(r.eft) : "—"}</td>
+                  <td style={{ ...s.td, textAlign: "right", color: r.card > 0 ? "#7c3aed" : "#9ca3af" }}>{r.card > 0 ? fmt(r.card) : "—"}</td>
+                  {hasCredit && <td style={{ ...s.td, textAlign: "right", color: r.credit > 0 ? "#854d0e" : "#9ca3af" }}>{r.credit > 0 ? fmt(r.credit) : "—"}</td>}
+                  {hasOther  && <td style={{ ...s.td, textAlign: "right", color: r.other > 0 ? "#374151" : "#9ca3af" }}>{r.other > 0 ? fmt(r.other) : "—"}</td>}
+                  <td style={{ ...s.td, textAlign: "right", fontWeight: 700 }}>{fmt(r.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: "#f0fdf4", borderTop: "2px solid #bbf7d0" }}>
+                <td colSpan={3} style={{ ...s.td, fontWeight: 700 }}>Total</td>
+                <td style={s.td} />
+                <td style={{ ...s.td, textAlign: "right", fontWeight: 700, color: "#166534" }}>{fmt(bySpeciesRows.reduce((a, r) => a + r.cash, 0))}</td>
+                <td style={{ ...s.td, textAlign: "right", fontWeight: 700, color: "#1e40af" }}>{fmt(bySpeciesRows.reduce((a, r) => a + r.eft, 0))}</td>
+                <td style={{ ...s.td, textAlign: "right", fontWeight: 700, color: "#7c3aed" }}>{fmt(bySpeciesRows.reduce((a, r) => a + r.card, 0))}</td>
+                {hasCredit && <td style={{ ...s.td, textAlign: "right", fontWeight: 700, color: "#854d0e" }}>{fmt(bySpeciesRows.reduce((a, r) => a + r.credit, 0))}</td>}
+                {hasOther  && <td style={{ ...s.td, textAlign: "right", fontWeight: 700 }}>{fmt(bySpeciesRows.reduce((a, r) => a + r.other, 0))}</td>}
+                <td style={{ ...s.td, textAlign: "right", fontWeight: 700, color: "#166534" }}>{fmt(bySpeciesRows.reduce((a, r) => a + r.total, 0))}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      {/* By Client / Walk-in detail table */}
+      {!loading && salesView !== "species" && visible.length > 0 && (
         <div style={s.tableWrap}>
           <table style={s.table}>
             <thead>
