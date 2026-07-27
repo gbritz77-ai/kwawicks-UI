@@ -17,11 +17,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-image: url('/dashboard-bg.jpg');
-  background-size: cover;
-  background-position: center;
-  background-attachment: fixed;
-  background-color: #1a2e1a;
+  background-color: #f1f5f9;
 }
 
 button {

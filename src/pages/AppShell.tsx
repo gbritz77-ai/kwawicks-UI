@@ -718,8 +718,7 @@ const s: Record<string, React.CSSProperties> = {
 
   pageHeader: {
     marginBottom: 32,
-    background: "rgba(255,255,255,0.82)",
-    backdropFilter: "blur(8px)",
+    background: "#ffffff",
     borderRadius: 14,
     padding: "16px 22px",
     display: "inline-block",
@@ -730,12 +729,11 @@ const s: Record<string, React.CSSProperties> = {
 
   section: {
     marginBottom: 36,
-    background: "rgba(255,255,255,0.15)",
-    backdropFilter: "blur(6px)",
+    background: "#ffffff",
     borderRadius: 16,
     padding: "20px 20px 24px",
-    boxShadow: "0 4px 24px rgba(0,0,0,0.15)",
-    border: "1px solid rgba(255,255,255,0.3)",
+    boxShadow: "0 4px 24px rgba(0,0,0,0.08)",
+    border: "1px solid #e2e8f0",
   },
   sectionHeader: {
     display: "flex",
@@ -743,11 +741,11 @@ const s: Record<string, React.CSSProperties> = {
     gap: 12,
     marginBottom: 16,
     paddingBottom: 12,
-    borderBottom: "1px solid rgba(255,255,255,0.3)",
+    borderBottom: "1px solid #e2e8f0",
   },
   sectionIcon:  { fontSize: 26, lineHeight: 1 },
-  sectionTitle: { fontSize: 18, fontWeight: 800, color: "#ffffff", textShadow: "0 1px 4px rgba(0,0,0,0.4)" },
-  sectionSub:   { fontSize: 13, color: "rgba(255,255,255,0.85)", marginTop: 2, textShadow: "0 1px 3px rgba(0,0,0,0.3)" },
+  sectionTitle: { fontSize: 18, fontWeight: 800, color: "#0f172a" },
+  sectionSub:   { fontSize: 13, color: "#64748b", marginTop: 2 },
 
   panelRow: {
     display: "flex",
