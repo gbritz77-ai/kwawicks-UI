@@ -134,7 +134,7 @@ export default function DriverSalesPage() {
         speciesName: stockItem.speciesName,
         quantity: parsedQty,
         unitPrice: parsedPrice,
-        vatRate: VAT_RATE,
+        vatRate: stockItem.vat,
       }]);
     }
     setAddSpeciesId("");

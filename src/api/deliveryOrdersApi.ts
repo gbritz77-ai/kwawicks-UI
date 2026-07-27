@@ -56,6 +56,7 @@ export type DriverStockItem = {
   speciesName: string;
   availableQty: number;
   unitPrice: number;
+  vat: number;
 };
 
 export type EditDeliveryOrderLine = {

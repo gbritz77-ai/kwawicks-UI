@@ -122,7 +122,7 @@ export default function HubSalesPage() {
       speciesName: sp.name,
       quantity: parsedQty,
       unitPrice: parsedPrice,
-      vatRate: VAT_RATE,
+      vatRate: sp.vat,
     }]);
     setAddSpeciesId("");
     setAddQty("");
