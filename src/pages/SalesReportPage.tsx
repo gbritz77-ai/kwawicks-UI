@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import type { CSSProperties } from "react";
 import { reportsApi } from "../api/reportsApi";
 import type { SalesReportRow } from "../api/reportsApi";
@@ -27,16 +27,17 @@ function fmtDate(iso: string) {
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
-type View = "client" | "walkin";
+type View = "client" | "walkin" | "species";
 
 export default function SalesReportPage() {
   const range = defaultRange();
-  const [from, setFrom]   = useState(range.from);
-  const [to,   setTo]     = useState(range.to);
-  const [view, setView]   = useState<View>("client");
-  const [rows, setRows]   = useState<SalesReportRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState("");
+  const [from,      setFrom]      = useState(range.from);
+  const [to,        setTo]        = useState(range.to);
+  const [view,      setView]      = useState<View>("client");
+  const [speciesFilter, setSpeciesFilter] = useState("");
+  const [rows,      setRows]      = useState<SalesReportRow[]>([]);
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState("");
 
   async function load(f = from, t = to) {
     setLoading(true);
@@ -55,12 +56,28 @@ export default function SalesReportPage() {
 
   function apply() { load(); }
 
-  const visible = rows.filter(r => view === "client" ? !r.isWalkIn : r.isWalkIn);
+  // Distinct species for the filter dropdown (derived from loaded data)
+  const speciesOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    rows.forEach(r => { if (r.speciesId) map.set(r.speciesId, r.speciesName); });
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [rows]);
 
-  const total   = visible.reduce((s, r) => s + r.lineTotal, 0);
-  const qty     = visible.reduce((s, r) => s + r.qty,      0);
+  // Base filter: species dropdown applies to all views
+  const filtered = speciesFilter
+    ? rows.filter(r => r.speciesId === speciesFilter)
+    : rows;
 
-  // Group rows by client for the "By Client" view summary
+  const visible = filtered.filter(r =>
+    view === "species" ? true
+    : view === "client" ? !r.isWalkIn
+    : r.isWalkIn
+  );
+
+  const total = visible.reduce((s, r) => s + r.lineTotal, 0);
+  const qty   = visible.reduce((s, r) => s + r.qty,      0);
+
+  // By Client summary
   const byClient = visible.reduce<Record<string, { name: string; total: number; qty: number }>>((acc, r) => {
     if (!acc[r.clientId]) acc[r.clientId] = { name: r.clientName, total: 0, qty: 0 };
     acc[r.clientId].total += r.lineTotal;
@@ -68,13 +85,57 @@ export default function SalesReportPage() {
     return acc;
   }, {});
 
+  // By Species grouped rows: group by date + speciesId + unitPrice
+  type SpeciesGroup = {
+    date: string;
+    speciesName: string;
+    qty: number;
+    unitPrice: number;
+    cash: number;
+    eft: number;
+    card: number;
+    credit: number;
+    total: number;
+  };
+
+  const bySpeciesRows = useMemo((): SpeciesGroup[] => {
+    const map = new Map<string, SpeciesGroup>();
+    filtered.forEach(r => {
+      const key = `${r.date}|${r.speciesId}|${r.unitPrice}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          date: r.date,
+          speciesName: r.speciesName,
+          qty: 0,
+          unitPrice: r.unitPrice,
+          cash: 0,
+          eft: 0,
+          card: 0,
+          credit: 0,
+          total: 0,
+        });
+      }
+      const g = map.get(key)!;
+      g.qty   += r.qty;
+      g.total += r.lineTotal;
+      const pt = (r.paymentType || "").toLowerCase();
+      if (pt === "cash")   g.cash   += r.lineTotal;
+      else if (pt === "eft")    g.eft    += r.lineTotal;
+      else if (pt === "card")   g.card   += r.lineTotal;
+      else if (pt === "credit") g.credit += r.lineTotal;
+    });
+    return Array.from(map.values()).sort((a, b) =>
+      a.date === b.date ? a.speciesName.localeCompare(b.speciesName) : a.date.localeCompare(b.date)
+    );
+  }, [filtered]);
+
   const isMobile = window.innerWidth < 700;
 
   return (
     <div style={s.page}>
       <h2 style={s.heading}>Sales Report</h2>
 
-      {/* Date range filter */}
+      {/* Filter bar */}
       <div style={s.filterRow}>
         <div style={s.filterGroup}>
           <label style={s.label}>From</label>
@@ -94,6 +155,19 @@ export default function SalesReportPage() {
             style={s.dateInput}
           />
         </div>
+        <div style={s.filterGroup}>
+          <label style={s.label}>Species</label>
+          <select
+            value={speciesFilter}
+            onChange={e => setSpeciesFilter(e.target.value)}
+            style={s.selectInput}
+          >
+            <option value="">All Species</option>
+            {speciesOptions.map(([id, name]) => (
+              <option key={id} value={id}>{name}</option>
+            ))}
+          </select>
+        </div>
         <button style={s.applyBtn} onClick={apply} disabled={loading}>
           {loading ? "Loading…" : "Apply"}
         </button>
@@ -101,18 +175,15 @@ export default function SalesReportPage() {
 
       {/* View toggle */}
       <div style={s.tabRow}>
-        <button
-          style={view === "client" ? { ...s.tab, ...s.tabActive } : s.tab}
-          onClick={() => setView("client")}
-        >
-          By Client
-        </button>
-        <button
-          style={view === "walkin" ? { ...s.tab, ...s.tabActive } : s.tab}
-          onClick={() => setView("walkin")}
-        >
-          By Walk-in
-        </button>
+        {(["client", "walkin", "species"] as View[]).map(v => (
+          <button
+            key={v}
+            style={view === v ? { ...s.tab, ...s.tabActive } : s.tab}
+            onClick={() => setView(v)}
+          >
+            {v === "client" ? "By Client" : v === "walkin" ? "By Walk-in" : "By Species"}
+          </button>
+        ))}
       </div>
 
       {error   && <p style={s.error}>{error}</p>}
@@ -121,101 +192,212 @@ export default function SalesReportPage() {
       {!loading && !error && (
         <>
           {/* Summary KPIs */}
-          <div style={s.kpiRow}>
-            <div style={s.kpi}>
-              <span style={s.kpiLabel}>Lines</span>
-              <span style={s.kpiValue}>{visible.length.toLocaleString()}</span>
+          {view !== "species" && (
+            <div style={s.kpiRow}>
+              <div style={s.kpi}>
+                <span style={s.kpiLabel}>Lines</span>
+                <span style={s.kpiValue}>{visible.length.toLocaleString()}</span>
+              </div>
+              <div style={s.kpi}>
+                <span style={s.kpiLabel}>Total Qty</span>
+                <span style={s.kpiValue}>{qty.toLocaleString()}</span>
+              </div>
+              <div style={{ ...s.kpi, ...s.kpiHighlight }}>
+                <span style={s.kpiLabel}>Total Sales</span>
+                <span style={s.kpiValue}>{fmt(total)}</span>
+              </div>
             </div>
-            <div style={s.kpi}>
-              <span style={s.kpiLabel}>Total Qty</span>
-              <span style={s.kpiValue}>{qty.toLocaleString()}</span>
-            </div>
-            <div style={{ ...s.kpi, ...s.kpiHighlight }}>
-              <span style={s.kpiLabel}>Total Sales</span>
-              <span style={s.kpiValue}>{fmt(total)}</span>
-            </div>
-          </div>
+          )}
 
-          {visible.length === 0 ? (
-            <p style={s.muted}>No {view === "client" ? "client" : "walk-in"} sales in this period.</p>
-          ) : (
-            <>
-              {/* Client summary (only in By Client view) */}
-              {view === "client" && Object.keys(byClient).length > 1 && (
-                <div style={s.section}>
-                  <h3 style={s.sectionTitle}>Client Summary</h3>
-                  <div style={s.scrollWrap}>
-                    <table style={s.table}>
-                      <thead>
-                        <tr>
-                          <th style={s.th}>Client</th>
-                          <th style={{ ...s.th, ...s.right }}>Qty</th>
-                          <th style={{ ...s.th, ...s.right }}>Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Object.values(byClient)
-                          .sort((a, b) => b.total - a.total)
-                          .map((c, i) => (
-                            <tr key={i} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
-                              <td style={s.td}>{c.name}</td>
-                              <td style={{ ...s.td, ...s.right }}>{c.qty.toLocaleString()}</td>
-                              <td style={{ ...s.td, ...s.right, fontWeight: 600 }}>{fmt(c.total)}</td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+          {view === "species" && (
+            <div style={s.kpiRow}>
+              <div style={s.kpi}>
+                <span style={s.kpiLabel}>Groups</span>
+                <span style={s.kpiValue}>{bySpeciesRows.length.toLocaleString()}</span>
+              </div>
+              <div style={s.kpi}>
+                <span style={s.kpiLabel}>Total Qty</span>
+                <span style={s.kpiValue}>{bySpeciesRows.reduce((s, r) => s + r.qty, 0).toLocaleString()}</span>
+              </div>
+              <div style={{ ...s.kpi, background: "#eff6ff", border: "1px solid #bfdbfe" }}>
+                <span style={s.kpiLabel}>Cash</span>
+                <span style={s.kpiValue}>{fmt(bySpeciesRows.reduce((s, r) => s + r.cash, 0))}</span>
+              </div>
+              <div style={{ ...s.kpi, background: "#fdf4ff", border: "1px solid #e9d5ff" }}>
+                <span style={s.kpiLabel}>EFT</span>
+                <span style={s.kpiValue}>{fmt(bySpeciesRows.reduce((s, r) => s + r.eft, 0))}</span>
+              </div>
+              <div style={{ ...s.kpi, background: "#fff7ed", border: "1px solid #fed7aa" }}>
+                <span style={s.kpiLabel}>Card</span>
+                <span style={s.kpiValue}>{fmt(bySpeciesRows.reduce((s, r) => s + r.card, 0))}</span>
+              </div>
+              <div style={{ ...s.kpi, ...s.kpiHighlight }}>
+                <span style={s.kpiLabel}>Total Sales</span>
+                <span style={s.kpiValue}>{fmt(bySpeciesRows.reduce((s, r) => s + r.total, 0))}</span>
+              </div>
+            </div>
+          )}
 
-              {/* Detail table */}
+          {/* By Species view */}
+          {view === "species" && (
+            bySpeciesRows.length === 0 ? (
+              <p style={s.muted}>No sales in this period{speciesFilter ? " for the selected species" : ""}.</p>
+            ) : (
               <div style={s.section}>
-                <h3 style={s.sectionTitle}>
-                  {view === "client" ? "Client Sales Detail" : "Walk-in Sales Detail"}
-                </h3>
                 <div style={s.scrollWrap}>
                   <table style={s.table}>
                     <thead>
                       <tr>
                         <th style={s.th}>Date</th>
-                        <th style={s.th}>{view === "client" ? "Client" : "Customer"}</th>
-                        <th style={s.th}>Product</th>
+                        <th style={s.th}>Species</th>
                         <th style={{ ...s.th, ...s.right }}>Qty</th>
-                        {!isMobile && <th style={{ ...s.th, ...s.right }}>Unit Price</th>}
-                        <th style={s.th}>Payment</th>
+                        <th style={{ ...s.th, ...s.right }}>Unit Price</th>
+                        <th style={{ ...s.th, ...s.right }}>Cash</th>
+                        <th style={{ ...s.th, ...s.right }}>EFT</th>
+                        <th style={{ ...s.th, ...s.right }}>Card</th>
+                        {bySpeciesRows.some(r => r.credit > 0) && (
+                          <th style={{ ...s.th, ...s.right }}>Credit</th>
+                        )}
                         <th style={{ ...s.th, ...s.right }}>Total</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {visible.map((r, i) => (
-                        <tr key={`${r.invoiceId}-${r.speciesId}-${i}`} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
+                      {bySpeciesRows.map((r, i) => (
+                        <tr key={i} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
                           <td style={{ ...s.td, whiteSpace: "nowrap" }}>{fmtDate(r.date)}</td>
-                          <td style={s.td}>{r.clientName}</td>
-                          <td style={s.td}>{r.speciesName}</td>
+                          <td style={{ ...s.td, fontWeight: 600 }}>{r.speciesName}</td>
                           <td style={{ ...s.td, ...s.right }}>{r.qty.toLocaleString()}</td>
-                          {!isMobile && <td style={{ ...s.td, ...s.right }}>{fmt(r.unitPrice)}</td>}
-                          <td style={s.td}>
-                            <span style={{ ...s.badge, ...payBadgeStyle(r.paymentType) }}>
-                              {r.paymentType || "—"}
-                            </span>
+                          <td style={{ ...s.td, ...s.right }}>{fmt(r.unitPrice)}</td>
+                          <td style={{ ...s.td, ...s.right, color: r.cash > 0 ? "#166534" : "#9ca3af" }}>
+                            {r.cash > 0 ? fmt(r.cash) : "—"}
                           </td>
-                          <td style={{ ...s.td, ...s.right, fontWeight: 600 }}>{fmt(r.lineTotal)}</td>
+                          <td style={{ ...s.td, ...s.right, color: r.eft > 0 ? "#1e40af" : "#9ca3af" }}>
+                            {r.eft > 0 ? fmt(r.eft) : "—"}
+                          </td>
+                          <td style={{ ...s.td, ...s.right, color: r.card > 0 ? "#7c3aed" : "#9ca3af" }}>
+                            {r.card > 0 ? fmt(r.card) : "—"}
+                          </td>
+                          {bySpeciesRows.some(g => g.credit > 0) && (
+                            <td style={{ ...s.td, ...s.right, color: r.credit > 0 ? "#854d0e" : "#9ca3af" }}>
+                              {r.credit > 0 ? fmt(r.credit) : "—"}
+                            </td>
+                          )}
+                          <td style={{ ...s.td, ...s.right, fontWeight: 700 }}>{fmt(r.total)}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
                       <tr style={s.footerRow}>
-                        <td colSpan={isMobile ? 3 : 4} style={{ ...s.td, fontWeight: 700 }}>Total</td>
-                        {!isMobile && <td />}
-                        <td />
-                        <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#166534" }}>{fmt(total)}</td>
+                        <td colSpan={3} style={{ ...s.td, fontWeight: 700 }}>Total</td>
+                        <td style={s.td} />
+                        <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#166534" }}>
+                          {fmt(bySpeciesRows.reduce((s, r) => s + r.cash, 0))}
+                        </td>
+                        <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#1e40af" }}>
+                          {fmt(bySpeciesRows.reduce((s, r) => s + r.eft, 0))}
+                        </td>
+                        <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#7c3aed" }}>
+                          {fmt(bySpeciesRows.reduce((s, r) => s + r.card, 0))}
+                        </td>
+                        {bySpeciesRows.some(g => g.credit > 0) && (
+                          <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#854d0e" }}>
+                            {fmt(bySpeciesRows.reduce((s, r) => s + r.credit, 0))}
+                          </td>
+                        )}
+                        <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#166534" }}>
+                          {fmt(bySpeciesRows.reduce((s, r) => s + r.total, 0))}
+                        </td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
               </div>
-            </>
+            )
+          )}
+
+          {/* By Client / By Walk-in views */}
+          {view !== "species" && (
+            visible.length === 0 ? (
+              <p style={s.muted}>No {view === "client" ? "client" : "walk-in"} sales in this period{speciesFilter ? " for the selected species" : ""}.</p>
+            ) : (
+              <>
+                {/* Client summary */}
+                {view === "client" && Object.keys(byClient).length > 1 && (
+                  <div style={s.section}>
+                    <h3 style={s.sectionTitle}>Client Summary</h3>
+                    <div style={s.scrollWrap}>
+                      <table style={s.table}>
+                        <thead>
+                          <tr>
+                            <th style={s.th}>Client</th>
+                            <th style={{ ...s.th, ...s.right }}>Qty</th>
+                            <th style={{ ...s.th, ...s.right }}>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.values(byClient)
+                            .sort((a, b) => b.total - a.total)
+                            .map((c, i) => (
+                              <tr key={i} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
+                                <td style={s.td}>{c.name}</td>
+                                <td style={{ ...s.td, ...s.right }}>{c.qty.toLocaleString()}</td>
+                                <td style={{ ...s.td, ...s.right, fontWeight: 600 }}>{fmt(c.total)}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Detail table */}
+                <div style={s.section}>
+                  <h3 style={s.sectionTitle}>
+                    {view === "client" ? "Client Sales Detail" : "Walk-in Sales Detail"}
+                  </h3>
+                  <div style={s.scrollWrap}>
+                    <table style={s.table}>
+                      <thead>
+                        <tr>
+                          <th style={s.th}>Date</th>
+                          <th style={s.th}>{view === "client" ? "Client" : "Customer"}</th>
+                          <th style={s.th}>Product</th>
+                          <th style={{ ...s.th, ...s.right }}>Qty</th>
+                          {!isMobile && <th style={{ ...s.th, ...s.right }}>Unit Price</th>}
+                          <th style={s.th}>Payment</th>
+                          <th style={{ ...s.th, ...s.right }}>Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visible.map((r, i) => (
+                          <tr key={`${r.invoiceId}-${r.speciesId}-${i}`} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
+                            <td style={{ ...s.td, whiteSpace: "nowrap" }}>{fmtDate(r.date)}</td>
+                            <td style={s.td}>{r.clientName}</td>
+                            <td style={s.td}>{r.speciesName}</td>
+                            <td style={{ ...s.td, ...s.right }}>{r.qty.toLocaleString()}</td>
+                            {!isMobile && <td style={{ ...s.td, ...s.right }}>{fmt(r.unitPrice)}</td>}
+                            <td style={s.td}>
+                              <span style={{ ...s.badge, ...payBadgeStyle(r.paymentType) }}>
+                                {r.paymentType || "—"}
+                              </span>
+                            </td>
+                            <td style={{ ...s.td, ...s.right, fontWeight: 600 }}>{fmt(r.lineTotal)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr style={s.footerRow}>
+                          <td colSpan={isMobile ? 3 : 4} style={{ ...s.td, fontWeight: 700 }}>Total</td>
+                          {!isMobile && <td />}
+                          <td />
+                          <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#166534" }}>{fmt(total)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )
           )}
         </>
       )}
@@ -229,6 +411,7 @@ function payBadgeStyle(type: string): CSSProperties {
   switch ((type || "").toLowerCase()) {
     case "cash":   return { background: "#dcfce7", color: "#166534" };
     case "eft":    return { background: "#dbeafe", color: "#1e40af" };
+    case "card":   return { background: "#ede9fe", color: "#7c3aed" };
     case "credit": return { background: "#fef9c3", color: "#854d0e" };
     default:       return { background: "#f3f4f6", color: "#374151" };
   }
@@ -281,6 +464,15 @@ const s: Record<string, CSSProperties> = {
     fontSize: 14,
     color: "#111827",
     background: "#fff",
+  },
+  selectInput: {
+    border: "1px solid #d1d5db",
+    borderRadius: 6,
+    padding: "7px 10px",
+    fontSize: 14,
+    color: "#111827",
+    background: "#fff",
+    minWidth: 160,
   },
   applyBtn: {
     padding: "8px 20px",
