@@ -99,7 +99,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", background: "#f1f5f9" }}>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <NavBar />
       <main style={{ flex: 1, fontFamily: "system-ui, -apple-system, sans-serif" }}>
         {children}
