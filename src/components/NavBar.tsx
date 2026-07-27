@@ -114,7 +114,7 @@ export default function NavBar() {
     // Reports group
     const reportItems: Leaf[] = [];
     if (isOperational) reportItems.push(leaf("Reports", "/app/reports"));
-    if (isFinancial)   reportItems.push(leaf("AI Reports", "/app/ai-reports"));
+    if (isFinancial)   reportItems.push(leaf("Ask Mooks", "/app/ai-reports"));
     if (reportItems.length === 1) entries.push(reportItems[0]);
     else if (reportItems.length > 1) entries.push(group("Reports", reportItems));
 

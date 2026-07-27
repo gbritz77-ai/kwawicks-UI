@@ -70,8 +70,13 @@ export default function AiReportsPage() {
   return (
     <div style={s.page}>
       <div style={s.header}>
-        <h1 style={s.heading}>AI Reports</h1>
-        <p style={s.sub}>Ask a question in plain English — the AI queries your live data and builds the report.</p>
+        <div style={s.heroRow}>
+          <img src="/mooks.png" alt="Mooks" style={s.heroImg} />
+          <div>
+            <h1 style={s.heading}>Ask Mooks</h1>
+            <p style={s.sub}>Ask a question in plain English — Mooks queries your live data and builds the report.</p>
+          </div>
+        </div>
       </div>
 
       {/* Prompt input */}
@@ -139,7 +144,7 @@ export default function AiReportsPage() {
         <div style={s.resultSection}>
           {/* Narrative */}
           <div style={s.narrativeCard}>
-            <div style={s.narrativeIcon}>AI</div>
+            <img src="/mooks.png" alt="Mooks" style={s.narrativeAvatar} />
             <p style={s.narrativeText}>{result.narrative}</p>
           </div>
 
@@ -199,6 +204,8 @@ const s: Record<string, React.CSSProperties> = {
     color: "#1e293b",
   },
   header: { marginBottom: 24 },
+  heroRow: { display: "flex", alignItems: "center", gap: 16 },
+  heroImg: { width: 80, height: 80, borderRadius: "50%", objectFit: "cover", flexShrink: 0, boxShadow: "0 2px 12px rgba(99,102,241,0.25)" },
   heading: { margin: "0 0 6px", fontSize: 26, fontWeight: 700, color: "#0f172a" },
   sub: { margin: 0, color: "#64748b", fontSize: 14 },
 
@@ -306,13 +313,11 @@ const s: Record<string, React.CSSProperties> = {
     borderRadius: 10,
     padding: "16px 18px",
   },
-  narrativeIcon: {
-    background: "#6366f1",
-    color: "#fff",
-    borderRadius: 6,
-    padding: "3px 7px",
-    fontSize: 11,
-    fontWeight: 700,
+  narrativeAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: "50%",
+    objectFit: "cover",
     flexShrink: 0,
     marginTop: 2,
   },
