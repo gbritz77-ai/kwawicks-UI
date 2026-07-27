@@ -101,7 +101,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
       <NavBar />
-      <main style={{ flex: 1, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+      <main style={{ flex: 1, fontFamily: "system-ui, -apple-system, sans-serif", background: "rgba(241, 245, 249, 0.92)", backdropFilter: "blur(2px)", minHeight: "calc(100vh - 56px)" }}>
         {children}
       </main>
 
