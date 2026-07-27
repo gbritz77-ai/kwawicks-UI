@@ -714,10 +714,6 @@ const s: Record<string, React.CSSProperties> = {
   page: {
     padding: "24px",
     fontFamily: "system-ui, -apple-system, sans-serif",
-    backgroundImage: "url('/dashboard-bg.jpg')",
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-    backgroundAttachment: "fixed",
   },
 
   pageHeader: {
