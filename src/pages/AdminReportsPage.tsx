@@ -106,12 +106,14 @@ export default function AdminReportsPage() {
       }
       if (tab === "deliveries") setDeliveries(await reportsApi.getDeliveryStatus(from || undefined, to || undefined));
       if (tab === "invoices") {
-        const [inv, cls] = await Promise.all([
+        const [inv, cls, spc] = await Promise.all([
           reportsApi.getInvoices({ customerId: invoiceCustomer || undefined, paymentStatus: invoicePayFilter || undefined, from: from || undefined, to: to || undefined }),
           clients.length ? Promise.resolve(clients) : clientsApi.list(),
+          allSpecies.length ? Promise.resolve(allSpecies) : speciesApi.list(),
         ]);
         setInvoices(inv);
         if (!clients.length) setClients(cls.filter((c: ClientDto) => !c.isWalkIn));
+        if (!allSpecies.length) setAllSpecies(spc);
       }
       if (tab === "statement" && !clients.length) {
         setClients((await clientsApi.list()).filter((c: ClientDto) => !c.isWalkIn));
@@ -1397,6 +1399,7 @@ function InvoicesTab({
   const [waPhone, setWaPhone] = useState("");
   const [waSending, setWaSending] = useState(false);
   const [waResult, setWaResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [previewInv, setPreviewInv] = useState<InvoiceItem | null>(null);
 
   // Edit prices modal state
   const [editModal, setEditModal] = useState<InvoiceItem | null>(null);
@@ -1727,6 +1730,7 @@ function InvoicesTab({
                 <Th>Receipt</Th>
                 <Th>Action</Th>
                 <Th>WhatsApp</Th>
+                <Th>Preview</Th>
                 {isOwner && <Th>Edit Prices</Th>}
               </tr>
             </thead>
@@ -1880,6 +1884,11 @@ function InvoicesTab({
                         📱 WhatsApp
                       </button>
                     </Td>
+                    <Td>
+                      <button onClick={() => setPreviewInv(inv)} style={{ background: "none", border: "1px solid #bfdbfe", color: "#2563eb", borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                        👁 Preview
+                      </button>
+                    </Td>
                     {isOwner && (
                       <Td>
                         <button onClick={() => openEditModal(inv)} style={s.editPriceBtn}>
@@ -1910,6 +1919,86 @@ function InvoicesTab({
             <a href={receiptUrl} target="_blank" rel="noreferrer" style={{ display: "block", marginTop: 10, fontSize: 13, color: "#2563eb" }}>
               Open full size ↗
             </a>
+          </div>
+        </div>
+      )}
+
+      {/* Preview Invoice modal */}
+      {previewInv && (
+        <div style={s.modalOverlay} onClick={() => setPreviewInv(null)}>
+          <div style={{ ...s.modalBox, maxWidth: 640, maxHeight: "90vh", overflowY: "auto" as const }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <strong style={{ fontSize: 16 }}>Invoice Preview</strong>
+              <button onClick={() => setPreviewInv(null)} style={s.modalClose}>✕</button>
+            </div>
+
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20, paddingBottom: 16, borderBottom: "2px solid #e2e8f0" }}>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", letterSpacing: -0.5 }}>KwaWicks</div>
+                <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>Tax Invoice</div>
+              </div>
+              <div style={{ textAlign: "right" as const }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{previewInv.invoiceNumber || previewInv.invoiceId.slice(0, 8) + "…"}</div>
+                <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>{new Date(previewInv.createdAt).toLocaleDateString("en-ZA")}</div>
+                <div style={{ marginTop: 6 }}>
+                  <span style={{ ...s.badge, background: previewInv.paymentStatus === "Paid" ? "#dcfce7" : "#fef9c3", color: previewInv.paymentStatus === "Paid" ? "#166534" : "#854d0e" }}>
+                    {previewInv.paymentStatus}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Customer */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" as const, letterSpacing: 0.5, marginBottom: 4 }}>Bill To</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{previewInv.customerName || clientMap[previewInv.customerId] || previewInv.customerId}</div>
+              <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>Payment: {previewInv.paymentType}</div>
+              <div style={{ fontSize: 12, color: "#64748b" }}>Channel: {previewInv.saleType}</div>
+            </div>
+
+            {/* Lines */}
+            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
+              <thead>
+                <tr style={{ borderBottom: "2px solid #e2e8f0" }}>
+                  <th style={{ textAlign: "left" as const, padding: "6px 8px", fontSize: 12, fontWeight: 700, color: "#64748b" }}>Species</th>
+                  <th style={{ textAlign: "right" as const, padding: "6px 8px", fontSize: 12, fontWeight: 700, color: "#64748b" }}>Qty</th>
+                  <th style={{ textAlign: "right" as const, padding: "6px 8px", fontSize: 12, fontWeight: 700, color: "#64748b" }}>Unit (incl. VAT)</th>
+                  <th style={{ textAlign: "right" as const, padding: "6px 8px", fontSize: 12, fontWeight: 700, color: "#64748b" }}>Line Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {previewInv.lines?.map((l, i) => {
+                  const unitIncl = l.unitPrice * (1 + l.vatRate);
+                  const lineTotal = unitIncl * l.quantity;
+                  const spName = species.find(sp => sp.speciesId === l.speciesId)?.name ?? l.speciesId;
+                  return (
+                    <tr key={i} style={{ borderBottom: "1px solid #f1f5f9", background: i % 2 === 0 ? "#fff" : "#f9fafb" }}>
+                      <td style={{ padding: "8px", fontSize: 13, fontWeight: 600, color: "#0f172a" }}>{spName}</td>
+                      <td style={{ padding: "8px", fontSize: 13, textAlign: "right" as const, color: "#374151" }}>{l.quantity}</td>
+                      <td style={{ padding: "8px", fontSize: 13, textAlign: "right" as const, color: "#374151" }}>R {unitIncl.toFixed(2)}</td>
+                      <td style={{ padding: "8px", fontSize: 13, textAlign: "right" as const, fontWeight: 600, color: "#0f172a" }}>R {lineTotal.toFixed(2)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {/* Totals */}
+            <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "flex-end", gap: 4, paddingTop: 12, borderTop: "2px solid #e2e8f0" }}>
+              <div style={{ display: "flex", gap: 24, fontSize: 13, color: "#374151" }}>
+                <span>Sub-total:</span>
+                <span style={{ minWidth: 90, textAlign: "right" as const }}>R {previewInv.subTotal.toFixed(2)}</span>
+              </div>
+              <div style={{ display: "flex", gap: 24, fontSize: 13, color: "#374151" }}>
+                <span>VAT:</span>
+                <span style={{ minWidth: 90, textAlign: "right" as const }}>R {previewInv.vatTotal.toFixed(2)}</span>
+              </div>
+              <div style={{ display: "flex", gap: 24, fontSize: 15, fontWeight: 800, color: "#0f172a", marginTop: 4 }}>
+                <span>Grand Total:</span>
+                <span style={{ minWidth: 90, textAlign: "right" as const }}>R {previewInv.grandTotal.toFixed(2)}</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
