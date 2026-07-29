@@ -15,7 +15,19 @@ function thirtyAgoIso() { const d = new Date(); d.setDate(d.getDate() - 30); ret
 export default function ClientAccountsPage() {
   const [clients, setClients] = useState<ClientDto[]>([]);
   const [clientSearch, setClientSearch] = useState("");
+  const [clientDropOpen, setClientDropOpen] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState("");
+  const clientComboRef = React.useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (clientComboRef.current && !clientComboRef.current.contains(e.target as Node))
+        setClientDropOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
   const [ledger, setLedger] = useState<ClientCreditLedgerDto | null>(null);
   const [loadingLedger, setLoadingLedger] = useState(false);
   const [error, setError] = useState("");
@@ -269,25 +281,42 @@ export default function ClientAccountsPage() {
       {/* Client selector + date range */}
       <div style={s.selectorCard}>
         <label style={s.selectorLabel}>Client</label>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6, minWidth: 200 }}>
+        <div ref={clientComboRef} style={{ flex: 1, minWidth: 200, position: "relative" }}>
           <input
             type="text"
-            style={{ ...s.select, flex: "none" }}
+            style={{ ...s.select, width: "100%", boxSizing: "border-box" }}
             placeholder="Search clients…"
             value={clientSearch}
-            onChange={e => setClientSearch(e.target.value)}
+            onChange={e => { setClientSearch(e.target.value); setClientDropOpen(true); }}
+            onFocus={() => setClientDropOpen(true)}
           />
-          <select
-            style={{ ...s.select, flex: "none" }}
-            size={Math.min(6, clients.filter(c => !clientSearch || c.clientName.toLowerCase().includes(clientSearch.toLowerCase())).length + 1)}
-            value={selectedClientId}
-            onChange={e => setSelectedClientId(e.target.value)}
-          >
-            <option value="">— Choose a client —</option>
-            {clients
-              .filter(c => !clientSearch || c.clientName.toLowerCase().includes(clientSearch.toLowerCase()))
-              .map(c => <option key={c.clientId} value={c.clientId}>{c.clientName}</option>)}
-          </select>
+          {clientDropOpen && (
+            <div style={s.clientDrop}>
+              {clients
+                .filter(c => !clientSearch || c.clientName.toLowerCase().includes(clientSearch.toLowerCase()))
+                .map(c => (
+                  <div
+                    key={c.clientId}
+                    style={{
+                      ...s.clientDropItem,
+                      background: c.clientId === selectedClientId ? "#f0fdf4" : undefined,
+                      color:      c.clientId === selectedClientId ? "#166534"  : undefined,
+                      fontWeight: c.clientId === selectedClientId ? 700 : undefined,
+                    }}
+                    onMouseDown={() => {
+                      setSelectedClientId(c.clientId);
+                      setClientSearch(c.clientName);
+                      setClientDropOpen(false);
+                    }}
+                  >
+                    {c.clientName}
+                  </div>
+                ))}
+              {clients.filter(c => !clientSearch || c.clientName.toLowerCase().includes(clientSearch.toLowerCase())).length === 0 && (
+                <div style={{ padding: "10px 14px", fontSize: 13, color: "#94a3b8" }}>No clients found</div>
+              )}
+            </div>
+          )}
         </div>
 
         <label style={s.selectorLabel}>From</label>
@@ -823,6 +852,8 @@ const s: Record<string, React.CSSProperties> = {
   selectorLabel:{ fontSize: 13, fontWeight: 700, color: "#374151", flexShrink: 0 },
   select:       { flex: 1, padding: "9px 12px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 14, background: "#f9fafb", outline: "none" },
   waBtn:        { padding: "9px 18px", borderRadius: 8, background: "#15803d", color: "#fff", border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" as const },
+  clientDrop:     { position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#fff", border: "1px solid #d1d5db", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 200, maxHeight: 240, overflowY: "auto" as const },
+  clientDropItem: { padding: "9px 14px", fontSize: 14, cursor: "pointer", borderBottom: "1px solid #f1f5f9" },
   refreshBtn:   { padding: "9px 18px", borderRadius: 8, background: "#fff", color: "#374151", border: "1px solid #d1d5db", fontWeight: 700, fontSize: 13, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" as const },
 
   balanceCard:  { borderRadius: 14, padding: "20px 24px", display: "flex", alignItems: "center", gap: 20, marginBottom: 14, flexWrap: "wrap" as const },
