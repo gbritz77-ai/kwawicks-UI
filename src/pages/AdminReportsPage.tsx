@@ -1742,7 +1742,24 @@ function InvoicesTab({
                 const creditNegative = creditBal !== undefined && creditBal < 0;
                 return (
                   <tr key={inv.invoiceId}>
-                    <Td><span style={s.mono}>{inv.invoiceNumber || inv.invoiceId.slice(0, 8) + "…"}</span></Td>
+                    <Td>
+                      <span style={s.mono}>{inv.invoiceNumber || inv.invoiceId.slice(0, 8) + "…"}</span>
+                      {inv.lines?.length > 0 && (
+                        <div style={{ marginTop: 4 }}>
+                          {inv.lines.map((l, li) => (
+                            <div key={li} style={{ fontSize: 11, color: "#475569", lineHeight: 1.6 }}>
+                              <span style={{ fontWeight: 700, color: "#0f172a" }}>
+                                {species.find(sp => sp.speciesId === l.speciesId)?.name ?? l.speciesId}
+                              </span>
+                              {" × "}{l.quantity}
+                              <span style={{ color: "#64748b" }}>
+                                {" @ R"}{(l.unitPrice * (1 + l.vatRate)).toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </Td>
                     <Td>
                       {inv.staffMemberId
                         ? <>{staffMap[inv.staffMemberId] ?? inv.staffMemberId}<span style={{ ...s.badge, background: "#ede9fe", color: "#6d28d9", marginLeft: 6, fontSize: 10 }}>Staff</span></>
