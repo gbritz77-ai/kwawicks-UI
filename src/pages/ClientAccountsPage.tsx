@@ -335,6 +335,17 @@ export default function ClientAccountsPage() {
             >
               {refreshing ? "⏳ Refreshing…" : "🔄 Refresh"}
             </button>
+            <button
+              style={s.viewStmtBtn}
+              onClick={() => {
+                const p = new URLSearchParams({ customerId: selectedClientId });
+                if (fromDate) p.set("from", fromDate);
+                if (toDate)   p.set("to", toDate);
+                window.open(`/app/statement?${p}`, "_blank");
+              }}
+            >
+              👁 View Statement
+            </button>
             <button style={s.waBtn} onClick={openWa}>📱 Send Statement</button>
           </>
         )}
@@ -851,6 +862,7 @@ const s: Record<string, React.CSSProperties> = {
   selectorCard: { background: "#fff", borderRadius: 12, padding: "14px 20px", border: "1px solid #e2e8f0", marginBottom: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" as const },
   selectorLabel:{ fontSize: 13, fontWeight: 700, color: "#374151", flexShrink: 0 },
   select:       { flex: 1, padding: "9px 12px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 14, background: "#f9fafb", outline: "none" },
+  viewStmtBtn:  { padding: "9px 18px", borderRadius: 8, background: "#fff", color: "#0369a1", border: "1px solid #0369a1", fontWeight: 700, fontSize: 13, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" as const },
   waBtn:        { padding: "9px 18px", borderRadius: 8, background: "#15803d", color: "#fff", border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" as const },
   clientDrop:     { position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#fff", border: "1px solid #d1d5db", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 200, maxHeight: 240, overflowY: "auto" as const },
   clientDropItem: { padding: "9px 14px", fontSize: 14, cursor: "pointer", borderBottom: "1px solid #f1f5f9" },
