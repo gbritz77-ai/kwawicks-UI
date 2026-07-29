@@ -155,7 +155,8 @@ export default function NavBar() {
         leaf("Vehicles",  "/app/fleet"),
         leaf("Sites",     "/app/sites"),
         leaf("Dip Tanks", "/app/dip-tanks"),
-        leaf("Fuel",      "/app/fuel"),
+        leaf("Fuel",        "/app/fuel"),
+        leaf("Fuel Report", "/app/fuel-report"),
       ]));
     }
 
