@@ -185,6 +185,10 @@ export default function FuelPage() {
   const [uploadProgress, setUploadProgress] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const odoPhotoRef = useRef<HTMLInputElement>(null);
+  const litresPhotoRef = useRef<HTMLInputElement>(null);
+  const [odoReading, setOdoReading] = useState<{ status: "idle" | "reading" | "ok" | "fail"; msg: string }>({ status: "idle", msg: "" });
+  const [litresReading, setLitresReading] = useState<{ status: "idle" | "reading" | "ok" | "fail"; msg: string }>({ status: "idle", msg: "" });
 
   // Report filters
   const [report, setReport] = useState<VehicleFuelReportDto[] | null>(null);
@@ -232,6 +236,31 @@ export default function FuelPage() {
     setForm(f => ({ ...f, tankId, siteId: tank?.siteId ?? f.siteId }));
   }
 
+  async function handleAiCapture(file: File, field: "odometer" | "litres") {
+    const setState = field === "odometer" ? setOdoReading : setLitresReading;
+    setState({ status: "reading", msg: "" });
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(",")[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fuelIssuesApi.readImage(base64, file.type || "image/jpeg", field);
+      if (res.value != null) {
+        setF(field === "odometer" ? "odometerKm" : "litres", res.value);
+        setState({ status: "ok", msg: `Read: ${res.value}${field === "odometer" ? " km" : " L"}` });
+      } else {
+        setState({ status: "fail", msg: res.message ?? "Could not read the image — please enter the value manually." });
+      }
+    } catch {
+      setState({ status: "fail", msg: "Could not read the image — please enter the value manually." });
+    }
+  }
+
   async function handleSave() {
     if (!form.vehicleId) { setFormError("Vehicle is required."); return; }
     if (!form.litres || form.litres <= 0) { setFormError("Litres must be > 0."); return; }
@@ -250,6 +279,8 @@ export default function FuelPage() {
       setShowForm(false);
       setForm(emptyForm());
       setSlipFile(null);
+      setOdoReading({ status: "idle", msg: "" });
+      setLitresReading({ status: "idle", msg: "" });
       if (fileInputRef.current) fileInputRef.current.value = "";
       if (cameraInputRef.current) cameraInputRef.current.value = "";
     } catch (e: any) { setFormError(e?.message ?? "Save failed."); }
@@ -335,11 +366,39 @@ export default function FuelPage() {
             {/* Common fields */}
             <div>
               <label style={s.label}>Litres *</label>
-              <input style={s.input} type="number" step="0.01" min="0" value={form.litres || ""} onChange={e => setF("litres", Number(e.target.value))} />
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input style={{ ...s.input, flex: 1 }} type="number" step="0.01" min="0" value={form.litres || ""} onChange={e => setF("litres", Number(e.target.value))} />
+                <button type="button" title="Take photo of fuel pump display" style={s.aiCamBtn}
+                  onClick={() => litresPhotoRef.current?.click()}
+                  disabled={litresReading.status === "reading"}>
+                  {litresReading.status === "reading" ? "⏳" : "📷"}
+                </button>
+                <input ref={litresPhotoRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleAiCapture(f, "litres"); e.target.value = ""; }} />
+              </div>
+              {litresReading.status !== "idle" && (
+                <div style={{ fontSize: 11, marginTop: 3, color: litresReading.status === "ok" ? "#166534" : litresReading.status === "fail" ? "#dc2626" : "#0284c7" }}>
+                  {litresReading.status === "reading" ? "Reading image…" : litresReading.msg}
+                </div>
+              )}
             </div>
             <div>
               <label style={s.label}>Odometer (km)</label>
-              <input style={s.input} type="number" value={form.odometerKm ?? ""} onChange={e => setF("odometerKm", e.target.value ? Number(e.target.value) : null)} />
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input style={{ ...s.input, flex: 1 }} type="number" value={form.odometerKm ?? ""} onChange={e => setF("odometerKm", e.target.value ? Number(e.target.value) : null)} />
+                <button type="button" title="Take photo of odometer" style={s.aiCamBtn}
+                  onClick={() => odoPhotoRef.current?.click()}
+                  disabled={odoReading.status === "reading"}>
+                  {odoReading.status === "reading" ? "⏳" : "📷"}
+                </button>
+                <input ref={odoPhotoRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleAiCapture(f, "odometer"); e.target.value = ""; }} />
+              </div>
+              {odoReading.status !== "idle" && (
+                <div style={{ fontSize: 11, marginTop: 3, color: odoReading.status === "ok" ? "#166534" : odoReading.status === "fail" ? "#dc2626" : "#0284c7" }}>
+                  {odoReading.status === "reading" ? "Reading image…" : odoReading.msg}
+                </div>
+              )}
             </div>
             <div>
               <label style={s.label}>Cost per Litre (R)</label>
@@ -377,7 +436,7 @@ export default function FuelPage() {
           {uploadProgress && <div style={{ fontSize: 13, color: "#0284c7", marginTop: 8 }}>{uploadProgress}</div>}
           {formError && <div style={s.formError}>{formError}</div>}
           <div style={s.formFooter}>
-            <button style={s.btnSecondary} onClick={() => { setShowForm(false); setSlipFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; if (cameraInputRef.current) cameraInputRef.current.value = ""; }} disabled={busy}>Cancel</button>
+            <button style={s.btnSecondary} onClick={() => { setShowForm(false); setSlipFile(null); setOdoReading({ status: "idle", msg: "" }); setLitresReading({ status: "idle", msg: "" }); if (fileInputRef.current) fileInputRef.current.value = ""; if (cameraInputRef.current) cameraInputRef.current.value = ""; }} disabled={busy}>Cancel</button>
             <button style={s.btnPrimary} onClick={handleSave} disabled={busy}>{busy ? "Saving…" : "Save"}</button>
           </div>
         </div>
@@ -507,6 +566,7 @@ const s: Record<string, React.CSSProperties> = {
   btnPrimary: { background: "#166534", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer" },
   btnSecondary: { background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 8, padding: "9px 18px", fontSize: 14, cursor: "pointer" },
   slipBtn: { background: "#f8fafc", color: "#374151", border: "1px solid #d1d5db", borderRadius: 7, padding: "8px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" },
+  aiCamBtn: { background: "#f0fdf4", color: "#166534", border: "1px solid #86efac", borderRadius: 6, padding: "7px 10px", fontSize: 16, cursor: "pointer", flexShrink: 0 },
   tableWrap: { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, overflow: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" },
   table: { width: "100%", borderCollapse: "collapse" as const, fontSize: 13 },
   th: { textAlign: "left" as const, padding: "10px 14px", fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.05em", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" as const },

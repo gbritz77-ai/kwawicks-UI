@@ -71,4 +71,6 @@ export const fuelIssuesApi = {
     if (to) q.set("to", to);
     return api.get<VehicleFuelReportDto[]>(`/api/fuel/report${q.toString() ? "?" + q : ""}`);
   },
+  readImage: (imageBase64: string, mediaType: string, field: "odometer" | "litres") =>
+    api.post<{ value: number | null; message: string | null }>("/api/fuel/read-image", { imageBase64, mediaType, field }),
 };
