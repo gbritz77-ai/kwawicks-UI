@@ -110,7 +110,7 @@ export default function DriverFuelPage() {
     setVehicleId(""); setLitres(0); setOdometer(""); setCostPerLitre("");
     setStation(""); setReference(""); setPumpFile(null); setSlipFile(null);
     setPumpPreview(null); setSlipPreview(null); setError(""); setStep("form");
-    setIssueId(""); setDoneAt("");
+    setDoneAt("");
   }
 
   if (loading) return <div style={s.page}><p style={{ color: "#64748b" }}>Loading vehicles…</p></div>;
