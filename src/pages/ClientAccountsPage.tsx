@@ -14,6 +14,7 @@ function thirtyAgoIso() { const d = new Date(); d.setDate(d.getDate() - 30); ret
 
 export default function ClientAccountsPage() {
   const [clients, setClients] = useState<ClientDto[]>([]);
+  const [clientSearch, setClientSearch] = useState("");
   const [selectedClientId, setSelectedClientId] = useState("");
   const [ledger, setLedger] = useState<ClientCreditLedgerDto | null>(null);
   const [loadingLedger, setLoadingLedger] = useState(false);
@@ -268,10 +269,26 @@ export default function ClientAccountsPage() {
       {/* Client selector + date range */}
       <div style={s.selectorCard}>
         <label style={s.selectorLabel}>Client</label>
-        <select style={s.select} value={selectedClientId} onChange={e => setSelectedClientId(e.target.value)}>
-          <option value="">— Choose a client —</option>
-          {clients.map(c => <option key={c.clientId} value={c.clientId}>{c.clientName}</option>)}
-        </select>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6, minWidth: 200 }}>
+          <input
+            type="text"
+            style={{ ...s.select, flex: "none" }}
+            placeholder="Search clients…"
+            value={clientSearch}
+            onChange={e => setClientSearch(e.target.value)}
+          />
+          <select
+            style={{ ...s.select, flex: "none" }}
+            size={Math.min(6, clients.filter(c => !clientSearch || c.clientName.toLowerCase().includes(clientSearch.toLowerCase())).length + 1)}
+            value={selectedClientId}
+            onChange={e => setSelectedClientId(e.target.value)}
+          >
+            <option value="">— Choose a client —</option>
+            {clients
+              .filter(c => !clientSearch || c.clientName.toLowerCase().includes(clientSearch.toLowerCase()))
+              .map(c => <option key={c.clientId} value={c.clientId}>{c.clientName}</option>)}
+          </select>
+        </div>
 
         <label style={s.selectorLabel}>From</label>
         <input type="date" style={{ ...s.select, flex: "none", width: 140 }} value={fromDate} onChange={e => setFromDate(e.target.value)} />
