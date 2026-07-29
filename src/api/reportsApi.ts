@@ -136,6 +136,13 @@ export type InvoiceItem = {
 };
 
 // ── Admin: Customer Statement ─────────────────────────────────────────────────
+export type StatementInvoiceLine = {
+  speciesName: string;
+  qty: number;
+  unitPrice: number;
+  lineTotal: number;
+};
+
 export type CustomerStatementLine = {
   invoiceId: string;
   invoiceNumber: string;
@@ -145,6 +152,7 @@ export type CustomerStatementLine = {
   subTotal: number;
   vatTotal: number;
   grandTotal: number;
+  items: StatementInvoiceLine[];
 };
 
 export type CustomerStatementResponse = {

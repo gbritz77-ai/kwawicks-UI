@@ -207,25 +207,53 @@ function StatementDocument({ statement, creditBalance }: { statement: CustomerSt
         </thead>
         <tbody>
           {statement.lines.map((line, i) => (
-            <tr key={line.invoiceId} style={i % 2 === 0 ? {} : s.altRow}>
-              <td style={s.td}>{fmtDate(line.date)}</td>
-              <td style={{ ...s.td, fontFamily: "monospace", fontSize: 12 }}>
-                {line.invoiceNumber || line.invoiceId.slice(0, 8) + "…"}
-              </td>
-              <td style={s.td}>{line.paymentType || "—"}</td>
-              <td style={{ ...s.td, textAlign: "right" }}>{fmt(line.subTotal)}</td>
-              <td style={{ ...s.td, textAlign: "right" }}>{fmt(line.vatTotal)}</td>
-              <td style={{ ...s.td, textAlign: "right", fontWeight: 600 }}>{fmt(line.grandTotal)}</td>
-              <td style={{ ...s.td, textAlign: "center" }}>
-                <span style={{
-                  ...s.badge,
-                  background: line.paymentStatus === "Paid" ? "#dcfce7" : "#fef9c3",
-                  color: line.paymentStatus === "Paid" ? "#166534" : "#92400e",
-                }}>
-                  {line.paymentStatus || "—"}
-                </span>
-              </td>
-            </tr>
+            <React.Fragment key={line.invoiceId}>
+              <tr style={i % 2 === 0 ? {} : s.altRow}>
+                <td style={s.td}>{fmtDate(line.date)}</td>
+                <td style={{ ...s.td, fontFamily: "monospace", fontSize: 12 }}>
+                  {line.invoiceNumber || line.invoiceId.slice(0, 8) + "…"}
+                </td>
+                <td style={s.td}>{line.paymentType || "—"}</td>
+                <td style={{ ...s.td, textAlign: "right" }}>{fmt(line.subTotal)}</td>
+                <td style={{ ...s.td, textAlign: "right" }}>{fmt(line.vatTotal)}</td>
+                <td style={{ ...s.td, textAlign: "right", fontWeight: 600 }}>{fmt(line.grandTotal)}</td>
+                <td style={{ ...s.td, textAlign: "center" }}>
+                  <span style={{
+                    ...s.badge,
+                    background: line.paymentStatus === "Paid" ? "#dcfce7" : "#fef9c3",
+                    color: line.paymentStatus === "Paid" ? "#166534" : "#92400e",
+                  }}>
+                    {line.paymentStatus || "—"}
+                  </span>
+                </td>
+              </tr>
+              {line.items.length > 0 && (
+                <tr style={i % 2 === 0 ? {} : s.altRow}>
+                  <td colSpan={7} style={{ padding: "0 12px 10px 28px" }}>
+                    <table style={s.itemsTable}>
+                      <thead>
+                        <tr>
+                          <th style={s.itemTh}>Species</th>
+                          <th style={{ ...s.itemTh, textAlign: "right" }}>Qty</th>
+                          <th style={{ ...s.itemTh, textAlign: "right" }}>Unit Price</th>
+                          <th style={{ ...s.itemTh, textAlign: "right" }}>Line Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {line.items.map((it, j) => (
+                          <tr key={j}>
+                            <td style={s.itemTd}>{it.speciesName}</td>
+                            <td style={{ ...s.itemTd, textAlign: "right" }}>{it.qty}</td>
+                            <td style={{ ...s.itemTd, textAlign: "right" }}>{fmt(it.unitPrice)}</td>
+                            <td style={{ ...s.itemTd, textAlign: "right" }}>{fmt(it.lineTotal)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
           ))}
           {statement.lines.length === 0 && (
             <tr>
@@ -346,4 +374,11 @@ const s: Record<string, React.CSSProperties> = {
   footer: {
     borderTop: "1px solid #e2e8f0", paddingTop: 16, fontSize: 12, color: "#94a3b8", textAlign: "center",
   },
+  itemsTable: { width: "100%", borderCollapse: "collapse", fontSize: 11 },
+  itemTh: {
+    padding: "3px 8px", textAlign: "left", color: "#94a3b8",
+    fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em",
+    borderBottom: "1px solid #e2e8f0",
+  },
+  itemTd: { padding: "3px 8px", color: "#475569" },
 };
