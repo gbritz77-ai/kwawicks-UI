@@ -65,13 +65,6 @@ export default function AiReportsPage() {
     persistSaved(next);
   }
 
-  function loadSavedReport(r: SavedReport) {
-    setPrompt(r.prompt);
-    setResult(null);
-    setError("");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
   async function runReport(p = prompt) {
     if (!p.trim()) return;
     setPrompt(p);
