@@ -292,7 +292,6 @@ export default function AppShell() {
           {loadingDel ? <SkeletonCards n={4} /> : (
             <div style={{ ...s.panelRow, flexDirection: isMobile ? "column" : "row" }}>
               <div style={{ ...s.kpiGrid, gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(150px, 1fr))" }}>
-                <StatCard compact={isMobile} icon="📋" label="Open"            value={deliveryData?.openCount ?? 0}      color="#f59e0b" to="/app/delivery-orders?status=Open" />
                 <StatCard compact={isMobile} icon="🚚" label="Out for Delivery" value={deliveryData?.inTransitCount ?? 0} color="#2563eb" to="/app/delivery-orders?status=OutForDelivery" />
                 <StatCard compact={isMobile} icon="✅" label="Delivered"        value={deliveryData?.deliveredCount ?? 0}  color="#22c55e" to="/app/delivery-orders?status=Delivered" />
                 <StatCard compact={isMobile} icon="📦" label="Total Orders"     value={delivTotal}                         color="#8b5cf6" to="/app/delivery-orders" />
@@ -302,13 +301,11 @@ export default function AppShell() {
                 <div style={s.chartTitle}>Order Status Mix</div>
                 <div style={{ ...s.donutRow, flexDirection: isMobile ? "column" : "row", alignItems: "center" }}>
                   <DonutChart segments={[
-                    { label: "Open",            value: deliveryData?.openCount ?? 0,      color: "#f59e0b" },
                     { label: "Out for Delivery",value: deliveryData?.inTransitCount ?? 0, color: "#2563eb" },
                     { label: "Delivered",        value: deliveryData?.deliveredCount ?? 0, color: "#22c55e" },
                   ]} />
                   <div style={{ ...s.legend, width: isMobile ? "100%" : undefined }}>
                     {[
-                      { label: "Open",             color: "#f59e0b", value: deliveryData?.openCount ?? 0 },
                       { label: "Out for Delivery", color: "#2563eb", value: deliveryData?.inTransitCount ?? 0 },
                       { label: "Delivered",         color: "#22c55e", value: deliveryData?.deliveredCount ?? 0 },
                     ].map((seg) => (
