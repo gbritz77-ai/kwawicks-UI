@@ -40,7 +40,6 @@ export default function DriverFuelPage() {
   const [step, setStep]       = useState<Step>("form");
   const [busy, setBusy]       = useState(false);
   const [error, setError]     = useState("");
-  const [issueId, setIssueId] = useState("");
   const [doneAt, setDoneAt]   = useState("");
 
   useEffect(() => {
@@ -84,11 +83,10 @@ export default function DriverFuelPage() {
         reference: reference.trim() || undefined,
       });
 
-      setIssueId(issue.issueId);
       setDoneAt(issue.issuedAt);
 
       // 2. Upload pump photo (stored as the slip — first upload)
-      const { uploadUrl: pumpUrl, s3Key: pumpKey } = await fuelIssuesApi.getSlipUploadUrl(
+      const { uploadUrl: pumpUrl } = await fuelIssuesApi.getSlipUploadUrl(
         issue.issueId, pumpFile.type || "image/jpeg"
       );
       await fetch(pumpUrl, { method: "PUT", body: pumpFile, headers: { "Content-Type": pumpFile.type || "image/jpeg" } });
@@ -186,7 +184,7 @@ export default function DriverFuelPage() {
           Odometer reading
           <NumericInput
             value={odometer}
-            onChange={v => setOdometer(v === "" ? "" : Number(v))}
+            onChange={e => setOdometer(e.target.value === "" ? "" : Number(e.target.value))}
             placeholder="e.g. 123456"
             style={s.input}
             disabled={busy}
@@ -198,7 +196,7 @@ export default function DriverFuelPage() {
           Cost per litre (R)
           <NumericInput
             value={costPerLitre}
-            onChange={v => setCostPerLitre(v === "" ? "" : Number(v))}
+            onChange={e => setCostPerLitre(e.target.value === "" ? "" : Number(e.target.value))}
             placeholder="e.g. 22.50"
             style={s.input}
             disabled={busy}
