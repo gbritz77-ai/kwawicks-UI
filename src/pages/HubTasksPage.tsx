@@ -582,18 +582,7 @@ export default function HubTasksPage() {
                   />
                 </label>
 
-                <label style={s.label}>
-                  Qty booked out for delivery
-                  <NumericInput
-                    style={s.input}
-                    allowDecimal={false} 
-                    value={speciesForm.qtyBookedOutForDelivery}
-                    onChange={(e) => setSpeciesForm((p) => ({ ...p, qtyBookedOutForDelivery: e.target.value }))}
-                    disabled={busy}
-                  />
-                </label>
-
-                {speciesForm.speciesId && (
+{speciesForm.speciesId && (
                   <label style={s.checkboxRow}>
                     <input
                       type="checkbox"
