@@ -8,6 +8,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { speciesApi, type SpeciesResponse } from "../api/speciesApi";
 import { clientsApi, type ClientDto, type ClientType } from "../api/clientsApi";
+import { stockLossApi } from "../api/stockLossApi";
 import { hasAnyRole } from "../api/auth";
 import { NumericInput } from "../components/NumericInput";
 
@@ -109,6 +110,14 @@ export default function HubTasksPage() {
 
   // Confirm-delete modal
   const [confirmDelete, setConfirmDelete] = useState<{ type: "species" | "client"; id: string; label: string } | null>(null);
+
+  // Stock adjustment modal
+  const [adjustTarget, setAdjustTarget] = useState<SpeciesResponse | null>(null);
+  const [adjustType, setAdjustType] = useState<"Over" | "Under">("Under");
+  const [adjustQty, setAdjustQty] = useState("");
+  const [adjustNotes, setAdjustNotes] = useState("");
+  const [adjustError, setAdjustError] = useState("");
+  const [adjustBusy, setAdjustBusy] = useState(false);
 
   // ---------- Loaders ----------
   async function loadSpecies() {
@@ -378,6 +387,45 @@ export default function HubTasksPage() {
     }
   }
 
+  // ---------- Stock adjustment ----------
+  function openAdjust(s: SpeciesResponse) {
+    setAdjustTarget(s);
+    setAdjustType("Under");
+    setAdjustQty("");
+    setAdjustNotes("");
+    setAdjustError("");
+  }
+
+  async function saveAdjust() {
+    if (!adjustTarget) return;
+    const qty = parseInt(adjustQty, 10);
+    if (!Number.isInteger(qty) || qty <= 0) {
+      setAdjustError("Quantity must be a whole number greater than 0.");
+      return;
+    }
+    setAdjustBusy(true);
+    setAdjustError("");
+    try {
+      const result = await stockLossApi.record({
+        speciesId: (adjustTarget as any).speciesId,
+        qty,
+        adjustmentType: adjustType,
+        notes: adjustNotes.trim(),
+      });
+      // Update local stock count
+      setItems(prev => prev.map((x: any) =>
+        x.speciesId === (adjustTarget as any).speciesId
+          ? { ...x, qtyOnHandHub: result.qtyOnHandHubAfter }
+          : x
+      ));
+      setAdjustTarget(null);
+    } catch (e: any) {
+      setAdjustError(e?.message ?? "Failed to record adjustment.");
+    } finally {
+      setAdjustBusy(false);
+    }
+  }
+
   // ---------- Header helpers ----------
   const headerSub = tab === "species" ? "Manage Species (inventory master list)" : "Manage Clients";
   const isLoading = tab === "species" ? loading : loadingClients;
@@ -508,6 +556,9 @@ export default function HubTasksPage() {
                     <div style={s.gridCell}>{x.isActive ? "Active" : "Inactive"}</div>
                     {canManageSpecies && (
                       <div style={s.gridActions}>
+                        <button style={s.gridAdjustBtn} onClick={() => openAdjust(x)} disabled={busy} title="Record over/under stock">
+                          Adjust Stock
+                        </button>
                         <button style={s.gridEditBtn} onClick={() => openEditSpecies(x)} disabled={busy}>
                           Edit
                         </button>
@@ -797,6 +848,84 @@ export default function HubTasksPage() {
 
       {tab === "clients" && !canManageClients && <div style={s.card}>Clients management is available to Owner, Finance, Admin, and Procurement users.</div>}
 
+      {/* ===== STOCK ADJUSTMENT MODAL ===== */}
+      {adjustTarget && (
+        <div style={s.modalBackdrop} onClick={() => !adjustBusy && setAdjustTarget(null)}>
+          <div style={{ ...s.modal, maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>Adjust Stock — {(adjustTarget as any).name}</div>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 16 }}>
+              Current qty on hand: <strong>{(adjustTarget as any).qtyOnHandHub}</strong>
+            </div>
+
+            {/* Over / Under toggle */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>Adjustment Type</div>
+              <div style={{ display: "flex", gap: 0, border: "1px solid #d1d5db", borderRadius: 8, overflow: "hidden" }}>
+                {(["Under", "Over"] as const).map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setAdjustType(t)}
+                    style={{
+                      flex: 1, padding: "10px 0", fontSize: 14, fontWeight: 700, border: "none", cursor: "pointer",
+                      background: adjustType === t
+                        ? (t === "Under" ? "#dc2626" : "#16a34a")
+                        : "#f9fafb",
+                      color: adjustType === t ? "#fff" : "#374151",
+                    }}
+                  >
+                    {t === "Under" ? "⬇ Under (Stock Loss)" : "⬆ Over (Stock Found)"}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 12, color: "#6b7280", marginTop: 6 }}>
+                {adjustType === "Under"
+                  ? "Stock is missing or died — qty on hand will decrease."
+                  : "Extra stock was found — qty on hand will increase."}
+              </div>
+            </div>
+
+            <label style={s.label}>
+              Quantity *
+              <input
+                style={s.input}
+                type="number"
+                min="1"
+                step="1"
+                value={adjustQty}
+                onChange={e => setAdjustQty(e.target.value)}
+                disabled={adjustBusy}
+                placeholder="e.g. 10"
+              />
+            </label>
+
+            <label style={s.label}>
+              Notes / Reason
+              <input
+                style={s.input}
+                value={adjustNotes}
+                onChange={e => setAdjustNotes(e.target.value)}
+                disabled={adjustBusy}
+                placeholder="e.g. Dead on arrival, count recheck"
+              />
+            </label>
+
+            {adjustError && <div style={{ color: "#dc2626", fontSize: 13, marginTop: 8 }}>{adjustError}</div>}
+
+            <div style={s.modalBtns}>
+              <button style={s.secondaryBtn} onClick={() => setAdjustTarget(null)} disabled={adjustBusy}>Cancel</button>
+              <button
+                style={{ ...s.primaryBtn, background: adjustType === "Under" ? "#dc2626" : "#16a34a" }}
+                onClick={saveAdjust}
+                disabled={adjustBusy || !adjustQty}
+              >
+                {adjustBusy ? "Saving…" : `Record ${adjustType === "Under" ? "Under" : "Over"} Stock`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ===== CONFIRM DELETE MODAL ===== */}
       {confirmDelete && (
         <div style={s.modalBackdrop} onClick={() => !busy && setConfirmDelete(null)}>
@@ -958,12 +1087,12 @@ const s: Record<string, React.CSSProperties> = {
   // Species grid: Name | Unit Cost | Sell Price | VAT | Qty on Hand | Status | Actions
   speciesRow: {
     display: "grid",
-    gridTemplateColumns: "1.8fr 1fr 1fr 0.6fr 1fr 0.8fr 0.8fr",
+    gridTemplateColumns: "1.8fr 1fr 1fr 0.6fr 1fr 0.8fr 1.4fr",
     gap: 12,
     padding: "14px 14px",
     alignItems: "center",
     fontSize: 14,
-    minWidth: 900,
+    minWidth: 980,
   },
 
   // ✅ FIX: 6 columns because we render 6 cells (Name, ID, Address, Contact, Type, Actions)
@@ -1025,6 +1154,18 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex",
     justifyContent: "flex-end",
     gap: 10,
+  },
+
+  gridAdjustBtn: {
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: "1px solid rgba(234,179,8,0.5)",
+    cursor: "pointer",
+    fontWeight: 800,
+    background: "rgba(234,179,8,0.08)",
+    color: "#92400e",
+    fontSize: 12,
+    whiteSpace: "nowrap" as const,
   },
 
   gridEditBtn: {
