@@ -82,6 +82,9 @@ export default function AdminReportsPage() {
   const [salesCostRecords, setSalesCostRecords] = useState<CostAverageRecordDto[]>([]);
   const [marginSalesRows,  setMarginSalesRows]  = useState<SalesReportRow[]>([]);
 
+  // ── Dead / Short / Over driver filter ──────────────────────────────────────
+  const [crDriverFilter, setCrDriverFilter] = useState("");
+
   // ── Staff Stock Deductions tab state ────────────────────────────────────────
   const [staffDeductions, setStaffDeductions] = useState<StaffStockDeductionsReportResponse | null>(null);
   const [staffDeductFilter, setStaffDeductFilter] = useState("");
@@ -955,6 +958,14 @@ export default function AdminReportsPage() {
           return true;
         });
 
+        // All unique driver names for the filter dropdown
+        const allDrivers = [...new Set(confirmed.map(cr => cr.assignedDriverName || cr.assignedDriverId || "Unknown"))].sort();
+
+        // Apply driver filter
+        const filtered = crDriverFilter
+          ? confirmed.filter(cr => (cr.assignedDriverName || cr.assignedDriverId || "Unknown") === crDriverFilter)
+          : confirmed;
+
         // Per-order rows
         type OrderRow = {
           id: string; supplier: string; driver: string; date: string;
@@ -962,7 +973,7 @@ export default function AdminReportsPage() {
           receivedQty: number; deadQty: number; shortQty: number; overQty: number;
         };
         const orderRows: OrderRow[] = [];
-        for (const cr of confirmed) {
+        for (const cr of filtered) {
           for (const l of cr.lines) {
             orderRows.push({
               id: cr.collectionRequestId,
@@ -983,7 +994,7 @@ export default function AdminReportsPage() {
         // Per-driver summary
         type DriverRow = { driver: string; collections: number; dead: number; short: number; over: number };
         const driverMap = new Map<string, DriverRow>();
-        for (const cr of confirmed) {
+        for (const cr of filtered) {
           const key = cr.assignedDriverName || cr.assignedDriverId || "Unknown";
           const dead  = cr.lines.reduce((s, l) => s + (l.deadQty || 0), 0);
           const short = cr.lines.reduce((s, l) => s + (l.shortQty || Math.max(0, l.orderedQty - l.loadedQty)), 0);
@@ -999,8 +1010,27 @@ export default function AdminReportsPage() {
 
         return (
           <div>
+            {/* Driver filter */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" as const }}>
+              <label style={s.label}>Driver</label>
+              <select
+                value={crDriverFilter}
+                onChange={e => setCrDriverFilter(e.target.value)}
+                style={{ ...s.dateInput, minWidth: 160 }}
+              >
+                <option value="">All Drivers</option>
+                {allDrivers.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+              {crDriverFilter && (
+                <button
+                  onClick={() => setCrDriverFilter("")}
+                  style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #cbd5e1", background: "#f8fafc", cursor: "pointer", fontSize: 13, color: "#64748b" }}
+                >✕ Clear</button>
+              )}
+            </div>
+
             <div style={s.kpiRow}>
-              <KpiCard label="Collections" value={String(confirmed.length)} />
+              <KpiCard label="Collections" value={String(filtered.length)} />
               <KpiCard label="Total Dead"  value={totalDead.toLocaleString()}  highlight />
               <KpiCard label="Total Short" value={totalShort.toLocaleString()} highlight />
               <KpiCard label="Total Over"  value={totalOver.toLocaleString()} />
@@ -1012,8 +1042,8 @@ export default function AdminReportsPage() {
                 <thead><tr><Th>Driver</Th><Th>Collections</Th><Th>Dead</Th><Th>Short</Th><Th>Over</Th></tr></thead>
                 <tbody>
                   {driverRows.map((r, i) => (
-                    <tr key={i}>
-                      <Td style={{ fontWeight: 600 }}>{r.driver}</Td>
+                    <tr key={i} style={{ cursor: "pointer" }} onClick={() => setCrDriverFilter(crDriverFilter === r.driver ? "" : r.driver)}>
+                      <Td style={{ fontWeight: 600, color: crDriverFilter === r.driver ? "#15803d" : undefined }}>{r.driver}{crDriverFilter === r.driver ? " ✓" : ""}</Td>
                       <Td>{r.collections}</Td>
                       <Td style={{ fontWeight: 700, color: r.dead  > 0 ? "#dc2626" : "#166534" }}>{r.dead}</Td>
                       <Td style={{ fontWeight: 700, color: r.short > 0 ? "#f59e0b" : "#166534" }}>{r.short}</Td>
@@ -1024,7 +1054,7 @@ export default function AdminReportsPage() {
               </ScrollTable>
             )}
 
-            <h3 style={s.subHeading}>Per Order</h3>
+            <h3 style={s.subHeading}>Per Order{crDriverFilter ? ` — ${crDriverFilter}` : ""}</h3>
             {orderRows.length === 0 ? <p style={s.muted}>No data.</p> : (
               <ScrollTable>
                 <thead><tr><Th>Date</Th><Th>Order ID</Th><Th>Supplier</Th><Th>Driver</Th><Th>Species</Th><Th>Ordered</Th><Th>Loaded</Th><Th>Received</Th><Th>Dead</Th><Th>Short</Th><Th>Over</Th></tr></thead>
