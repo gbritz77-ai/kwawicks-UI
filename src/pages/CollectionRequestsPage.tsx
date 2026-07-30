@@ -64,7 +64,7 @@ export default function CollectionRequestsPage() {
 
   // Hub confirm modal
   const [confirmItem, setConfirmItem] = useState<CollectionRequestDto | null>(null);
-  const [confirmLines, setConfirmLines] = useState<{ speciesId: string; receivedQty: number; discrepancyNotes: string; deadQty: number }[]>([]);
+  const [confirmLines, setConfirmLines] = useState<{ speciesId: string; shortQty: number; overQty: number; deadQty: number; discrepancyNotes: string }[]>([]);
   const [confirmError, setConfirmError] = useState("");
 
   // Finance acknowledge modal
@@ -228,7 +228,13 @@ export default function CollectionRequestsPage() {
 
   function openConfirm(item: CollectionRequestDto) {
     setConfirmItem(item);
-    setConfirmLines(item.lines.map(l => ({ speciesId: l.speciesId, receivedQty: l.loadedQty, discrepancyNotes: "", deadQty: l.deadQty || 0 })));
+    setConfirmLines(item.lines.map(l => ({
+      speciesId: l.speciesId,
+      shortQty: l.shortQty || 0,
+      overQty: l.overQty || 0,
+      deadQty: l.deadQty || 0,
+      discrepancyNotes: l.discrepancyNotes || "",
+    })));
     setConfirmError("");
   }
 
@@ -1342,25 +1348,45 @@ export default function CollectionRequestsPage() {
         <div style={s.backdrop} onClick={() => !busy && setConfirmItem(null)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
             <div style={s.modalTitle}>Confirm Receipt — {confirmItem.supplierName}</div>
-            <div style={s.modalSub}>Enter the actual quantities received at the hub</div>
+            <div style={s.modalSub}>Record short, over, and dead quantities per species. Received stock is calculated automatically.</div>
             {confirmError && <div style={s.formError}>{confirmError}</div>}
             {confirmLines.map((cl, i) => {
               const origLine = confirmItem.lines[i];
+              const loaded = origLine?.loadedQty ?? 0;
+              const receivedAlive = Math.max(0, loaded - cl.shortQty + cl.overQty - cl.deadQty);
               return (
                 <div key={cl.speciesId} style={s.loadLineCard}>
-                  <div style={s.loadLineName}>{origLine?.speciesName || cl.speciesId}</div>
-                  <div style={s.loadLineOrdered}>Loaded: {origLine?.loadedQty} · Ordered: {origLine?.orderedQty}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+                    <div style={s.loadLineName}>{origLine?.speciesName || cl.speciesId}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", background: "#f1f5f9", borderRadius: 8, padding: "2px 10px" }}>
+                      Received: <span style={{ color: receivedAlive < loaded ? "#dc2626" : receivedAlive > loaded ? "#16a34a" : "#0f172a" }}>{receivedAlive}</span>
+                    </div>
+                  </div>
+                  <div style={s.loadLineOrdered}>Loaded: {loaded} · Ordered: {origLine?.orderedQty}</div>
                   <div style={s.loadLineInputs}>
-                    <label style={s.label}>Received Qty
-                      <NumericInput style={s.input} allowDecimal={false} value={cl.receivedQty}
-                        onChange={e => setConfirmLines(ls => ls.map((x, j) => j === i ? { ...x, receivedQty: parseInt(e.target.value) || 0 } : x))} disabled={busy} onFocus={e => e.target.select()} />
+                    <label style={s.label}>Short Qty
+                      <NumericInput
+                        style={{ ...s.input, borderColor: cl.shortQty > 0 ? "#fca5a5" : undefined }}
+                        allowDecimal={false} value={cl.shortQty}
+                        onChange={e => setConfirmLines(ls => ls.map((x, j) => j === i ? { ...x, shortQty: Math.max(0, parseInt(e.target.value) || 0) } : x))}
+                        disabled={busy} onFocus={e => e.target.select()} />
+                    </label>
+                    <label style={s.label}>Over Qty
+                      <NumericInput
+                        style={{ ...s.input, borderColor: cl.overQty > 0 ? "#bbf7d0" : undefined }}
+                        allowDecimal={false} value={cl.overQty}
+                        onChange={e => setConfirmLines(ls => ls.map((x, j) => j === i ? { ...x, overQty: Math.max(0, parseInt(e.target.value) || 0) } : x))}
+                        disabled={busy} onFocus={e => e.target.select()} />
                     </label>
                     <label style={s.label}>Dead Qty
-                      <NumericInput style={s.input} allowDecimal={false} value={cl.deadQty}
-                        onChange={e => setConfirmLines(ls => ls.map((x, j) => j === i ? { ...x, deadQty: parseInt(e.target.value) || 0 } : x))} disabled={busy} onFocus={e => e.target.select()} />
+                      <NumericInput
+                        style={{ ...s.input, borderColor: cl.deadQty > 0 ? "#fed7aa" : undefined }}
+                        allowDecimal={false} value={cl.deadQty}
+                        onChange={e => setConfirmLines(ls => ls.map((x, j) => j === i ? { ...x, deadQty: Math.max(0, parseInt(e.target.value) || 0) } : x))}
+                        disabled={busy} onFocus={e => e.target.select()} />
                     </label>
-                    <label style={s.label}>Discrepancy Notes
-                      <input style={s.input} value={cl.discrepancyNotes} placeholder="If different from loaded"
+                    <label style={s.label}>Notes
+                      <input style={s.input} value={cl.discrepancyNotes} placeholder="Optional notes"
                         onChange={e => setConfirmLines(ls => ls.map((x, j) => j === i ? { ...x, discrepancyNotes: e.target.value } : x))} disabled={busy} />
                     </label>
                   </div>

@@ -119,7 +119,7 @@ export const collectionRequestsApi = {
     api.put<CollectionRequestDto>(`/api/collection-requests/${id}/load`, { lines }),
   dispatch: (id: string) => api.put<CollectionRequestDto>(`/api/collection-requests/${id}/dispatch`, {}),
   arrive: (id: string) => api.put<CollectionRequestDto>(`/api/collection-requests/${id}/arrive`, {}),
-  hubConfirm: (id: string, lines: { speciesId: string; receivedQty: number; discrepancyNotes: string; deadQty: number }[]) =>
+  hubConfirm: (id: string, lines: { speciesId: string; discrepancyNotes: string; deadQty: number; shortQty: number; overQty: number }[]) =>
     api.put<CollectionRequestDto>(`/api/collection-requests/${id}/hub-confirm`, { lines }),
   financeAcknowledge: (id: string, invoiceS3Key: string) =>
     api.put<CollectionRequestDto>(`/api/collection-requests/${id}/finance-acknowledge`, { invoiceS3Key }),
