@@ -85,6 +85,32 @@ export type CollectionShortfallReportItem = {
   shortfallLines: CollectionShortfallLine[];
 };
 
+export type DriverDiscrepancyLine = {
+  speciesName: string;
+  loadedQty: number;
+  shortQty: number;
+  overQty: number;
+  deadQty: number;
+  notes: string;
+};
+
+export type DriverDiscrepancyCollection = {
+  collectionRequestId: string;
+  supplierName: string;
+  collectionDate: string | null;
+  confirmedAt: string;
+  lines: DriverDiscrepancyLine[];
+};
+
+export type DriverDiscrepancyReportItem = {
+  driverId: string;
+  driverName: string;
+  totalShort: number;
+  totalOver: number;
+  totalDead: number;
+  collections: DriverDiscrepancyCollection[];
+};
+
 export type EditAllocationLine = {
   speciesId: string;
   qty: number;
@@ -154,5 +180,12 @@ export const collectionRequestsApi = {
     if (to) qs.set("to", to);
     const q = qs.toString();
     return api.get<CollectionShortfallReportItem[]>(`/api/collection-requests/shortfall-report${q ? `?${q}` : ""}`);
+  },
+  driverDiscrepancyReport: (from?: string, to?: string) => {
+    const qs = new URLSearchParams();
+    if (from) qs.set("from", from);
+    if (to) qs.set("to", to);
+    const q = qs.toString();
+    return api.get<DriverDiscrepancyReportItem[]>(`/api/collection-requests/driver-discrepancy-report${q ? `?${q}` : ""}`);
   },
 };

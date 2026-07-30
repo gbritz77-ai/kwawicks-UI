@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useState } from "react";
 import { collectionRequestsApi } from "../api/collectionRequestsApi";
-import type { CollectionRequestDto, CollectionRequestLineDto, CollectionShortfallReportItem, CollectionDeliveryAllocationDto } from "../api/collectionRequestsApi";
+import type { CollectionRequestDto, CollectionRequestLineDto, CollectionShortfallReportItem, CollectionDeliveryAllocationDto, DriverDiscrepancyReportItem } from "../api/collectionRequestsApi";
 import { procurementOrdersApi } from "../api/procurementOrdersApi";
 import type { ProcurementOrderDto } from "../api/procurementOrdersApi";
 import { usersApi } from "../api/usersApi";
@@ -80,6 +80,12 @@ export default function CollectionRequestsPage() {
   const [shortfallReport, setShortfallReport] = useState<CollectionShortfallReportItem[] | null>(null);
   const [shortfallLoading, setShortfallLoading] = useState(false);
   const [shortfallError, setShortfallError] = useState("");
+
+  // Driver discrepancy report
+  const [showDiscrepancy, setShowDiscrepancy] = useState(false);
+  const [discrepancyReport, setDiscrepancyReport] = useState<DriverDiscrepancyReportItem[] | null>(null);
+  const [discrepancyLoading, setDiscrepancyLoading] = useState(false);
+  const [discrepancyError, setDiscrepancyError] = useState("");
 
   // Edit allocation modal
   const [editAllocCr, setEditAllocCr] = useState<CollectionRequestDto | null>(null);
@@ -168,6 +174,18 @@ export default function CollectionRequestsPage() {
       setItems(crs);
       setLastRefresh(new Date());
     } catch { /* non-fatal — just skip this tick */ }
+  }
+
+  async function openDiscrepancyReport() {
+    setShowDiscrepancy(true);
+    setDiscrepancyError("");
+    if (discrepancyReport !== null) return;
+    setDiscrepancyLoading(true);
+    try {
+      const data = await collectionRequestsApi.driverDiscrepancyReport();
+      setDiscrepancyReport(data);
+    } catch (e: any) { setDiscrepancyError(e?.message ?? "Failed to load report."); }
+    finally { setDiscrepancyLoading(false); }
   }
 
   async function openShortfallReport() {
@@ -999,6 +1017,7 @@ export default function CollectionRequestsPage() {
           )}
           <button style={s.refreshBtn} onClick={silentRefresh} title="Refresh now">↻</button>
           {!isDriver() && <button style={s.shortfallBtn} onClick={openShortfallReport}>⚠ Shortfall Report</button>}
+          {!isDriver() && <button style={s.discrepancyBtn} onClick={openDiscrepancyReport}>📋 Driver Discrepancy</button>}
           {canCreate() && <button style={s.primaryBtn} onClick={() => { setCreateError(""); setShowCreate(true); }}>+ New Collection</button>}
         </div>
       </div>
@@ -1506,6 +1525,105 @@ export default function CollectionRequestsPage() {
                   return `Create ${clientSlots || ""} Delivery Order${clientSlots === 1 ? "" : "s"} 🚚`;
                 })()}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Driver discrepancy report modal */}
+      {showDiscrepancy && (
+        <div style={s.backdrop} onClick={() => setShowDiscrepancy(false)}>
+          <div style={{ ...s.modal, maxWidth: 720 }} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>📋 Driver Receipt Discrepancy Report</div>
+            <div style={s.modalSub}>Short, over and dead quantities recorded per driver on hub confirmation</div>
+            {discrepancyError && <div style={s.formError}>{discrepancyError}</div>}
+            {discrepancyLoading ? (
+              <div style={{ textAlign: "center", padding: 32, color: "#64748b" }}>Loading report…</div>
+            ) : discrepancyReport && discrepancyReport.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 24, color: "#16a34a", fontWeight: 700, fontSize: 15 }}>✓ No discrepancies recorded</div>
+            ) : discrepancyReport ? (
+              <div style={{ maxHeight: 520, overflowY: "auto" }}>
+                {discrepancyReport.map(driver => (
+                  <div key={driver.driverId} style={{ border: "1px solid #e2e8f0", borderRadius: 12, marginBottom: 16, overflow: "hidden" }}>
+                    {/* Driver header */}
+                    <div style={{ background: "#f8fafc", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>🚛 {driver.driverName}</div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {driver.totalShort > 0 && (
+                          <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 10px", borderRadius: 20, background: "rgba(220,38,38,0.1)", color: "#dc2626", border: "1px solid rgba(220,38,38,0.3)" }}>
+                            Short: {driver.totalShort}
+                          </span>
+                        )}
+                        {driver.totalOver > 0 && (
+                          <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 10px", borderRadius: 20, background: "rgba(22,163,74,0.1)", color: "#16a34a", border: "1px solid rgba(22,163,74,0.3)" }}>
+                            Over: {driver.totalOver}
+                          </span>
+                        )}
+                        {driver.totalDead > 0 && (
+                          <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 10px", borderRadius: 20, background: "rgba(234,88,12,0.1)", color: "#c2410c", border: "1px solid rgba(234,88,12,0.3)" }}>
+                            Dead: {driver.totalDead}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {/* Collections */}
+                    {driver.collections.map(col => (
+                      <div key={col.collectionRequestId} style={{ padding: "10px 16px", borderTop: "1px solid #f1f5f9" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, flexWrap: "wrap", gap: 4 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>
+                            CR-{col.collectionRequestId.split("-")[0].toUpperCase()} · {col.supplierName}
+                          </div>
+                          <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                            {col.collectionDate && <span>📅 {new Date(col.collectionDate).toLocaleDateString("en-ZA")} · </span>}
+                            Confirmed {new Date(col.confirmedAt).toLocaleDateString("en-ZA")}
+                          </div>
+                        </div>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                          <thead>
+                            <tr style={{ background: "#f8fafc" }}>
+                              <th style={{ textAlign: "left", padding: "3px 8px", color: "#64748b", fontWeight: 600 }}>Species</th>
+                              <th style={{ textAlign: "right", padding: "3px 8px", color: "#64748b", fontWeight: 600 }}>Loaded</th>
+                              <th style={{ textAlign: "right", padding: "3px 8px", color: "#dc2626", fontWeight: 700 }}>Short</th>
+                              <th style={{ textAlign: "right", padding: "3px 8px", color: "#16a34a", fontWeight: 700 }}>Over</th>
+                              <th style={{ textAlign: "right", padding: "3px 8px", color: "#c2410c", fontWeight: 700 }}>Dead</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {col.lines.map((line, li) => (
+                              <tr key={li} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                                <td style={{ padding: "4px 8px", fontWeight: 600 }}>{line.speciesName}</td>
+                                <td style={{ padding: "4px 8px", textAlign: "right" }}>{line.loadedQty}</td>
+                                <td style={{ padding: "4px 8px", textAlign: "right", fontWeight: 700, color: line.shortQty > 0 ? "#dc2626" : "#cbd5e1" }}>
+                                  {line.shortQty > 0 ? line.shortQty : "—"}
+                                </td>
+                                <td style={{ padding: "4px 8px", textAlign: "right", fontWeight: 700, color: line.overQty > 0 ? "#16a34a" : "#cbd5e1" }}>
+                                  {line.overQty > 0 ? line.overQty : "—"}
+                                </td>
+                                <td style={{ padding: "4px 8px", textAlign: "right", fontWeight: 700, color: line.deadQty > 0 ? "#c2410c" : "#cbd5e1" }}>
+                                  {line.deadQty > 0 ? line.deadQty : "—"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {col.lines.some(l => l.notes) && (
+                          <div style={{ marginTop: 4 }}>
+                            {col.lines.filter(l => l.notes).map((l, i) => (
+                              <div key={i} style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
+                                {l.speciesName}: {l.notes}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <div style={s.modalBtns}>
+              <button style={s.secondaryBtn} onClick={() => setShowDiscrepancy(false)}>Close</button>
+              <button style={s.secondaryBtn} onClick={() => { setDiscrepancyReport(null); openDiscrepancyReport(); }}>↻ Refresh</button>
             </div>
           </div>
         </div>
@@ -2087,6 +2205,7 @@ const s: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
   shortfallBtn: { padding: "10px 18px", borderRadius: 8, background: "rgba(234,88,12,0.08)", border: "1px solid rgba(234,88,12,0.4)", color: "#9a3412", fontWeight: 700, fontSize: 14, cursor: "pointer" },
+  discrepancyBtn: { padding: "10px 18px", borderRadius: 8, background: "rgba(37,99,235,0.08)", border: "1px solid rgba(37,99,235,0.4)", color: "#1e3a8a", fontWeight: 700, fontSize: 14, cursor: "pointer" },
   roadsaleBtn: { padding: "10px 18px", borderRadius: 8, background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.4)", color: "#6d28d9", fontWeight: 700, fontSize: 13, cursor: "pointer" },
   refreshBtn: { padding: "8px 12px", borderRadius: 8, background: "#f1f5f9", border: "1px solid #cbd5e1", color: "#64748b", fontWeight: 700, fontSize: 15, cursor: "pointer", lineHeight: 1 },
   editAllocBtn: { padding: "2px 10px", borderRadius: 6, background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.35)", color: "#6d28d9", fontWeight: 700, fontSize: 11, cursor: "pointer" },
