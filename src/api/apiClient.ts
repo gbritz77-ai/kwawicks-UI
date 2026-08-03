@@ -35,7 +35,8 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
   } catch {}
 
   if (!res.ok) {
-    throw new Error(json?.message || json?.error || `Request failed (${res.status})`);
+    const msg = json?.message || json?.error || (typeof json === "string" ? json : null) || text || `Request failed (${res.status})`;
+    throw new Error(msg);
   }
 
   return (json ?? (text as any)) as T;
