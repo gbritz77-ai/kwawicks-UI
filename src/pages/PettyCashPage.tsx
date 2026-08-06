@@ -308,16 +308,16 @@ export default function PettyCashPage() {
           {/* Secondary KPI row */}
           <div style={s.kpiRow}>
             <div style={s.kpiCard}>
-              <div style={s.kpiLabel}>Petty Cash Float (till)</div>
-              <div style={{ ...s.kpiValue, color: "#22c55e" }}>{fmt(FLOAT)}</div>
+              <div style={s.kpiLabel}>Petty Cash Balance (till)</div>
+              <div style={{ ...s.kpiValue, color: "#22c55e" }}>{fmt(summary.currentBalance)}</div>
             </div>
             <div style={s.kpiCard}>
-              <div style={s.kpiLabel}>Hub Sales Cash</div>
-              <div style={{ ...s.kpiValue, color: "#22c55e" }}>{fmt(summary.cashFromHubSales)}</div>
+              <div style={s.kpiLabel}>Client Deposits (Cash)</div>
+              <div style={{ ...s.kpiValue, color: "#22c55e" }}>{fmt(summary.cashFromCreditDeposits)}</div>
             </div>
             <div style={s.kpiCard}>
-              <div style={s.kpiLabel}>Expenses Paid Out</div>
-              <div style={{ ...s.kpiValue, color: "#ef4444" }}>{fmt(summary.totalOutSinceLastCashup)}</div>
+              <div style={s.kpiLabel}>Cash Received (Entries)</div>
+              <div style={{ ...s.kpiValue, color: "#22c55e" }}>{fmt(summary.totalInSinceLastCashup)}</div>
             </div>
             <div style={s.kpiCard}>
               <div style={s.kpiLabel}>Open Entries</div>
