@@ -47,10 +47,12 @@ export default function CollectionRequestsPage() {
   // Allocation modal — supports multiple client slots in one session
   type AllocSlot = {
     clientId: string;
+    clientSearch: string; // text shown in the combobox input
     lines: { speciesId: string; speciesName: string; qty: number; unitPrice: number; orderedQty: number; loadedQty: number }[];
   };
   const [allocItem, setAllocItem] = useState<CollectionRequestDto | null>(null);
   const [allocSlots, setAllocSlots] = useState<AllocSlot[]>([]);
+  const [openSlotDropdown, setOpenSlotDropdown] = useState<number | null>(null);
   const [allocError, setAllocError] = useState("");
 
   // Create form
@@ -437,6 +439,7 @@ export default function CollectionRequestsPage() {
   function blankSlot(cr: CollectionRequestDto): AllocSlot {
     return {
       clientId: "",
+      clientSearch: "",
       lines: cr.lines.map(l => ({
         speciesId: l.speciesId,
         speciesName: l.speciesName || l.speciesId,
@@ -1449,16 +1452,64 @@ export default function CollectionRequestsPage() {
                   </div>
 
                   <label style={s.label}>Allocate To *
-                    <select style={s.input} value={slot.clientId}
-                      onChange={e => setAllocSlots(ss => ss.map((x, j) => j === si ? { ...x, clientId: e.target.value } : x))}
-                      disabled={busy}>
-                      <option value="">— Select destination —</option>
-                      <option value="HUB">🏠 Hub Stock (stays at hub)</option>
-                      <option disabled>──────────────</option>
-                      {clients.map(c => (
-                        <option key={c.clientId} value={c.clientId}>{c.clientName}{c.clientCity ? ` · ${c.clientCity}` : ""}</option>
-                      ))}
-                    </select>
+                    <div style={{ position: "relative" }}>
+                      <input
+                        style={{ ...s.input, cursor: busy ? "not-allowed" : "text" }}
+                        type="text"
+                        placeholder="Search client name…"
+                        value={slot.clientSearch}
+                        disabled={busy}
+                        autoComplete="off"
+                        onFocus={() => { setOpenSlotDropdown(si); }}
+                        onBlur={() => setTimeout(() => setOpenSlotDropdown(prev => prev === si ? null : prev), 150)}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setAllocSlots(ss => ss.map((x, j) => j !== si ? x : { ...x, clientSearch: val, clientId: "" }));
+                          setOpenSlotDropdown(si);
+                        }}
+                      />
+                      {openSlotDropdown === si && !busy && (() => {
+                        const q = slot.clientSearch.toLowerCase();
+                        const hubMatch = !q || "hub stock stays at hub".includes(q);
+                        const filtered = clients.filter(c =>
+                          !q ||
+                          c.clientName.toLowerCase().includes(q) ||
+                          (c.clientCity ?? "").toLowerCase().includes(q)
+                        );
+                        return (
+                          <div style={{
+                            position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100,
+                            background: "var(--card-bg, #fff)", border: "1px solid var(--border, #d1d5db)",
+                            borderRadius: 6, maxHeight: 220, overflowY: "auto",
+                            boxShadow: "0 4px 16px rgba(0,0,0,0.18)", marginTop: 2,
+                          }}>
+                            {hubMatch && (
+                              <div
+                                style={{ padding: "8px 12px", cursor: "pointer", borderBottom: "1px solid var(--border, #e5e7eb)", fontWeight: 500 }}
+                                onMouseDown={() => {
+                                  setAllocSlots(ss => ss.map((x, j) => j !== si ? x : { ...x, clientId: "HUB", clientSearch: "🏠 Hub Stock" }));
+                                  setOpenSlotDropdown(null);
+                                }}
+                              >🏠 Hub Stock (stays at hub)</div>
+                            )}
+                            {filtered.length === 0 && !hubMatch
+                              ? <div style={{ padding: "8px 12px", color: "var(--text-muted, #6b7280)", fontStyle: "italic" }}>No clients found</div>
+                              : filtered.map(c => (
+                                <div
+                                  key={c.clientId}
+                                  style={{ padding: "8px 12px", cursor: "pointer" }}
+                                  onMouseDown={() => {
+                                    const label = c.clientName + (c.clientCity ? ` · ${c.clientCity}` : "");
+                                    setAllocSlots(ss => ss.map((x, j) => j !== si ? x : { ...x, clientId: c.clientId, clientSearch: label }));
+                                    setOpenSlotDropdown(null);
+                                  }}
+                                >{c.clientName}{c.clientCity ? <span style={{ color: "var(--text-muted, #6b7280)" }}> · {c.clientCity}</span> : null}</div>
+                              ))
+                            }
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </label>
 
                   {slot.lines.map((l, li) => {
