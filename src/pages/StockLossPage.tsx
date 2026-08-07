@@ -23,12 +23,13 @@ export default function StockLossPage() {
   const [filterSpecies, setFilterSpecies] = useState("");
 
   // Record loss modal
-  const [showModal,    setShowModal]    = useState(false);
-  const [modalSpecies, setModalSpecies] = useState("");
-  const [modalQty,     setModalQty]     = useState(0);
-  const [modalNotes,   setModalNotes]   = useState("");
-  const [modalBusy,    setModalBusy]    = useState(false);
-  const [modalError,   setModalError]   = useState("");
+  const [showModal,       setShowModal]       = useState(false);
+  const [modalSpecies,    setModalSpecies]    = useState("");
+  const [modalQty,        setModalQty]        = useState(0);
+  const [modalType,       setModalType]       = useState<"Under" | "Over">("Under");
+  const [modalNotes,      setModalNotes]      = useState("");
+  const [modalBusy,       setModalBusy]       = useState(false);
+  const [modalError,      setModalError]      = useState("");
 
   // Latest success flash
   const [flash, setFlash] = useState<{ speciesName: string; qty: number; after: number } | null>(null);
@@ -51,6 +52,7 @@ export default function StockLossPage() {
   function openModal() {
     setModalSpecies(species[0]?.speciesId ?? "");
     setModalQty(0);
+    setModalType("Under");
     setModalNotes("");
     setModalError("");
     setShowModal(true);
@@ -65,6 +67,7 @@ export default function StockLossPage() {
       const result = await stockLossApi.record({
         speciesId: modalSpecies,
         qty: modalQty,
+        adjustmentType: modalType,
         notes: modalNotes.trim(),
       });
       setLosses(prev => [result, ...prev]);
@@ -104,7 +107,7 @@ export default function StockLossPage() {
       {/* Success flash */}
       {flash && (
         <div style={s.flash}>
-          ✓ Recorded {flash.qty} dead {flash.speciesName} — hub stock now {flash.after} on hand.
+          ✓ Recorded {flash.qty} {flash.speciesName} — hub stock now {flash.after} on hand.
         </div>
       )}
 
@@ -154,7 +157,8 @@ export default function StockLossPage() {
               <tr style={s.thead}>
                 <th style={s.th}>Date / Time</th>
                 <th style={s.th}>Species</th>
-                <th style={{ ...s.th, textAlign: "right" }}>Qty Dead</th>
+                <th style={{ ...s.th, textAlign: "right" }}>Qty</th>
+                <th style={s.th}>Type</th>
                 <th style={s.th}>Notes</th>
                 <th style={s.th}>Recorded By</th>
               </tr>
@@ -165,7 +169,16 @@ export default function StockLossPage() {
                   <td style={s.td}>{fmt(l.createdAt)}</td>
                   <td style={{ ...s.td, fontWeight: 600 }}>{l.speciesName || l.speciesId}</td>
                   <td style={{ ...s.td, textAlign: "right" }}>
-                    <span style={s.qtyBadge}>−{l.qty.toLocaleString()}</span>
+                    {l.adjustmentType === "Over"
+                      ? <span style={s.qtyBadgeOver}>+{l.qty.toLocaleString()}</span>
+                      : <span style={s.qtyBadge}>−{l.qty.toLocaleString()}</span>
+                    }
+                  </td>
+                  <td style={s.td}>
+                    {l.adjustmentType === "Over"
+                      ? <span style={s.typeBadgeOver}>Surplus</span>
+                      : <span style={s.typeBadgeLoss}>Dead / Loss</span>
+                    }
                   </td>
                   <td style={{ ...s.td, color: "#64748b" }}>{l.notes || <span style={{ color: "#cbd5e1" }}>—</span>}</td>
                   <td style={{ ...s.td, color: "#64748b", fontSize: 12 }}>{l.recordedByUserId}</td>
@@ -180,12 +193,29 @@ export default function StockLossPage() {
       {showModal && (
         <div style={s.backdrop} onClick={() => !modalBusy && setShowModal(false)}>
           <div style={s.modal} onClick={e => e.stopPropagation()}>
-            <div style={s.modalTitle}>Record Dead Stock</div>
+            <div style={s.modalTitle}>{modalType === "Over" ? "📦 Record Stock Surplus" : "💀 Record Dead / Lost Stock"}</div>
             <div style={s.modalSub}>
-              This will immediately reduce the hub stock count for the selected species.
+              {modalType === "Over"
+                ? "Stock count is higher than the system — this will increase the hub stock count."
+                : "Animals that have died or stock that is missing — this will reduce the hub stock count."}
             </div>
 
             {modalError && <div style={s.formError}>{modalError}</div>}
+
+            <label style={s.label}>Adjustment Type
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button"
+                  style={{ ...s.typeToggle, ...(modalType === "Under" ? s.typeToggleActive : {}) }}
+                  onClick={() => setModalType("Under")} disabled={modalBusy}>
+                  💀 Dead / Loss
+                </button>
+                <button type="button"
+                  style={{ ...s.typeToggle, ...(modalType === "Over" ? s.typeToggleActiveOver : {}) }}
+                  onClick={() => setModalType("Over")} disabled={modalBusy}>
+                  📦 Surplus Found
+                </button>
+              </div>
+            </label>
 
             <label style={s.label}>
               Species
@@ -212,28 +242,29 @@ export default function StockLossPage() {
             )}
 
             <label style={s.label}>
-              Number Dead
+              {modalType === "Over" ? "Qty Found (surplus)" : "Qty Dead / Missing"}
               <NumericInput
                 value={modalQty}
                 onChange={e => setModalQty(Math.max(0, parseInt(e.target.value) || 0))}
                 allowDecimal={false}
-                label="Number Dead"
+                label={modalType === "Over" ? "Qty Found" : "Qty Dead"}
                 min={1}
-                max={selectedSpecies?.qtyOnHandHub ?? 99999}
+                max={99999}
                 style={s.input}
                 disabled={modalBusy}
               />
             </label>
 
-            {selectedSpecies && modalQty > 0 && (
-              <div style={{
-                ...s.stockHint,
-                color: selectedSpecies.qtyOnHandHub - modalQty < 0 ? "#dc2626" : "#15803d",
-                fontWeight: 700,
-              }}>
-                Hub stock after: {(selectedSpecies.qtyOnHandHub - modalQty).toLocaleString()}
-              </div>
-            )}
+            {selectedSpecies && modalQty > 0 && (() => {
+              const after = modalType === "Over"
+                ? selectedSpecies.qtyOnHandHub + modalQty
+                : selectedSpecies.qtyOnHandHub - modalQty;
+              return (
+                <div style={{ ...s.stockHint, color: after < 0 ? "#dc2626" : "#15803d", fontWeight: 700 }}>
+                  Hub stock after: {after.toLocaleString()}
+                </div>
+              );
+            })()}
 
             <label style={s.label}>
               Notes (optional)
@@ -255,10 +286,10 @@ export default function StockLossPage() {
                 Cancel
               </button>
               <button
-                style={{ ...s.primaryBtn, background: "#dc2626" }}
+                style={{ ...s.primaryBtn, background: modalType === "Over" ? "#16a34a" : "#dc2626" }}
                 onClick={submitLoss}
                 disabled={modalBusy}>
-                {modalBusy ? "Recording…" : "💀 Record Loss"}
+                {modalBusy ? "Recording…" : modalType === "Over" ? "📦 Record Surplus" : "💀 Record Loss"}
               </button>
             </div>
           </div>
@@ -297,7 +328,13 @@ const s: Record<string, React.CSSProperties> = {
   th:           { padding: "10px 14px", textAlign: "left" as const, fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.04em", borderBottom: "1px solid #e2e8f0" },
   tr:           { borderBottom: "1px solid #f1f5f9" },
   td:           { padding: "12px 14px", fontSize: 14, color: "#0f172a" },
-  qtyBadge:     { background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.25)", color: "#dc2626", borderRadius: 8, padding: "2px 8px", fontWeight: 700, fontSize: 13 },
+  qtyBadge:        { background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.25)", color: "#dc2626", borderRadius: 8, padding: "2px 8px", fontWeight: 700, fontSize: 13 },
+  qtyBadgeOver:    { background: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.3)", color: "#15803d", borderRadius: 8, padding: "2px 8px", fontWeight: 700, fontSize: 13 },
+  typeBadgeLoss:   { background: "rgba(220,38,38,0.07)", color: "#dc2626", borderRadius: 6, padding: "2px 7px", fontSize: 12, fontWeight: 600 },
+  typeBadgeOver:   { background: "rgba(22,163,74,0.07)", color: "#15803d", borderRadius: 6, padding: "2px 7px", fontSize: 12, fontWeight: 600 },
+  typeToggle:      { flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #d1d5db", background: "#f9fafb", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  typeToggleActive:    { background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.4)", color: "#dc2626" },
+  typeToggleActiveOver:{ background: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.4)", color: "#15803d" },
 
   // Modal
   backdrop:     { position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", backdropFilter: "blur(6px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 16, overflowY: "auto", zIndex: 300 },

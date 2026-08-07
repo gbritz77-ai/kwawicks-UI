@@ -5,6 +5,7 @@ export type StockLossDto = {
   speciesId: string;
   speciesName: string;
   qty: number;
+  adjustmentType: string; // "Under" = loss (reduces stock) | "Over" = surplus found (increases stock)
   notes: string;
   recordedByUserId: string;
   createdAt: string;
