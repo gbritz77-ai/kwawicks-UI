@@ -214,6 +214,7 @@ export type SalesReportRow = {
   lineTotal: number;
   paymentType: string;
   saleType: string;
+  splitPayments: { method: string; amount: number }[];
 };
 
 export type SalesReportResponse = {

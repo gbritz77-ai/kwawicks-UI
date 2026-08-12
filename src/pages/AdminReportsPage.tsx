@@ -2850,7 +2850,19 @@ function SalesTab({
       const g = map.get(key)!;
       g.qty += r.qty; g.total += r.lineTotal;
       const pt = (r.paymentType || "").toLowerCase();
-      if (pt === "cash") g.cash += r.lineTotal;
+      if (pt === "split" && r.splitPayments?.length) {
+        // Distribute line total across methods proportionally to the split amounts
+        const splitTotal = r.splitPayments.reduce((s, sp) => s + sp.amount, 0);
+        r.splitPayments.forEach(sp => {
+          const share = splitTotal > 0 ? (sp.amount / splitTotal) * r.lineTotal : 0;
+          const m = sp.method.toLowerCase();
+          if (m === "cash") g.cash += share;
+          else if (m === "eft") g.eft += share;
+          else if (m === "card" || m === "cardmachine") g.card += share;
+          else if (m === "credit") g.credit += share;
+          else g.other += share;
+        });
+      } else if (pt === "cash") g.cash += r.lineTotal;
       else if (pt === "eft") g.eft += r.lineTotal;
       else if (pt === "card" || pt === "cardmachine") g.card += r.lineTotal;
       else if (pt === "credit") g.credit += r.lineTotal;
@@ -3005,6 +3017,15 @@ function SalesTab({
                       <span style={{ ...salesBadge, ...(r.paymentType === "Cash" ? badgeCash : r.paymentType === "EFT" ? badgeEFT : r.paymentType === "Credit" ? badgeCredit : badgeOther) }}>
                         {r.paymentType || "—"}
                       </span>
+                      {r.paymentType === "Split" && r.splitPayments?.length > 0 && (
+                        <div style={{ marginTop: 3 }}>
+                          {r.splitPayments.map((sp, si) => (
+                            <div key={si} style={{ fontSize: 11, color: "#374151", lineHeight: 1.6 }}>
+                              <span style={{ fontWeight: 700 }}>{sp.method}</span> {fmt(sp.amount)}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td style={{ ...s.td, textAlign: "right" }}>{fmt(r.unitPrice)}</td>
                     <td style={{ ...s.td, textAlign: "right", color: uc !== null ? "#92400e" : "#9ca3af" }}>
