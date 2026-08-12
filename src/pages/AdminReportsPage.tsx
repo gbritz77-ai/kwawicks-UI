@@ -1477,6 +1477,7 @@ function InvoicesTab({
   const [overridePrompt, setOverridePrompt] = useState<{ invoiceId: string; customerId: string; balance: number; clientName: string } | null>(null);
   const [payTypeFilter, setPayTypeFilter] = useState("");
   const [saleTypeFilter, setSaleTypeFilter] = useState("");
+  const [invoiceNumFilter, setInvoiceNumFilter] = useState("");
   const [creditBalances, setCreditBalances] = useState<Record<string, number>>({}); // customerId → balance
   const [creditBalanceLoading, setCreditBalanceLoading] = useState<Record<string, boolean>>({});
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
@@ -1625,9 +1626,10 @@ function InvoicesTab({
   const totalPending    = invoices?.filter((i) => i.paymentStatus === "Pending").reduce((s, i) => s + i.grandTotal, 0) ?? 0;
   const totalPaid       = invoices?.filter((i) => i.paymentStatus === "Paid").reduce((s, i) => s + i.grandTotal, 0) ?? 0;
   const visibleInvoices = invoices?.filter((i) =>
-    (!payFilter      || i.paymentStatus === payFilter) &&
-    (!payTypeFilter  || i.paymentType   === payTypeFilter) &&
-    (!saleTypeFilter || i.saleType      === saleTypeFilter)
+    (!payFilter        || i.paymentStatus === payFilter) &&
+    (!payTypeFilter    || i.paymentType   === payTypeFilter) &&
+    (!saleTypeFilter   || i.saleType      === saleTypeFilter) &&
+    (!invoiceNumFilter || (i.invoiceNumber ?? "").toLowerCase().includes(invoiceNumFilter.toLowerCase()))
   ) ?? [];
 
   const SALE_TYPE_LABELS: Record<string, string> = {
@@ -1751,6 +1753,15 @@ function InvoicesTab({
           <option value="Credit">Credit</option>
           <option value="OnAccount">On Account</option>
         </select>
+
+        <label style={s.label}>Invoice #</label>
+        <input
+          type="text"
+          placeholder="e.g. INV001372"
+          value={invoiceNumFilter}
+          onChange={e => setInvoiceNumFilter(e.target.value)}
+          style={{ ...s.dateInput, minWidth: 140 }}
+        />
 
         <label style={s.label}>From</label>
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={s.dateInput} />
@@ -2837,20 +2848,30 @@ function SalesTab({
     return s + (c !== null ? c * r.qty : 0);
   }, 0);
 
-  // By Species grouping: consolidate by date + speciesId + price (rounded to cents)
-  type CreditLine = { clientName: string; invoiceNumber: string; amount: number };
-  type SpGroup = { date: string; speciesName: string; qty: number; unitPrice: number; cash: number; eft: number; card: number; credit: number; other: number; total: number; creditLines: CreditLine[] };
+  // By Species grouping: non-credit consolidated by date + speciesId + price; credit = one row per invoice
+  type SpGroup = { date: string; speciesName: string; qty: number; unitPrice: number; cash: number; eft: number; card: number; credit: number; other: number; total: number; isCreditRow: boolean; clientName: string; invoiceNumber: string };
   const bySpeciesRows: SpGroup[] = [];
   if (salesView === "species") {
     const map = new Map<string, SpGroup>();
     visible.forEach(r => {
       const day = r.date.slice(0, 10); // normalize full datetime to YYYY-MM-DD
       const priceCents = Math.round(r.unitPrice * 100);
+      const pt = (r.paymentType || "").toLowerCase();
+
+      // Credit invoices: one row per invoice (not consolidated)
+      if (pt === "credit") {
+        const key = `credit|${r.invoiceId}|${r.speciesId}`;
+        if (!map.has(key)) map.set(key, { date: day, speciesName: r.speciesName, qty: 0, unitPrice: r.unitPrice, cash: 0, eft: 0, card: 0, credit: 0, other: 0, total: 0, isCreditRow: true, clientName: r.clientName, invoiceNumber: r.invoiceNumber });
+        const g = map.get(key)!;
+        g.qty += r.qty; g.total += r.lineTotal; g.credit += r.lineTotal;
+        return;
+      }
+
+      // All other payment types: consolidate by date + species + price
       const key = `${day}|${r.speciesId}|${priceCents}`;
-      if (!map.has(key)) map.set(key, { date: day, speciesName: r.speciesName, qty: 0, unitPrice: r.unitPrice, cash: 0, eft: 0, card: 0, credit: 0, other: 0, total: 0, creditLines: [] });
+      if (!map.has(key)) map.set(key, { date: day, speciesName: r.speciesName, qty: 0, unitPrice: r.unitPrice, cash: 0, eft: 0, card: 0, credit: 0, other: 0, total: 0, isCreditRow: false, clientName: "", invoiceNumber: "" });
       const g = map.get(key)!;
       g.qty += r.qty; g.total += r.lineTotal;
-      const pt = (r.paymentType || "").toLowerCase();
       if (pt === "split" && r.splitPayments?.length) {
         // Distribute line total across methods proportionally to the split amounts
         const splitTotal = r.splitPayments.reduce((s, sp) => s + sp.amount, 0);
@@ -2860,13 +2881,12 @@ function SalesTab({
           if (m === "cash") g.cash += share;
           else if (m === "eft") g.eft += share;
           else if (m === "card" || m === "cardmachine") g.card += share;
-          else if (m === "credit") { g.credit += share; g.creditLines.push({ clientName: r.clientName, invoiceNumber: r.invoiceNumber, amount: share }); }
+          else if (m === "credit") g.credit += share;
           else g.other += share;
         });
       } else if (pt === "cash") g.cash += r.lineTotal;
       else if (pt === "eft") g.eft += r.lineTotal;
       else if (pt === "card" || pt === "cardmachine") g.card += r.lineTotal;
-      else if (pt === "credit") { g.credit += r.lineTotal; g.creditLines.push({ clientName: r.clientName, invoiceNumber: r.invoiceNumber, amount: r.lineTotal }); }
       else g.other += r.lineTotal;
     });
     bySpeciesRows.push(...Array.from(map.values()).sort((a, b) => a.date === b.date ? a.speciesName.localeCompare(b.speciesName) : a.date.localeCompare(b.date)));
@@ -2972,11 +2992,11 @@ function SalesTab({
                       {r.credit > 0 ? (
                         <>
                           <div style={{ fontWeight: 600 }}>{fmt(r.credit)}</div>
-                          {r.creditLines.map((cl, ci) => (
-                            <div key={ci} style={{ fontSize: 11, color: "#6b7280", lineHeight: 1.6, whiteSpace: "nowrap" as const }}>
-                              {cl.invoiceNumber} · {cl.clientName}
+                          {r.isCreditRow && (
+                            <div style={{ fontSize: 11, color: "#6b7280", lineHeight: 1.6, whiteSpace: "nowrap" as const }}>
+                              {r.invoiceNumber} · {r.clientName}
                             </div>
-                          ))}
+                          )}
                         </>
                       ) : "—"}
                     </td>
