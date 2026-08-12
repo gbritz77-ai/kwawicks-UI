@@ -777,8 +777,8 @@ function BankStatementsTab() {
               })}
             </div>
 
-            {/* Possible duplicates — hidden from the main list by default */}
-            {selected.possibleDuplicates && selected.possibleDuplicates.length > 0 && (
+            {/* Possible duplicates — hidden from the main list by default; irrelevant for debit view */}
+            {txTypeFilter !== "Debit" && selected.possibleDuplicates && selected.possibleDuplicates.length > 0 && (
               <div style={sp.dupSection}>
                 <div style={sp.dupHeader} onClick={() => setShowDuplicates(v => !v)}>
                   <span>⚠ Possible Duplicates ({selected.possibleDuplicates.length})</span>
