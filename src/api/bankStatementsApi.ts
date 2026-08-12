@@ -18,6 +18,7 @@ export type BankTransactionResponse = {
   allocatedSupplierName: string;
   allocatedClientId: string;
   allocatedClientName: string;
+  expenseCategory: string;
   allocatedAt: string | null;
   /** True when this unallocated credit matches (same date + amount) a transaction that was
    * already allocated under a different, previously-imported statement. */
@@ -108,7 +109,12 @@ export type BankReconAllocationReportItem = {
   allocatedSupplierName: string;
   allocatedClientId: string;
   allocatedClientName: string;
+  expenseCategory: string;
   allocatedAt: string | null;
+};
+
+export type AllocateExpenseRequest = {
+  category: string;
 };
 
 // ── API ────────────────────────────────────────────────────────────────────
@@ -172,6 +178,21 @@ export const bankStatementsApi = {
       `/api/bank-statements/${statementId}/transactions/${transactionId}/allocate-supplier`,
       req
     ),
+
+  /** Allocate a bank debit transaction to an expense category. Returns updated statement. */
+  allocateExpense: (statementId: string, transactionId: string, req: AllocateExpenseRequest) =>
+    api.put<AllocateResponse>(
+      `/api/bank-statements/${statementId}/transactions/${transactionId}/allocate-expense`,
+      req
+    ),
+
+  /** Get all expense categories. */
+  getExpenseCategories: () =>
+    api.get<string[]>("/api/bank-statements/expense-categories"),
+
+  /** Add a new expense category. Returns updated list. */
+  addExpenseCategory: (category: string) =>
+    api.post<string[]>("/api/bank-statements/expense-categories", { category }),
 
   /** Remove allocation from a bank transaction. Returns updated statement. */
   deallocate: (statementId: string, transactionId: string) =>

@@ -45,7 +45,7 @@ export default function ReconPage() {
 
 // ── Bank Statements tab ────────────────────────────────────────────────────
 
-type RightMode = "matches" | "browse" | "clientcredit" | "suppliers" | "nonclient";
+type RightMode = "matches" | "browse" | "clientcredit" | "suppliers" | "nonclient" | "expense";
 
 function BankStatementsTab() {
   // Statement list
@@ -113,6 +113,13 @@ function BankStatementsTab() {
   const [pickedSupplier,  setPickedSupplier]  = useState<SupplierResponse | null>(null);
   const [supplierNotes,   setSupplierNotes]   = useState("");
 
+  // Expense allocation
+  const [expenseCategories,      setExpenseCategories]      = useState<string[]>([]);
+  const [expenseCatsLoaded,      setExpenseCatsLoaded]      = useState(false);
+  const [pickedExpenseCategory,  setPickedExpenseCategory]  = useState("");
+  const [newExpenseCategory,     setNewExpenseCategory]     = useState("");
+  const [addingCategory,         setAddingCategory]         = useState(false);
+
   // ── Loaders ──────────────────────────────────────────────────────────────
 
   async function loadStatements() {
@@ -176,6 +183,7 @@ function BankStatementsTab() {
     setNcDescription(""); setNcAmount("");
     setPickedSupplier(null); setSupplierNotes(""); setSupplierSearch("");
     setPickedCreditClient(null); setCreditClientSearch(""); setCreditBalance(null); setCreditNotes("");
+    setPickedExpenseCategory(""); setNewExpenseCategory("");
   }
 
   async function selectTx(tx: BankTransactionResponse) {
@@ -185,6 +193,7 @@ function BankStatementsTab() {
     setNcDescription(""); setNcAmount("");
     setPickedSupplier(null); setSupplierNotes(""); setSupplierSearch("");
     setPickedCreditClient(null); setCreditClientSearch(""); setCreditBalance(null); setCreditNotes("");
+    setPickedExpenseCategory(""); setNewExpenseCategory("");
 
     // Load smart matches
     setMatchesLoading(true);
@@ -274,6 +283,42 @@ function BankStatementsTab() {
   async function switchToSuppliers() {
     setRightMode("suppliers"); setPickedSupplier(null); setSupplierNotes("");
     await ensureSuppliers();
+  }
+
+  // ── Expense categories ────────────────────────────────────────────────────
+
+  async function switchToExpense() {
+    setRightMode("expense"); setPickedExpenseCategory(""); setNewExpenseCategory("");
+    if (!expenseCatsLoaded) {
+      try { setExpenseCategories(await bankStatementsApi.getExpenseCategories()); setExpenseCatsLoaded(true); }
+      catch { /* ignore */ }
+    }
+  }
+
+  async function allocateExpense() {
+    if (!selected || !activeTx || !pickedExpenseCategory) return;
+    setAllocBusy("expense"); setAllocError("");
+    try {
+      const res = await bankStatementsApi.allocateExpense(
+        selected.statementId, activeTx.transactionId, { category: pickedExpenseCategory }
+      );
+      setSelected(res.statement);
+      resetRightPanel();
+      await loadStatements();
+    } catch (e: any) { setAllocError(e?.message ?? "Failed to allocate."); }
+    finally { setAllocBusy(null); }
+  }
+
+  async function addExpenseCategory() {
+    if (!newExpenseCategory.trim()) return;
+    setAddingCategory(true);
+    try {
+      const updated = await bankStatementsApi.addExpenseCategory(newExpenseCategory.trim());
+      setExpenseCategories(updated);
+      setPickedExpenseCategory(newExpenseCategory.trim());
+      setNewExpenseCategory("");
+    } catch (e: any) { setAllocError(e?.message ?? "Failed to add category."); }
+    finally { setAddingCategory(false); }
   }
 
   // ── Allocate ──────────────────────────────────────────────────────────────
@@ -404,6 +449,8 @@ function BankStatementsTab() {
                       ? <span style={{...s.badge,background:"#fef3c7",color:"#92400e"}}>Supplier</span>
                       : r.allocationType === "ClientCredit"
                       ? <span style={{...s.badge,background:"#dcfce7",color:"#166534"}}>Credit Payment</span>
+                      : r.allocationType === "Expense"
+                      ? <span style={{...s.badge,background:"#fce7f3",color:"#9d174d"}}>Expense</span>
                       : <span style={{...s.badge,background:"#f3e8ff",color:"#7c3aed"}}>Non-Client</span>}
                   </td>
                   <td style={s.td}>
@@ -413,6 +460,8 @@ function BankStatementsTab() {
                       ? <span>{r.allocatedSupplierName || r.allocatedSupplierId}</span>
                       : r.allocationType === "ClientCredit"
                       ? <span>{r.allocatedClientName || r.allocatedClientId}</span>
+                      : r.allocationType === "Expense"
+                      ? <span>{r.expenseCategory}</span>
                       : r.nonClientDescription}
                   </td>
                   <td style={s.td}>{fmtDate(r.allocatedAt)}</td>
@@ -509,6 +558,8 @@ function BankStatementsTab() {
                   ? (tx.allocatedSupplierName || tx.allocatedSupplierId)
                   : tx.allocationType === "ClientCredit"
                   ? (tx.allocatedClientName || tx.allocatedClientId)
+                  : tx.allocationType === "Expense"
+                  ? tx.expenseCategory
                   : tx.nonClientDescription || "Non-client";
 
                 return (
@@ -536,12 +587,14 @@ function BankStatementsTab() {
                           ...(tx.allocationType === "Invoice"       ? s.badgeEFT
                             : tx.allocationType === "Supplier"      ? { background:"#fef3c7", color:"#92400e" }
                             : tx.allocationType === "ClientCredit"  ? { background:"#dcfce7", color:"#166534" }
+                            : tx.allocationType === "Expense"       ? { background:"#fce7f3", color:"#9d174d" }
                             : { background:"#f3e8ff", color:"#7c3aed" }),
                           fontSize: 11
                         }}>
-                          {tx.allocationType === "Invoice"      ? "Invoice"
-                            : tx.allocationType === "Supplier"  ? "Supplier"
+                          {tx.allocationType === "Invoice"         ? "Invoice"
+                            : tx.allocationType === "Supplier"     ? "Supplier"
                             : tx.allocationType === "ClientCredit" ? "Credit Payment"
+                            : tx.allocationType === "Expense"      ? "Expense"
                             : "Non-client"}
                         </span>
                         <span style={{ fontSize:12, color:"#374151" }}>{allocLabel}</span>
@@ -635,6 +688,7 @@ function BankStatementsTab() {
                   <button style={rightMode==="clientcredit"? sp.modeTabActive : sp.modeTab} onClick={switchToClientCredit}>Client Credit</button>
                   <button style={rightMode==="suppliers"   ? sp.modeTabActive : sp.modeTab} onClick={switchToSuppliers}>Browse Suppliers</button>
                   <button style={rightMode==="nonclient"   ? sp.modeTabActive : sp.modeTab} onClick={()=>setRightMode("nonclient")}>Non-Client</button>
+                  <button style={rightMode==="expense"     ? sp.modeTabActive : sp.modeTab} onClick={switchToExpense}>Expense</button>
                 </div>
 
                 {/* ─ Smart Matches ─ */}
@@ -976,6 +1030,64 @@ function BankStatementsTab() {
                       onClick={allocateNonClient}
                     >
                       {allocBusy === "nonclient" ? "Allocating…" : "✔ Confirm Non-Client Allocation"}
+                    </button>
+                  </div>
+                )}
+
+                {/* ─ Expense ─ */}
+                {rightMode === "expense" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "4px 0" }}>
+                    <div style={{ fontSize: 13, color: "#6b7280" }}>
+                      Allocate this debit to an expense category (e.g. Fuel, Bank Charges).
+                    </div>
+                    <div style={s.fieldGroup}>
+                      <label style={s.label}>Expense Category *</label>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
+                        {expenseCategories.map(cat => (
+                          <button
+                            key={cat}
+                            onClick={() => setPickedExpenseCategory(cat)}
+                            style={{
+                              background: pickedExpenseCategory === cat ? "#9d174d" : "#fce7f3",
+                              color: pickedExpenseCategory === cat ? "#fff" : "#9d174d",
+                              border: "1px solid #f9a8d4",
+                              borderRadius: 8,
+                              padding: "6px 14px",
+                              fontSize: 13,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                            }}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 10 }}>
+                      <label style={{ ...s.label, marginBottom: 6, display: "block" }}>Add New Category</label>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input
+                          style={{ ...s.input, flex: 1 }}
+                          placeholder="e.g. Vehicle Maintenance…"
+                          value={newExpenseCategory}
+                          onChange={e => setNewExpenseCategory(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter" && newExpenseCategory.trim()) addExpenseCategory(); }}
+                        />
+                        <button
+                          style={{ ...sp.allocBtn, background: "#6b7280", opacity: (!newExpenseCategory.trim() || addingCategory) ? 0.5 : 1 }}
+                          disabled={!newExpenseCategory.trim() || addingCategory}
+                          onClick={addExpenseCategory}
+                        >
+                          {addingCategory ? "…" : "+ Add"}
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      style={{ ...sp.allocBtn, padding: "10px 20px", fontSize: 14, background: "#9d174d", opacity: (!pickedExpenseCategory || allocBusy === "expense") ? 0.5 : 1 }}
+                      disabled={!pickedExpenseCategory || !!allocBusy}
+                      onClick={allocateExpense}
+                    >
+                      {allocBusy === "expense" ? "Allocating…" : `✔ Allocate to ${pickedExpenseCategory || "…"}`}
                     </button>
                   </div>
                 )}
