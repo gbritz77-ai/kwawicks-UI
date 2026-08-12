@@ -2838,7 +2838,8 @@ function SalesTab({
   }, 0);
 
   // By Species grouping: consolidate by date + speciesId + price (rounded to cents)
-  type SpGroup = { date: string; speciesName: string; qty: number; unitPrice: number; cash: number; eft: number; card: number; credit: number; other: number; total: number };
+  type CreditLine = { clientName: string; invoiceNumber: string; amount: number };
+  type SpGroup = { date: string; speciesName: string; qty: number; unitPrice: number; cash: number; eft: number; card: number; credit: number; other: number; total: number; creditLines: CreditLine[] };
   const bySpeciesRows: SpGroup[] = [];
   if (salesView === "species") {
     const map = new Map<string, SpGroup>();
@@ -2846,7 +2847,7 @@ function SalesTab({
       const day = r.date.slice(0, 10); // normalize full datetime to YYYY-MM-DD
       const priceCents = Math.round(r.unitPrice * 100);
       const key = `${day}|${r.speciesId}|${priceCents}`;
-      if (!map.has(key)) map.set(key, { date: day, speciesName: r.speciesName, qty: 0, unitPrice: r.unitPrice, cash: 0, eft: 0, card: 0, credit: 0, other: 0, total: 0 });
+      if (!map.has(key)) map.set(key, { date: day, speciesName: r.speciesName, qty: 0, unitPrice: r.unitPrice, cash: 0, eft: 0, card: 0, credit: 0, other: 0, total: 0, creditLines: [] });
       const g = map.get(key)!;
       g.qty += r.qty; g.total += r.lineTotal;
       const pt = (r.paymentType || "").toLowerCase();
@@ -2859,13 +2860,13 @@ function SalesTab({
           if (m === "cash") g.cash += share;
           else if (m === "eft") g.eft += share;
           else if (m === "card" || m === "cardmachine") g.card += share;
-          else if (m === "credit") g.credit += share;
+          else if (m === "credit") { g.credit += share; g.creditLines.push({ clientName: r.clientName, invoiceNumber: r.invoiceNumber, amount: share }); }
           else g.other += share;
         });
       } else if (pt === "cash") g.cash += r.lineTotal;
       else if (pt === "eft") g.eft += r.lineTotal;
       else if (pt === "card" || pt === "cardmachine") g.card += r.lineTotal;
-      else if (pt === "credit") g.credit += r.lineTotal;
+      else if (pt === "credit") { g.credit += r.lineTotal; g.creditLines.push({ clientName: r.clientName, invoiceNumber: r.invoiceNumber, amount: r.lineTotal }); }
       else g.other += r.lineTotal;
     });
     bySpeciesRows.push(...Array.from(map.values()).sort((a, b) => a.date === b.date ? a.speciesName.localeCompare(b.speciesName) : a.date.localeCompare(b.date)));
@@ -2966,7 +2967,20 @@ function SalesTab({
                   <td style={{ ...s.td, textAlign: "right", color: r.cash > 0 ? "#166534" : "#9ca3af" }}>{r.cash > 0 ? fmt(r.cash) : "—"}</td>
                   <td style={{ ...s.td, textAlign: "right", color: r.eft > 0 ? "#1e40af" : "#9ca3af" }}>{r.eft > 0 ? fmt(r.eft) : "—"}</td>
                   <td style={{ ...s.td, textAlign: "right", color: r.card > 0 ? "#7c3aed" : "#9ca3af" }}>{r.card > 0 ? fmt(r.card) : "—"}</td>
-                  {hasCredit && <td style={{ ...s.td, textAlign: "right", color: r.credit > 0 ? "#854d0e" : "#9ca3af" }}>{r.credit > 0 ? fmt(r.credit) : "—"}</td>}
+                  {hasCredit && (
+                    <td style={{ ...s.td, textAlign: "right", color: r.credit > 0 ? "#854d0e" : "#9ca3af" }}>
+                      {r.credit > 0 ? (
+                        <>
+                          <div style={{ fontWeight: 600 }}>{fmt(r.credit)}</div>
+                          {r.creditLines.map((cl, ci) => (
+                            <div key={ci} style={{ fontSize: 11, color: "#6b7280", lineHeight: 1.6, whiteSpace: "nowrap" as const }}>
+                              {cl.invoiceNumber} · {cl.clientName}
+                            </div>
+                          ))}
+                        </>
+                      ) : "—"}
+                    </td>
+                  )}
                   {hasOther  && <td style={{ ...s.td, textAlign: "right", color: r.other > 0 ? "#374151" : "#9ca3af" }}>{r.other > 0 ? fmt(r.other) : "—"}</td>}
                   <td style={{ ...s.td, textAlign: "right", fontWeight: 700 }}>{fmt(r.total)}</td>
                 </tr>
