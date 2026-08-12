@@ -321,6 +321,9 @@ export const reportsApi = {
   },
 
   getAllStatements: (from?: string, to?: string) =>
+    api.get<CustomerStatementResponse[]>(`/api/reports/statements${dateParams(from, to)}`),
+
+  getClientBalances: (from?: string, to?: string) =>
     api.get<ClientCreditStatementSummary[]>(`/api/reports/client-balances${dateParams(from, to)}`),
 
   getSpeciesRevenue: (from?: string, to?: string) =>

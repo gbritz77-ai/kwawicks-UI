@@ -157,7 +157,7 @@ export default function AdminReportsPage() {
         setStaffDeductions(await reportsApi.getStaffStockDeductions({ from: from || undefined, to: to || undefined }));
       }
       if (tab === "client-balances") {
-        setClientBalances(await reportsApi.getAllStatements(from || undefined, to || undefined));
+        setClientBalances(await reportsApi.getClientBalances(from || undefined, to || undefined));
       }
     } catch {
       setError("Failed to load report.");
