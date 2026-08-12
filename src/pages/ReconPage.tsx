@@ -8,6 +8,7 @@ import type {
   BankTransactionResponse,
   AllocationWarning,
   BankReconAllocationReportItem,
+  DebitReportResponse,
 } from "../api/bankStatementsApi";
 import { clientsApi } from "../api/clientsApi";
 import type { ClientDto } from "../api/clientsApi";
@@ -61,6 +62,15 @@ function BankStatementsTab() {
   const [reportLoading, setReportLoading] = useState(false);
   const [reportFrom,    setReportFrom]    = useState(thirtyDaysAgoIso());
   const [reportTo,      setReportTo]      = useState(todayIso());
+
+  // Debit report view
+  const [showDebitReport,    setShowDebitReport]    = useState(false);
+  const [debitReport,        setDebitReport]        = useState<DebitReportResponse | null>(null);
+  const [debitReportLoading, setDebitReportLoading] = useState(false);
+  const [debitReportFrom,    setDebitReportFrom]    = useState(thirtyDaysAgoIso());
+  const [debitReportTo,      setDebitReportTo]      = useState(todayIso());
+  const [debitAllocFilter,   setDebitAllocFilter]   = useState<"all"|"allocated"|"unallocated">("all");
+  const [debitCatFilter,     setDebitCatFilter]     = useState("");
 
   // Upload
   const fileRef = useRef<HTMLInputElement>(null);
@@ -157,6 +167,19 @@ function BankStatementsTab() {
     finally { setReportLoading(false); }
   }
   useEffect(() => { if (showReport) loadReport(); }, [showReport]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadDebitReport() {
+    setDebitReportLoading(true);
+    try {
+      const data = await bankStatementsApi.getDebitReport({
+        from: debitReportFrom || undefined,
+        to:   debitReportTo   ? debitReportTo + "T23:59:59Z" : undefined,
+      });
+      setDebitReport(data);
+    } catch (e: any) { setError(e?.message ?? "Failed to load debit report."); }
+    finally { setDebitReportLoading(false); }
+  }
+  useEffect(() => { if (showDebitReport) loadDebitReport(); }, [showDebitReport]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Upload ────────────────────────────────────────────────────────────────
 
@@ -410,6 +433,137 @@ function BankStatementsTab() {
 
   const totalUnalloc  = statements.reduce((sum, s) => sum + s.unallocatedCount, 0);
   const totalUnallocAmt = statements.reduce((sum, s) => sum + s.unallocatedAmount, 0);
+
+  // ── Debit report view ─────────────────────────────────────────────────────
+
+  if (showDebitReport) {
+    const visibleItems = (debitReport?.items ?? []).filter(item => {
+      if (debitAllocFilter === "allocated"   && !item.isAllocated) return false;
+      if (debitAllocFilter === "unallocated" && item.isAllocated)  return false;
+      if (debitCatFilter && item.allocationType !== debitCatFilter) return false;
+      return true;
+    });
+    const allocationTypes = Array.from(new Set((debitReport?.items ?? []).filter(i => i.isAllocated).map(i => i.allocationType))).sort();
+
+    const badgeStyle = (type: string): React.CSSProperties =>
+      type === "Expense"   ? { background:"#fce7f3", color:"#9d174d" } :
+      type === "Supplier"  ? { background:"#fef3c7", color:"#92400e" } :
+      type === "NonClient" ? { background:"#f3e8ff", color:"#7c3aed" } :
+                             { background:"#f1f5f9", color:"#374151" };
+
+    return (
+      <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        {error && <div style={s.errorBanner}>{error}</div>}
+
+        {/* Header */}
+        <div style={s.detailHeader}>
+          <button style={s.backBtn} onClick={() => { setShowDebitReport(false); setDebitReport(null); }}>← Back</button>
+          <span style={{ fontWeight:700, fontSize:15, flex:1 }}>Debit Report</span>
+          <div style={s.filterRow}>
+            <div style={s.filterGroup}><label style={s.filterLabel}>From</label><input type="date" style={s.input} value={debitReportFrom} onChange={e=>setDebitReportFrom(e.target.value)} /></div>
+            <div style={s.filterGroup}><label style={s.filterLabel}>To</label><input type="date" style={s.input} value={debitReportTo} onChange={e=>setDebitReportTo(e.target.value)} /></div>
+            <button style={s.applyBtn} onClick={loadDebitReport} disabled={debitReportLoading}>{debitReportLoading?"Loading…":"Apply"}</button>
+          </div>
+        </div>
+
+        {debitReportLoading ? <div style={s.empty}>Loading…</div> : !debitReport ? null : (
+          <>
+            {/* KPI cards */}
+            <div style={s.kpiRow}>
+              <div style={s.kpiCard}><div style={s.kpiValue}>{fmt(debitReport.totalDebits)}</div><div style={s.kpiLabel}>Total Debits</div></div>
+              <div style={{...s.kpiCard,...s.kpiGreen}}><div style={s.kpiValue}>{fmt(debitReport.totalAllocated)}</div><div style={s.kpiLabel}>Allocated</div></div>
+              <div style={{...s.kpiCard, borderLeft:"4px solid #ef4444"}}><div style={{...s.kpiValue, color: debitReport.totalUnallocated > 0 ? "#ef4444" : "#111827"}}>{fmt(debitReport.totalUnallocated)}</div><div style={s.kpiLabel}>Unallocated</div></div>
+            </div>
+
+            {/* Category breakdown */}
+            {debitReport.byCategory.length > 0 && (
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                {debitReport.byCategory.map(cat => (
+                  <div
+                    key={cat.label}
+                    onClick={() => {
+                      const type = cat.label.startsWith("Expense") ? "Expense" : cat.label.startsWith("Supplier") ? "Supplier" : cat.label.startsWith("Non-Client") ? "NonClient" : "";
+                      setDebitCatFilter(prev => prev === type ? "" : type);
+                      setDebitAllocFilter(cat.label === "Unallocated" ? "unallocated" : "all");
+                    }}
+                    style={{ background:"#f8fafc", border:"1px solid #e5e7eb", borderRadius:10, padding:"10px 16px", cursor:"pointer", minWidth:140 }}
+                  >
+                    <div style={{ fontSize:13, fontWeight:700, color:"#111827", marginBottom:2 }}>{fmt(cat.total)}</div>
+                    <div style={{ fontSize:12, color:"#6b7280" }}>{cat.label}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Filters */}
+            <div style={{ ...s.filterRow, marginBottom:0 }}>
+              <div style={s.filterGroup}>
+                <label style={s.filterLabel}>Status</label>
+                <select style={s.select} value={debitAllocFilter} onChange={e=>{setDebitAllocFilter(e.target.value as any); setDebitCatFilter("");}}>
+                  <option value="all">All</option>
+                  <option value="allocated">Allocated</option>
+                  <option value="unallocated">Unallocated</option>
+                </select>
+              </div>
+              {allocationTypes.length > 0 && (
+                <div style={s.filterGroup}>
+                  <label style={s.filterLabel}>Category Type</label>
+                  <select style={s.select} value={debitCatFilter} onChange={e=>setDebitCatFilter(e.target.value)}>
+                    <option value="">All</option>
+                    {allocationTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+              )}
+              <div style={{ alignSelf:"flex-end", color:"#6b7280", fontSize:13, paddingBottom:8 }}>{visibleItems.length} rows</div>
+            </div>
+
+            {/* Table */}
+            {visibleItems.length === 0
+              ? <div style={s.empty}>No debit transactions in this date range.</div>
+              : (
+              <div style={s.tableWrap}><table style={s.table}>
+                <thead><tr>
+                  <th style={s.th}>Date</th>
+                  <th style={s.th}>Description</th>
+                  <th style={s.th}>Reference</th>
+                  <th style={{...s.th,textAlign:"right"}}>Amount</th>
+                  <th style={s.th}>Status</th>
+                  <th style={s.th}>Allocated To</th>
+                  <th style={s.th}>Allocated At</th>
+                  <th style={s.th}>Statement</th>
+                </tr></thead>
+                <tbody>
+                  {visibleItems.map(item => (
+                    <tr key={item.transactionId} style={{ background: item.isAllocated ? "#f0fdf4" : "#fff" }}>
+                      <td style={s.td}>{fmtDate(item.date)}</td>
+                      <td style={{...s.td, maxWidth:260, overflow:"hidden", textOverflow:"ellipsis"}}>{item.description}</td>
+                      <td style={{...s.td,...s.mono, fontSize:12}}>{item.reference||"—"}</td>
+                      <td style={{...s.td,textAlign:"right",fontWeight:700}}>{fmt(item.amount)}</td>
+                      <td style={s.td}>
+                        {item.isAllocated
+                          ? <span style={{...s.badge, background:"#dcfce7", color:"#166534"}}>Allocated</span>
+                          : <span style={{...s.badge, background:"#fee2e2", color:"#991b1b"}}>Unallocated</span>}
+                      </td>
+                      <td style={s.td}>
+                        {item.isAllocated ? (
+                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                            <span style={{...s.badge, ...badgeStyle(item.allocationType), fontSize:11}}>{item.allocationType}</span>
+                            <span style={{ fontSize:13, color:"#374151" }}>{item.allocatedTo}</span>
+                          </div>
+                        ) : "—"}
+                      </td>
+                      <td style={s.td}>{item.isAllocated ? fmtDate(item.allocatedAt) : "—"}</td>
+                      <td style={{...s.td, fontSize:12, color:"#9ca3af", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis"}}>{item.fileName}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table></div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
 
   // ── Allocation report view ────────────────────────────────────────────────
 
@@ -1112,7 +1266,10 @@ function BankStatementsTab() {
           <div style={s.kpiCard}><div style={{...s.kpiValue,color:totalUnalloc>0?"#ef4444":"#111827"}}>{totalUnalloc}</div><div style={s.kpiLabel}>Unallocated</div></div>
           <div style={s.kpiCard}><div style={{...s.kpiValue,color:totalUnallocAmt>0?"#ef4444":"#111827",fontSize:18}}>{fmt(totalUnallocAmt)}</div><div style={s.kpiLabel}>Unallocated Amount</div></div>
         </div>
-        <button style={s.applyBtn} onClick={()=>setShowReport(true)}>📊 Allocation Report</button>
+        <div style={{ display:"flex", gap:8 }}>
+          <button style={s.applyBtn} onClick={()=>setShowDebitReport(true)}>📉 Debit Report</button>
+          <button style={s.applyBtn} onClick={()=>setShowReport(true)}>📊 Allocation Report</button>
+        </div>
       </div>
 
       {/* Upload */}

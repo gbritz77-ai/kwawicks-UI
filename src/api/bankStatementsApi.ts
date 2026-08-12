@@ -117,6 +117,33 @@ export type AllocateExpenseRequest = {
   category: string;
 };
 
+export type DebitReportItem = {
+  statementId: string;
+  fileName: string;
+  transactionId: string;
+  date: string;
+  description: string;
+  reference: string;
+  amount: number;
+  isAllocated: boolean;
+  allocationType: string;
+  allocatedTo: string;
+  allocatedAt: string | null;
+};
+
+export type DebitReportCategorySummary = {
+  label: string;
+  total: number;
+};
+
+export type DebitReportResponse = {
+  totalDebits: number;
+  totalAllocated: number;
+  totalUnallocated: number;
+  byCategory: DebitReportCategorySummary[];
+  items: DebitReportItem[];
+};
+
 // ── API ────────────────────────────────────────────────────────────────────
 
 export const bankStatementsApi = {
@@ -199,6 +226,15 @@ export const bankStatementsApi = {
     api.del<BankStatementResponse>(
       `/api/bank-statements/${statementId}/transactions/${transactionId}/allocate`
     ),
+
+  /** Debit report across all statements by date range. */
+  getDebitReport: (params?: { from?: string; to?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to)   qs.set("to",   params.to);
+    const q = qs.toString();
+    return api.get<DebitReportResponse>(`/api/bank-statements/debit-report${q ? `?${q}` : ""}`);
+  },
 
   /** Allocation report across all statements. */
   getAllocationReport: (params?: { from?: string; to?: string }) => {
