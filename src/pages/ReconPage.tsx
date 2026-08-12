@@ -441,10 +441,15 @@ function BankStatementsTab() {
     const visibleItems = (debitReport?.items ?? []).filter(item => {
       if (debitAllocFilter === "allocated"   && !item.isAllocated) return false;
       if (debitAllocFilter === "unallocated" && item.isAllocated)  return false;
-      if (debitCatFilter && item.allocationType !== debitCatFilter) return false;
+      if (debitCatFilter && item.allocatedTo !== debitCatFilter) return false;
       return true;
     });
-    const allocationTypes = Array.from(new Set((debitReport?.items ?? []).filter(i => i.isAllocated).map(i => i.allocationType))).sort();
+    // Specific category labels for the filter (e.g. "Fuel", "Bank Charges", not just "Expense")
+    const categoryLabels = Array.from(new Set(
+      (debitReport?.items ?? [])
+        .filter(i => i.isAllocated && i.allocatedTo)
+        .map(i => i.allocatedTo)
+    )).sort();
 
     const badgeStyle = (type: string): React.CSSProperties =>
       type === "Expense"   ? { background:"#fce7f3", color:"#9d174d" } :
@@ -483,9 +488,16 @@ function BankStatementsTab() {
                   <div
                     key={cat.label}
                     onClick={() => {
-                      const type = cat.label.startsWith("Expense") ? "Expense" : cat.label.startsWith("Supplier") ? "Supplier" : cat.label.startsWith("Non-Client") ? "NonClient" : "";
-                      setDebitCatFilter(prev => prev === type ? "" : type);
-                      setDebitAllocFilter(cat.label === "Unallocated" ? "unallocated" : "all");
+                      if (cat.label === "Unallocated") {
+                        setDebitAllocFilter("unallocated");
+                        setDebitCatFilter("");
+                      } else {
+                        // label is like "Expense: Fuel" — extract the specific category
+                        const colonIdx = cat.label.indexOf(": ");
+                        const specificCat = colonIdx >= 0 ? cat.label.slice(colonIdx + 2) : cat.label;
+                        setDebitCatFilter(prev => prev === specificCat ? "" : specificCat);
+                        setDebitAllocFilter("all");
+                      }
                     }}
                     style={{ background:"#f8fafc", border:"1px solid #e5e7eb", borderRadius:10, padding:"10px 16px", cursor:"pointer", minWidth:140 }}
                   >
@@ -506,12 +518,12 @@ function BankStatementsTab() {
                   <option value="unallocated">Unallocated</option>
                 </select>
               </div>
-              {allocationTypes.length > 0 && (
+              {categoryLabels.length > 0 && (
                 <div style={s.filterGroup}>
-                  <label style={s.filterLabel}>Category Type</label>
+                  <label style={s.filterLabel}>Category</label>
                   <select style={s.select} value={debitCatFilter} onChange={e=>setDebitCatFilter(e.target.value)}>
                     <option value="">All</option>
-                    {allocationTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                    {categoryLabels.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
               )}
