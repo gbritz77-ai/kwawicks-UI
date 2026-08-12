@@ -409,6 +409,7 @@ function BankStatementsTab() {
 
   const visibleTx = (selected?.transactions ?? []).filter(tx => {
     if (txTypeFilter !== "all" && tx.type !== txTypeFilter) return false;
+    if (tx.type === "Debit" && tx.isAllocated) return false;   // allocated debits never shown
     if (txAllocFilter === "unallocated" && tx.isAllocated) return false;
     if (txAllocFilter === "allocated"   && !tx.isAllocated) return false;
     if (txSearch) {
@@ -681,11 +682,13 @@ function BankStatementsTab() {
               <option value="all">All</option><option value="Credit">Credits</option><option value="Debit">Debits</option>
             </select>
           </div>
-          <div style={s.filterGroup}><label style={s.filterLabel}>Allocation</label>
-            <select style={s.select} value={txAllocFilter} onChange={e=>setTxAllocFilter(e.target.value as any)}>
-              <option value="all">All</option><option value="unallocated">Unallocated</option><option value="allocated">Allocated</option>
-            </select>
-          </div>
+          {txTypeFilter !== "Debit" && (
+            <div style={s.filterGroup}><label style={s.filterLabel}>Allocation</label>
+              <select style={s.select} value={txAllocFilter} onChange={e=>setTxAllocFilter(e.target.value as any)}>
+                <option value="all">All</option><option value="unallocated">Unallocated</option><option value="allocated">Allocated</option>
+              </select>
+            </div>
+          )}
           <div style={s.filterGroup}><label style={s.filterLabel}>Search</label>
             <input style={{ ...s.input, minWidth: 180 }} placeholder="Description or ref…" value={txSearch} onChange={e=>setTxSearch(e.target.value)} />
           </div>
