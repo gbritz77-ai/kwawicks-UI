@@ -777,11 +777,18 @@ function BankStatementsTab() {
               })}
             </div>
 
-            {/* Possible duplicates — hidden from the main list by default */}
-            {selected.possibleDuplicates && selected.possibleDuplicates.length > 0 && (
+            {/* Possible duplicates — filtered to match the active type view */}
+            {(() => {
+              const visibleDups = (selected.possibleDuplicates ?? []).filter(tx =>
+                txTypeFilter === "Debit"   ? tx.type === "Debit"  :
+                txTypeFilter === "Credit"  ? tx.type === "Credit" :
+                true
+              );
+              if (visibleDups.length === 0) return null;
+              return (
               <div style={sp.dupSection}>
                 <div style={sp.dupHeader} onClick={() => setShowDuplicates(v => !v)}>
-                  <span>⚠ Possible Duplicates ({selected.possibleDuplicates.length})</span>
+                  <span>⚠ Possible Duplicates ({visibleDups.length})</span>
                   <span>{showDuplicates ? "▲" : "▼"}</span>
                 </div>
                 {showDuplicates && (
@@ -790,7 +797,7 @@ function BankStatementsTab() {
                       These {txTypeFilter === "Debit" ? "debits" : "credits"} match the date + amount of a transaction already reconciled under a different statement upload —
                       likely from overlapping date ranges between exports. Verify before allocating.
                     </div>
-                    {selected.possibleDuplicates.map(tx => {
+                    {visibleDups.map(tx => {
                       const isActive = activeTx?.transactionId === tx.transactionId;
                       return (
                         <div
@@ -815,7 +822,8 @@ function BankStatementsTab() {
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* ── RIGHT: Allocation panel ── */}
