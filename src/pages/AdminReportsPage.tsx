@@ -28,13 +28,14 @@ import type {
   SpeciesRevenueResponse,
   SalesReportRow,
   StaffStockDeductionsReportResponse,
+  ClientCreditStatementSummary,
 } from "../api/reportsApi";
 import { costAveragesApi } from "../api/costAveragesApi";
 import type { CostAverageRecordDto } from "../api/costAveragesApi";
 import type { ClientDto } from "../api/clientsApi";
 import { NumericInput } from "../components/NumericInput";
 
-type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability" | "collection-returns" | "client-orders" | "sales" | "delivery-runs" | "staff-deductions";
+type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability" | "collection-returns" | "client-orders" | "sales" | "delivery-runs" | "staff-deductions" | "client-balances";
 
 export default function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -91,6 +92,9 @@ export default function AdminReportsPage() {
   const [settleTarget, setSettleTarget] = useState<{ staffMemberId: string; staffName: string; balance: number } | null>(null);
   const [settleLoading, setSettleLoading] = useState(false);
   const [settleMessage, setSettleMessage] = useState("");
+
+  // ── Client Balances tab state ───────────────────────────────────────────────
+  const [clientBalances, setClientBalances] = useState<ClientCreditStatementSummary[] | null>(null);
 
   async function load() {
     setLoading(true);
@@ -152,6 +156,9 @@ export default function AdminReportsPage() {
       if (tab === "staff-deductions") {
         setStaffDeductions(await reportsApi.getStaffStockDeductions({ from: from || undefined, to: to || undefined }));
       }
+      if (tab === "client-balances") {
+        setClientBalances(await reportsApi.getAllStatements(from || undefined, to || undefined));
+      }
     } catch {
       setError("Failed to load report.");
     } finally {
@@ -170,9 +177,9 @@ export default function AdminReportsPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["revenue", "outstanding", "invoices", "sales", "staff-deductions", "client-orders", "drivers", "returns", "deliveries", "delivery-runs", "species", "statement", "supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability", "collection-returns"] as Tab[])
+        {(["revenue", "outstanding", "invoices", "sales", "client-balances", "staff-deductions", "client-orders", "drivers", "returns", "deliveries", "delivery-runs", "species", "statement", "supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability", "collection-returns"] as Tab[])
           .filter(t => {
-            const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "statement", "sales", "staff-deductions"];
+            const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "statement", "sales", "staff-deductions", "client-balances"];
             const procurementTabs: Tab[] = ["supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability", "collection-returns"];
             if (procurementTabs.includes(t)) return isProcurementUser;
             return isFinancialUser || !financialTabs.includes(t);
@@ -184,6 +191,7 @@ export default function AdminReportsPage() {
             {t === "invoices"              && "🧾 Invoices"}
             {t === "sales"                 && "📋 Sales"}
             {t === "staff-deductions"      && "👤 Staff Stock Deductions"}
+            {t === "client-balances"       && "💳 Client Balances"}
             {t === "drivers"               && "🚚 Driver Performance"}
             {t === "returns"               && "↩️ Returns"}
             {t === "deliveries"            && "📬 Deliveries"}
@@ -1384,6 +1392,54 @@ export default function AdminReportsPage() {
                   );
                 })}
               </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ── Client Balances ── */}
+      {tab === "client-balances" && !loading && (() => {
+        const rows = (clientBalances ?? [])
+          .filter(r => r.closingBalance < 0)
+          .sort((a, b) => a.closingBalance - b.closingBalance);
+        const allRows = clientBalances ?? [];
+        const totalOwing = allRows.reduce((s, r) => s + Math.min(0, r.closingBalance), 0);
+
+        return (
+          <div>
+            <div style={s.kpiRow}>
+              <KpiCard label="Clients" value={String(allRows.length)} />
+              <KpiCard label="Clients with Balance" value={String(rows.length)} />
+              <KpiCard label="Total Outstanding" value={fmt(Math.abs(totalOwing))} highlight />
+            </div>
+
+            {rows.length === 0 ? (
+              <p style={s.muted}>{allRows.length === 0 ? "No data — click Apply to load." : "No clients have an outstanding balance in this period."}</p>
+            ) : (
+              <ScrollTable>
+                <thead>
+                  <tr>
+                    <Th>Client</Th>
+                    <Th>Opening Balance</Th>
+                    <Th>Charges</Th>
+                    <Th>Payments / Deposits</Th>
+                    <Th>Outstanding Balance</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => (
+                    <tr key={r.customerId} style={{ background: i % 2 === 0 ? "#fff" : "#f9fafb" }}>
+                      <Td>{r.customerName}</Td>
+                      <Td>{fmt(r.openingBalance)}</Td>
+                      <Td style={{ color: "#dc2626" }}>{fmt(Math.abs(r.totalCharges))}</Td>
+                      <Td style={{ color: "#16a34a" }}>{fmt(r.totalDeposits)}</Td>
+                      <Td style={{ color: r.closingBalance < 0 ? "#dc2626" : "#16a34a", fontWeight: 700 }}>
+                        {fmt(Math.abs(r.closingBalance))} {r.closingBalance < 0 ? "owing" : "credit"}
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </ScrollTable>
             )}
           </div>
         );

@@ -171,6 +171,18 @@ export type CustomerStatementResponse = {
   totalOutstanding: number;
 };
 
+// ── Admin: All-client ledger balance summary ──────────────────────────────────
+export type ClientCreditStatementSummary = {
+  customerId: string;
+  customerName: string;
+  from?: string;
+  to?: string;
+  openingBalance: number;
+  totalDeposits: number;
+  totalCharges: number;
+  closingBalance: number;
+};
+
 // ── Admin: Species Revenue ────────────────────────────────────────────────────
 export type SpeciesRevenueSummary = {
   speciesId: string;
@@ -308,7 +320,7 @@ export const reportsApi = {
   },
 
   getAllStatements: (from?: string, to?: string) =>
-    api.get<CustomerStatementResponse[]>(`/api/reports/statements${dateParams(from, to)}`),
+    api.get<ClientCreditStatementSummary[]>(`/api/reports/client-balances${dateParams(from, to)}`),
 
   getSpeciesRevenue: (from?: string, to?: string) =>
     api.get<SpeciesRevenueResponse>(`/api/reports/revenue-by-species${dateParams(from, to)}`),
