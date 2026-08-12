@@ -777,8 +777,8 @@ function BankStatementsTab() {
               })}
             </div>
 
-            {/* Possible duplicates — hidden from the main list by default; irrelevant for debit view */}
-            {txTypeFilter !== "Debit" && selected.possibleDuplicates && selected.possibleDuplicates.length > 0 && (
+            {/* Possible duplicates — hidden from the main list by default */}
+            {selected.possibleDuplicates && selected.possibleDuplicates.length > 0 && (
               <div style={sp.dupSection}>
                 <div style={sp.dupHeader} onClick={() => setShowDuplicates(v => !v)}>
                   <span>⚠ Possible Duplicates ({selected.possibleDuplicates.length})</span>
@@ -787,7 +787,7 @@ function BankStatementsTab() {
                 {showDuplicates && (
                   <div style={sp.dupList}>
                     <div style={sp.dupNote}>
-                      These credits match the date + amount of a transaction already reconciled under a different statement upload —
+                      These {txTypeFilter === "Debit" ? "debits" : "credits"} match the date + amount of a transaction already reconciled under a different statement upload —
                       likely from overlapping date ranges between exports. Verify before allocating.
                     </div>
                     {selected.possibleDuplicates.map(tx => {
