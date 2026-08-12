@@ -2787,9 +2787,10 @@ function SalesTab({
   if (salesView === "species") {
     const map = new Map<string, SpGroup>();
     visible.forEach(r => {
+      const day = r.date.slice(0, 10); // normalize full datetime to YYYY-MM-DD
       const priceCents = Math.round(r.unitPrice * 100);
-      const key = `${r.date}|${r.speciesId}|${priceCents}`;
-      if (!map.has(key)) map.set(key, { date: r.date, speciesName: r.speciesName, qty: 0, unitPrice: r.unitPrice, cash: 0, eft: 0, card: 0, credit: 0, other: 0, total: 0 });
+      const key = `${day}|${r.speciesId}|${priceCents}`;
+      if (!map.has(key)) map.set(key, { date: day, speciesName: r.speciesName, qty: 0, unitPrice: r.unitPrice, cash: 0, eft: 0, card: 0, credit: 0, other: 0, total: 0 });
       const g = map.get(key)!;
       g.qty += r.qty; g.total += r.lineTotal;
       const pt = (r.paymentType || "").toLowerCase();
