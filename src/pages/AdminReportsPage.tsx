@@ -1433,8 +1433,8 @@ export default function AdminReportsPage() {
                       <Td>{fmt(r.openingBalance)}</Td>
                       <Td style={{ color: "#dc2626" }}>{fmt(Math.abs(r.totalCharges))}</Td>
                       <Td style={{ color: "#16a34a" }}>{fmt(r.totalDeposits)}</Td>
-                      <Td style={{ color: r.closingBalance < 0 ? "#dc2626" : "#16a34a", fontWeight: 700 }}>
-                        {fmt(Math.abs(r.closingBalance))} {r.closingBalance < 0 ? "owing" : "credit"}
+                      <Td style={{ color: Math.round(r.closingBalance * 100) < 0 ? "#dc2626" : "#16a34a", fontWeight: 700 }}>
+                        {fmt(Math.abs(r.closingBalance))} {Math.round(r.closingBalance * 100) < 0 ? "owing" : "credit"}
                       </Td>
                     </tr>
                   ))}
