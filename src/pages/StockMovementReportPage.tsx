@@ -6,6 +6,7 @@ import type { SpeciesResponse } from "../api/speciesApi";
 import { collectionRequestsApi } from "../api/collectionRequestsApi";
 import type { CollectionRequestDto } from "../api/collectionRequestsApi";
 import { stockLossApi } from "../api/stockLossApi";
+import type { StockLossDto } from "../api/stockLossApi";
 import { reportsApi } from "../api/reportsApi";
 import type { SalesReportRow } from "../api/reportsApi";
 
@@ -90,10 +91,12 @@ export default function StockMovementReportPage() {
     [...allSpecies].sort((a, b) => a.name.localeCompare(b.name)),
   [allSpecies]);
 
-  type DriverRow = { driver: string; deadQty: number; overQty: number; shortQty: number };
+  type DriverSpeciesLine = { speciesName: string; deadQty: number; overQty: number; shortQty: number };
+  type DriverRow = { driver: string; deadQty: number; overQty: number; shortQty: number; species: DriverSpeciesLine[] };
   const driverRows = useMemo((): DriverRow[] => {
     if (!loaded) return [];
-    const map = new Map<string, DriverRow>();
+    // driver → speciesId → line
+    const map = new Map<string, Map<string, DriverSpeciesLine>>();
     for (const cr of crs) {
       if ((cr.supplierName || "").toLowerCase() === "hub") continue;
       const date = (cr.collectionDate ?? cr.createdAt).slice(0, 10);
@@ -102,14 +105,27 @@ export default function StockMovementReportPage() {
       const driver = cr.assignedDriverName || "Unknown";
       for (const line of cr.lines) {
         if (!line.deadQty && !line.overQty && !line.shortQty) continue;
-        if (!map.has(driver)) map.set(driver, { driver, deadQty: 0, overQty: 0, shortQty: 0 });
-        const g = map.get(driver)!;
+        if (!map.has(driver)) map.set(driver, new Map());
+        const specMap = map.get(driver)!;
+        if (!specMap.has(line.speciesId)) specMap.set(line.speciesId, { speciesName: line.speciesName, deadQty: 0, overQty: 0, shortQty: 0 });
+        const g = specMap.get(line.speciesId)!;
         g.deadQty  += line.deadQty  ?? 0;
         g.overQty  += line.overQty  ?? 0;
         g.shortQty += line.shortQty ?? 0;
       }
     }
-    return Array.from(map.values()).sort((a, b) => a.driver.localeCompare(b.driver));
+    return Array.from(map.entries())
+      .map(([driver, specMap]) => {
+        const species = Array.from(specMap.values()).sort((a, b) => a.speciesName.localeCompare(b.speciesName));
+        return {
+          driver,
+          deadQty:  species.reduce((s, r) => s + r.deadQty,  0),
+          overQty:  species.reduce((s, r) => s + r.overQty,  0),
+          shortQty: species.reduce((s, r) => s + r.shortQty, 0),
+          species,
+        };
+      })
+      .sort((a, b) => a.driver.localeCompare(b.driver));
   }, [loaded, crs, from, to]);
 
   const reportRows = useMemo((): ReportRow[] => {
@@ -404,30 +420,38 @@ export default function StockMovementReportPage() {
                   <thead>
                     <tr>
                       <th style={s.th}>Driver</th>
+                      <th style={s.th}>Species</th>
                       <th style={{ ...s.th, ...s.right, color: "#dc2626" }}>Dead QTY</th>
                       <th style={{ ...s.th, ...s.right, color: "#16a34a" }}>Over QTY</th>
                       <th style={{ ...s.th, ...s.right, color: "#d97706" }}>Short QTY</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {driverRows.map((r, i) => (
-                      <tr key={i} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
-                        <td style={{ ...s.td, fontWeight: 600 }}>{r.driver}</td>
-                        <td style={{ ...s.td, ...s.right, color: r.deadQty  > 0 ? "#dc2626" : "#9ca3af" }}>
-                          {r.deadQty  > 0 ? `−${r.deadQty.toLocaleString()}`  : "—"}
-                        </td>
-                        <td style={{ ...s.td, ...s.right, color: r.overQty  > 0 ? "#16a34a" : "#9ca3af" }}>
-                          {r.overQty  > 0 ? `+${r.overQty.toLocaleString()}`  : "—"}
-                        </td>
-                        <td style={{ ...s.td, ...s.right, color: r.shortQty > 0 ? "#d97706" : "#9ca3af" }}>
-                          {r.shortQty > 0 ? `−${r.shortQty.toLocaleString()}` : "—"}
-                        </td>
-                      </tr>
+                    {driverRows.map((r, di) => (
+                      r.species.map((sp, si) => (
+                        <tr key={`${di}-${si}`} style={di % 2 === 0 ? s.rowEven : s.rowOdd}>
+                          {si === 0 && (
+                            <td style={{ ...s.td, fontWeight: 700, verticalAlign: "top" }} rowSpan={r.species.length}>
+                              {r.driver}
+                            </td>
+                          )}
+                          <td style={{ ...s.td, color: "#374151" }}>{sp.speciesName}</td>
+                          <td style={{ ...s.td, ...s.right, color: sp.deadQty  > 0 ? "#dc2626" : "#9ca3af" }}>
+                            {sp.deadQty  > 0 ? `−${sp.deadQty.toLocaleString()}`  : "—"}
+                          </td>
+                          <td style={{ ...s.td, ...s.right, color: sp.overQty  > 0 ? "#16a34a" : "#9ca3af" }}>
+                            {sp.overQty  > 0 ? `+${sp.overQty.toLocaleString()}`  : "—"}
+                          </td>
+                          <td style={{ ...s.td, ...s.right, color: sp.shortQty > 0 ? "#d97706" : "#9ca3af" }}>
+                            {sp.shortQty > 0 ? `−${sp.shortQty.toLocaleString()}` : "—"}
+                          </td>
+                        </tr>
+                      ))
                     ))}
                   </tbody>
                   <tfoot>
                     <tr style={{ background: "#f0fdf4", borderTop: "2px solid #bbf7d0" }}>
-                      <td style={{ ...s.td, fontWeight: 700 }}>Total</td>
+                      <td colSpan={2} style={{ ...s.td, fontWeight: 700 }}>Total</td>
                       <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#dc2626" }}>
                         {driverRows.reduce((s, r) => s + r.deadQty,  0) > 0
                           ? `−${driverRows.reduce((s, r) => s + r.deadQty,  0).toLocaleString()}` : "—"}
