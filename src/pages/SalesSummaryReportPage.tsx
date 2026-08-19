@@ -315,9 +315,13 @@ export default function SalesSummaryReportPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {groups.map((g, gi) =>
-                        g.lines.map((row, li) => (
-                          <tr key={`${gi}-${li}`} style={gi % 2 === 0 ? s.rowEven : s.rowOdd}>
+                      {groups.map((g, gi) => {
+                        const isNewClient = gi === 0 || groups[gi - 1].client !== g.client;
+                        return g.lines.map((row, li) => (
+                          <tr key={`${gi}-${li}`} style={{
+                            ...(gi % 2 === 0 ? s.rowEven : s.rowOdd),
+                            ...(isNewClient && li === 0 ? { borderTop: "3px solid #fbbf24" } : {}),
+                          }}>
                             {li === 0 && (
                               <>
                                 <td style={{ ...s.td, fontWeight: 600, verticalAlign: "top" }} rowSpan={g.lines.length}>
@@ -334,8 +338,8 @@ export default function SalesSummaryReportPage() {
                             <td style={{ ...s.td, ...s.right }}>{fmt(row.unitPrice)}</td>
                             <td style={{ ...s.td, ...s.right, fontWeight: 700 }}>{fmt(row.lineTotal)}</td>
                           </tr>
-                        ))
-                      )}
+                        ));
+                      })}
                     </tbody>
                     <tfoot>
                       <tr style={s.footerRow}>
