@@ -84,6 +84,28 @@ export default function StockMovementReportPage() {
     [...allSpecies].sort((a, b) => a.name.localeCompare(b.name)),
   [allSpecies]);
 
+  type DriverRow = { driver: string; deadQty: number; overQty: number; shortQty: number };
+  const driverRows = useMemo((): DriverRow[] => {
+    if (!loaded) return [];
+    const map = new Map<string, DriverRow>();
+    for (const cr of crs) {
+      if ((cr.supplierName || "").toLowerCase() === "hub") continue;
+      const date = (cr.collectionDate ?? cr.createdAt).slice(0, 10);
+      if (from && date < from) continue;
+      if (to   && date > to)   continue;
+      const driver = cr.assignedDriverName || "Unknown";
+      for (const line of cr.lines) {
+        if (!line.deadQty && !line.overQty && !line.shortQty) continue;
+        if (!map.has(driver)) map.set(driver, { driver, deadQty: 0, overQty: 0, shortQty: 0 });
+        const g = map.get(driver)!;
+        g.deadQty  += line.deadQty  ?? 0;
+        g.overQty  += line.overQty  ?? 0;
+        g.shortQty += line.shortQty ?? 0;
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.driver.localeCompare(b.driver));
+  }, [loaded, crs, from, to]);
+
   const reportRows = useMemo((): ReportRow[] => {
     if (!loaded) return [];
 
@@ -360,6 +382,60 @@ export default function StockMovementReportPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Driver breakdown */}
+          {driverRows.length > 0 && (
+            <div style={{ marginTop: 32 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#374151", marginBottom: 10 }}>
+                Driver Adjustment Summary
+              </h3>
+              <div style={s.scrollWrap}>
+                <table style={s.table}>
+                  <thead>
+                    <tr>
+                      <th style={s.th}>Driver</th>
+                      <th style={{ ...s.th, ...s.right, color: "#dc2626" }}>Dead QTY</th>
+                      <th style={{ ...s.th, ...s.right, color: "#16a34a" }}>Over QTY</th>
+                      <th style={{ ...s.th, ...s.right, color: "#d97706" }}>Short QTY</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {driverRows.map((r, i) => (
+                      <tr key={i} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
+                        <td style={{ ...s.td, fontWeight: 600 }}>{r.driver}</td>
+                        <td style={{ ...s.td, ...s.right, color: r.deadQty  > 0 ? "#dc2626" : "#9ca3af" }}>
+                          {r.deadQty  > 0 ? `−${r.deadQty.toLocaleString()}`  : "—"}
+                        </td>
+                        <td style={{ ...s.td, ...s.right, color: r.overQty  > 0 ? "#16a34a" : "#9ca3af" }}>
+                          {r.overQty  > 0 ? `+${r.overQty.toLocaleString()}`  : "—"}
+                        </td>
+                        <td style={{ ...s.td, ...s.right, color: r.shortQty > 0 ? "#d97706" : "#9ca3af" }}>
+                          {r.shortQty > 0 ? `−${r.shortQty.toLocaleString()}` : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: "#f0fdf4", borderTop: "2px solid #bbf7d0" }}>
+                      <td style={{ ...s.td, fontWeight: 700 }}>Total</td>
+                      <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#dc2626" }}>
+                        {driverRows.reduce((s, r) => s + r.deadQty,  0) > 0
+                          ? `−${driverRows.reduce((s, r) => s + r.deadQty,  0).toLocaleString()}` : "—"}
+                      </td>
+                      <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#16a34a" }}>
+                        {driverRows.reduce((s, r) => s + r.overQty,  0) > 0
+                          ? `+${driverRows.reduce((s, r) => s + r.overQty,  0).toLocaleString()}` : "—"}
+                      </td>
+                      <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#d97706" }}>
+                        {driverRows.reduce((s, r) => s + r.shortQty, 0) > 0
+                          ? `−${driverRows.reduce((s, r) => s + r.shortQty, 0).toLocaleString()}` : "—"}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
           )}
         </>
