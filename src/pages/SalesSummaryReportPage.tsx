@@ -27,7 +27,9 @@ function fmtDate(s: string) {
 }
 
 type SummaryRow = {
+  speciesId: string;
   speciesName: string;
+  suppliers: string[];
   qty: number;
   unitPrice: number;
   cash: number;
@@ -97,6 +99,24 @@ export default function SalesSummaryReportPage() {
     .filter(r => !speciesFilter || r.speciesId === speciesFilter)
     .filter(r => !supplierSpeciesIds || supplierSpeciesIds.has(r.speciesId));
 
+  // Build speciesId → Set<supplierName> from CRs in the period
+  const suppliersBySpecies = useMemo((): Map<string, Set<string>> => {
+    const m = new Map<string, Set<string>>();
+    for (const cr of crs) {
+      if (!cr.supplierName || cr.supplierName.toLowerCase() === "hub") continue;
+      const date = (cr.collectionDate ?? cr.createdAt).slice(0, 10);
+      if (from && date < from) continue;
+      if (to   && date > to)   continue;
+      for (const line of cr.lines) {
+        if (line.loadedQty > 0) {
+          if (!m.has(line.speciesId)) m.set(line.speciesId, new Set());
+          m.get(line.speciesId)!.add(cr.supplierName);
+        }
+      }
+    }
+    return m;
+  }, [crs, from, to]);
+
   const summaryRows = useMemo((): SummaryRow[] => {
     const map = new Map<string, SummaryRow>();
     filtered.forEach(r => {
@@ -104,7 +124,9 @@ export default function SalesSummaryReportPage() {
       const key = `${r.speciesId}|${priceCents}`;
       if (!map.has(key)) {
         map.set(key, {
+          speciesId: r.speciesId,
           speciesName: r.speciesName,
+          suppliers: Array.from(suppliersBySpecies.get(r.speciesId) ?? []).sort(),
           qty: 0,
           unitPrice: r.unitPrice,
           cash: 0, eft: 0, card: 0, credit: 0, total: 0,
@@ -129,12 +151,13 @@ export default function SalesSummaryReportPage() {
     return Array.from(map.values()).sort((a, b) =>
       a.speciesName.localeCompare(b.speciesName) || a.unitPrice - b.unitPrice
     );
-  }, [filtered]);
+  }, [filtered, suppliersBySpecies]);
 
   function exportToExcel() {
-    const headers = ["Species", "QTY", "Unit Price (incl VAT)", "Cash", "EFT", "Card", "Credit", "Total"];
+    const headers = ["Species", "Supplier", "QTY", "Unit Price (incl VAT)", "Cash", "EFT", "Card", "Credit", "Total"];
     const dataRows = summaryRows.map(r => [
       r.speciesName,
+      r.suppliers.join(", ") || "—",
       r.qty,
       r.unitPrice,
       r.cash,
@@ -143,7 +166,7 @@ export default function SalesSummaryReportPage() {
       r.credit,
       r.total,
     ]);
-    const totalsRow = ["Total", totalQty, "", totalCash, totalEft, totalCard, totalCred, grandTotal];
+    const totalsRow = ["Total", "", totalQty, "", totalCash, totalEft, totalCard, totalCred, grandTotal];
 
     const ws = XLSX.utils.aoa_to_sheet([
       [`Sales Summary Report`],
@@ -156,7 +179,7 @@ export default function SalesSummaryReportPage() {
     ]);
 
     // Column widths
-    ws["!cols"] = [{ wch: 24 }, { wch: 10 }, { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
+    ws["!cols"] = [{ wch: 24 }, { wch: 24 }, { wch: 10 }, { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sales Summary");
@@ -283,6 +306,7 @@ export default function SalesSummaryReportPage() {
                 <thead>
                   <tr>
                     <th style={s.th}>Species</th>
+                    <th style={s.th}>Supplier</th>
                     <th style={{ ...s.th, ...s.right }}>QTY</th>
                     <th style={{ ...s.th, ...s.right }}>Unit Price</th>
                     <th style={{ ...s.th, ...s.right }}>Cash</th>
@@ -296,6 +320,7 @@ export default function SalesSummaryReportPage() {
                   {summaryRows.map((r, i) => (
                     <tr key={i} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
                       <td style={{ ...s.td, fontWeight: 600 }}>{r.speciesName}</td>
+                      <td style={{ ...s.td, color: "#6b7280", fontSize: 12 }}>{r.suppliers.join(", ") || "—"}</td>
                       <td style={{ ...s.td, ...s.right }}>{r.qty.toLocaleString()}</td>
                       <td style={{ ...s.td, ...s.right }}>{fmt(r.unitPrice)}</td>
                       <td style={{ ...s.td, ...s.right, color: r.cash > 0 ? "#166534" : "#9ca3af" }}>
@@ -319,6 +344,7 @@ export default function SalesSummaryReportPage() {
                 <tfoot>
                   <tr style={s.footerRow}>
                     <td style={{ ...s.td, fontWeight: 700 }}>Total</td>
+                    <td style={s.td} />
                     <td style={{ ...s.td, ...s.right, fontWeight: 700 }}>{totalQty.toLocaleString()}</td>
                     <td style={s.td} />
                     <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#166534" }}>{fmt(totalCash)}</td>
