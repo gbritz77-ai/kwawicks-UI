@@ -126,7 +126,11 @@ export default function AdminReportsPage() {
         setClients((await clientsApi.list()).filter((c: ClientDto) => !c.isWalkIn));
       }
       if (tab === "species") setSpeciesRevenue(await reportsApi.getSpeciesRevenue(from || undefined, to || undefined));
-      if (tab === "supplier-spend") setPoData(await procurementOrdersApi.list());
+      if (tab === "supplier-spend") {
+        const [pos, crs] = await Promise.all([procurementOrdersApi.list(), collectionRequestsApi.list()]);
+        setPoData(pos);
+        setCrData(crs);
+      }
       if (tab === "margin") {
         const [spc, costData, salesData] = await Promise.all([
           allSpecies.length ? Promise.resolve(allSpecies) : speciesApi.list(),
@@ -536,75 +540,116 @@ export default function AdminReportsPage() {
         </div>
       )}
 
-      {/* ── Supplier Spend by Month ── */}
-      {tab === "supplier-spend" && poData && !loading && (() => {
-        const nonDraft = poData.filter(p => p.status !== "Draft" && (p.supplierName || "").toLowerCase() !== "hub");
-        const filtered = nonDraft.filter(p => {
-          const d = p.createdAt.slice(0, 10);
-          if (from && d < from) return false;
-          if (to   && d > to)   return false;
-          return true;
-        });
-
-        // Aggregate: supplier → month → { orders, units, value }
-        type Row = { supplier: string; month: string; orders: number; units: number; value: number };
-        const map = new Map<string, Row>();
-        for (const po of filtered) {
-          const month = po.createdAt.slice(0, 7); // "YYYY-MM"
-          const key   = `${po.supplierName}||${month}`;
-          const poValue = po.lines.reduce((s, l) => s + l.orderedQty * (l.unitCost ?? 0), 0);
-          const poUnits = po.lines.reduce((s, l) => s + l.orderedQty, 0);
-          const existing = map.get(key) ?? { supplier: po.supplierName || po.supplierId, month, orders: 0, units: 0, value: 0 };
-          map.set(key, { ...existing, orders: existing.orders + 1, units: existing.units + poUnits, value: existing.value + poValue });
+      {/* ── Supplier Spend ── */}
+      {tab === "supplier-spend" && poData && crData && !loading && (() => {
+        // Build a unit cost lookup: procurementOrderId → speciesId → unitCost
+        const costLookup = new Map<string, Map<string, number>>();
+        for (const po of poData) {
+          const bySpecies = new Map<string, number>();
+          for (const l of po.lines) bySpecies.set(l.speciesId, l.unitCost ?? 0);
+          costLookup.set(po.procurementOrderId, bySpecies);
         }
-        const rows = [...map.values()].sort((a, b) => b.month.localeCompare(a.month) || a.supplier.localeCompare(b.supplier));
 
-        const totalValue  = rows.reduce((s, r) => s + r.value, 0);
-        const totalOrders = rows.reduce((s, r) => s + r.orders, 0);
-        const totalUnits  = rows.reduce((s, r) => s + r.units,  0);
-        const suppliers   = new Set(rows.map(r => r.supplier)).size;
-
-        const formatMonth = (m: string) => {
-          const [y, mo] = m.split("-");
-          return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString("en-ZA", { month: "long", year: "numeric" });
+        // Build detail rows from collection requests (loaded qty, not ordered qty)
+        type DetailRow = {
+          date: string;
+          supplier: string;
+          speciesName: string;
+          unitCost: number;
+          loadedQty: number;
+          totalValue: number;
         };
+
+        const details: DetailRow[] = [];
+        for (const cr of crData) {
+          if ((cr.supplierName || "").toLowerCase() === "hub") continue;
+          // Use collectionDate if available, otherwise createdAt date
+          const date = (cr.collectionDate ?? cr.createdAt).slice(0, 10);
+          if (from && date < from) continue;
+          if (to   && date > to)   continue;
+
+          const poBySpecies = costLookup.get(cr.procurementOrderId) ?? new Map<string, number>();
+
+          for (const line of cr.lines) {
+            if (line.loadedQty <= 0) continue;
+            const unitCost = poBySpecies.get(line.speciesId) ?? 0;
+            details.push({
+              date,
+              supplier: cr.supplierName || cr.supplierId,
+              speciesName: line.speciesName,
+              unitCost,
+              loadedQty: line.loadedQty,
+              totalValue: line.loadedQty * unitCost,
+            });
+          }
+        }
+
+        // Sort by date desc then supplier asc
+        details.sort((a, b) => b.date.localeCompare(a.date) || a.supplier.localeCompare(b.supplier));
+
+        const totalQty   = details.reduce((s, r) => s + r.loadedQty, 0);
+        const totalValue = details.reduce((s, r) => s + r.totalValue, 0);
+        const suppliers  = new Set(details.map(r => r.supplier)).size;
+
+        // Group rows by date+supplier for display
+        type Group = { date: string; supplier: string; lines: DetailRow[] };
+        const groups: Group[] = [];
+        for (const row of details) {
+          const last = groups[groups.length - 1];
+          if (last && last.date === row.date && last.supplier === row.supplier) {
+            last.lines.push(row);
+          } else {
+            groups.push({ date: row.date, supplier: row.supplier, lines: [row] });
+          }
+        }
+
+        const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" });
 
         return (
           <div>
             <div style={s.kpiRow}>
               <KpiCard label="Total Spend (incl. VAT)" value={fmt(totalValue)} highlight />
-              <KpiCard label="Suppliers"               value={String(suppliers)} />
-              <KpiCard label="Orders"                  value={String(totalOrders)} />
-              <KpiCard label="Total Units"             value={totalUnits.toLocaleString()} />
+              <KpiCard label="Suppliers"  value={String(suppliers)} />
+              <KpiCard label="Total Qty Loaded" value={totalQty.toLocaleString()} />
             </div>
-            {rows.length === 0 ? (
-              <p style={s.muted}>No submitted orders for the selected period.</p>
+            {groups.length === 0 ? (
+              <p style={s.muted}>No loaded collections for the selected period.</p>
             ) : (
               <ScrollTable>
                 <thead>
                   <tr>
-                    <Th>Month</Th>
+                    <Th>Date</Th>
                     <Th>Supplier</Th>
-                    <Th>Orders</Th>
-                    <Th>Units</Th>
+                    <Th>Species</Th>
+                    <Th>Unit Cost (incl. VAT)</Th>
+                    <Th>Qty Loaded</Th>
                     <Th>Total Value (incl. VAT)</Th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r, i) => (
-                    <tr key={i}>
-                      <Td>{formatMonth(r.month)}</Td>
-                      <Td style={{ fontWeight: 600 }}>{r.supplier}</Td>
-                      <Td>{r.orders}</Td>
-                      <Td>{r.units.toLocaleString()}</Td>
-                      <Td style={{ fontWeight: 700, color: "#166534" }}>{fmt(r.value)}</Td>
-                    </tr>
-                  ))}
-                  <tr style={{ background: "#f8fafc", fontWeight: 700 }}>
-                    <Td style={{ fontWeight: 700 }}>TOTAL</Td>
-                    <Td>—</Td>
-                    <Td>{totalOrders}</Td>
-                    <Td>{totalUnits.toLocaleString()}</Td>
+                  {groups.map((g, gi) =>
+                    g.lines.map((row, li) => (
+                      <tr key={`${gi}-${li}`} style={{ background: gi % 2 === 0 ? "#fff" : "#f9fafb" }}>
+                        {li === 0 && (
+                          <>
+                            <Td style={{ fontWeight: 600, verticalAlign: "top" }} rowSpan={g.lines.length}>
+                              {fmtDate(g.date)}
+                            </Td>
+                            <Td style={{ fontWeight: 600, verticalAlign: "top" }} rowSpan={g.lines.length}>
+                              {g.supplier}
+                            </Td>
+                          </>
+                        )}
+                        <Td>{row.speciesName}</Td>
+                        <Td>{fmt(row.unitCost)}</Td>
+                        <Td>{row.loadedQty.toLocaleString()}</Td>
+                        <Td style={{ fontWeight: 700, color: "#166534" }}>{fmt(row.totalValue)}</Td>
+                      </tr>
+                    ))
+                  )}
+                  <tr style={{ background: "#f0fdf4", fontWeight: 700, borderTop: "2px solid #bbf7d0" }}>
+                    <Td colSpan={4} style={{ fontWeight: 700 }}>TOTAL</Td>
+                    <Td style={{ fontWeight: 700 }}>{totalQty.toLocaleString()}</Td>
                     <Td style={{ fontWeight: 800, color: "#166534" }}>{fmt(totalValue)}</Td>
                   </tr>
                 </tbody>
@@ -2371,8 +2416,8 @@ function ScrollTable({ children }: { children: React.ReactNode }) {
 function Th({ children }: { children: React.ReactNode }) {
   return <th style={s.th}>{children}</th>;
 }
-function Td({ children, style }: { children: React.ReactNode; style?: CSSProperties }) {
-  return <td style={{ ...s.td, ...style }}>{children}</td>;
+function Td({ children, style, rowSpan, colSpan }: { children: React.ReactNode; style?: CSSProperties; rowSpan?: number; colSpan?: number }) {
+  return <td style={{ ...s.td, ...style }} rowSpan={rowSpan} colSpan={colSpan}>{children}</td>;
 }
 
 // ── Client Orders Tab ────────────────────────────────────────────────────────
