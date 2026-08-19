@@ -85,9 +85,8 @@ export default function SalesReportPage() {
     return acc;
   }, {});
 
-  // By Species grouped rows: group by date + speciesId + unitPrice
+  // By Species grouped rows: group by speciesId + unitPrice across the full date range
   type SpeciesGroup = {
-    date: string;
     speciesName: string;
     qty: number;
     unitPrice: number;
@@ -102,10 +101,9 @@ export default function SalesReportPage() {
     const map = new Map<string, SpeciesGroup>();
     filtered.forEach(r => {
       const priceCents = Math.round(r.unitPrice * 100);
-      const key = `${r.date}|${r.speciesId}|${priceCents}`;
+      const key = `${r.speciesId}|${priceCents}`;
       if (!map.has(key)) {
         map.set(key, {
-          date: r.date,
           speciesName: r.speciesName,
           qty: 0,
           unitPrice: r.unitPrice,
@@ -120,14 +118,19 @@ export default function SalesReportPage() {
       g.qty   += r.qty;
       g.total += r.lineTotal;
       const pt = (r.paymentType || "").toLowerCase();
-      if (pt === "cash")   g.cash   += r.lineTotal;
-      else if (pt === "eft")    g.eft    += r.lineTotal;
-      else if (pt === "card")   g.card   += r.lineTotal;
-      else if (pt === "credit") g.credit += r.lineTotal;
+      if (pt === "split") {
+        (r.splitPayments ?? []).forEach(sp => {
+          const m = (sp.method || "").toLowerCase();
+          if (m === "cash")   g.cash   += sp.amount;
+          else if (m === "eft")  g.eft  += sp.amount;
+          else if (m === "card") g.card += sp.amount;
+        });
+      } else if (pt === "cash")   g.cash   += r.lineTotal;
+      else if (pt === "eft")      g.eft    += r.lineTotal;
+      else if (pt === "card")     g.card   += r.lineTotal;
+      else if (pt === "credit")   g.credit += r.lineTotal;
     });
-    return Array.from(map.values()).sort((a, b) =>
-      a.date === b.date ? a.speciesName.localeCompare(b.speciesName) : a.date.localeCompare(b.date)
-    );
+    return Array.from(map.values()).sort((a, b) => a.speciesName.localeCompare(b.speciesName));
   }, [filtered]);
 
   const isMobile = window.innerWidth < 700;
@@ -211,14 +214,26 @@ export default function SalesReportPage() {
           )}
 
           {view === "species" && (
+            <>
+            {(from || to) && (
+              <div style={s.dateRangeBanner}>
+                <span style={s.dateRangeLabel}>Period:</span>{" "}
+                <strong>{from ? fmtDate(from) : "—"}</strong>
+                {" to "}
+                <strong>{to ? fmtDate(to) : "—"}</strong>
+                {" · "}
+                <strong>{bySpeciesRows.reduce((s, r) => s + r.qty, 0).toLocaleString()}</strong>
+                {" units sold"}
+              </div>
+            )}
             <div style={s.kpiRow}>
               <div style={s.kpi}>
-                <span style={s.kpiLabel}>Groups</span>
-                <span style={s.kpiValue}>{bySpeciesRows.length.toLocaleString()}</span>
+                <span style={s.kpiLabel}>Total Qty Sold</span>
+                <span style={s.kpiValue}>{bySpeciesRows.reduce((s, r) => s + r.qty, 0).toLocaleString()}</span>
               </div>
               <div style={s.kpi}>
-                <span style={s.kpiLabel}>Total Qty</span>
-                <span style={s.kpiValue}>{bySpeciesRows.reduce((s, r) => s + r.qty, 0).toLocaleString()}</span>
+                <span style={s.kpiLabel}>Species / Price Groups</span>
+                <span style={s.kpiValue}>{bySpeciesRows.length.toLocaleString()}</span>
               </div>
               <div style={{ ...s.kpi, background: "#eff6ff", border: "1px solid #bfdbfe" }}>
                 <span style={s.kpiLabel}>Cash</span>
@@ -237,6 +252,7 @@ export default function SalesReportPage() {
                 <span style={s.kpiValue}>{fmt(bySpeciesRows.reduce((s, r) => s + r.total, 0))}</span>
               </div>
             </div>
+            </>
           )}
 
           {/* By Species view */}
@@ -249,7 +265,6 @@ export default function SalesReportPage() {
                   <table style={s.table}>
                     <thead>
                       <tr>
-                        <th style={s.th}>Date</th>
                         <th style={s.th}>Species</th>
                         <th style={{ ...s.th, ...s.right }}>Qty</th>
                         <th style={{ ...s.th, ...s.right }}>Unit Price</th>
@@ -265,7 +280,6 @@ export default function SalesReportPage() {
                     <tbody>
                       {bySpeciesRows.map((r, i) => (
                         <tr key={i} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
-                          <td style={{ ...s.td, whiteSpace: "nowrap" }}>{fmtDate(r.date)}</td>
                           <td style={{ ...s.td, fontWeight: 600 }}>{r.speciesName}</td>
                           <td style={{ ...s.td, ...s.right }}>{r.qty.toLocaleString()}</td>
                           <td style={{ ...s.td, ...s.right }}>{fmt(r.unitPrice)}</td>
@@ -289,7 +303,7 @@ export default function SalesReportPage() {
                     </tbody>
                     <tfoot>
                       <tr style={s.footerRow}>
-                        <td colSpan={3} style={{ ...s.td, fontWeight: 700 }}>Total</td>
+                        <td colSpan={2} style={{ ...s.td, fontWeight: 700 }}>Total</td>
                         <td style={s.td} />
                         <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#166534" }}>
                           {fmt(bySpeciesRows.reduce((s, r) => s + r.cash, 0))}
@@ -597,6 +611,22 @@ const s: Record<string, CSSProperties> = {
     fontSize: 11,
     fontWeight: 700,
     whiteSpace: "nowrap",
+  },
+
+  // Date range banner
+  dateRangeBanner: {
+    background: "#f0fdf4",
+    border: "1px solid #bbf7d0",
+    borderRadius: 8,
+    padding: "10px 16px",
+    fontSize: 14,
+    color: "#374151",
+    marginBottom: 16,
+  },
+  dateRangeLabel: {
+    fontWeight: 700,
+    color: "#166534",
+    marginRight: 4,
   },
 
   // Status
