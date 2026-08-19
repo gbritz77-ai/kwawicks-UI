@@ -305,8 +305,8 @@ export default function SalesSummaryReportPage() {
                   <table style={s.table}>
                     <thead>
                       <tr>
-                        <th style={s.th}>Date</th>
                         <th style={s.th}>Client</th>
+                        <th style={s.th}>Date</th>
                         <th style={s.th}>Inv No</th>
                         <th style={s.th}>Species</th>
                         <th style={{ ...s.th, ...s.right }}>QTY</th>
@@ -321,10 +321,10 @@ export default function SalesSummaryReportPage() {
                             {li === 0 && (
                               <>
                                 <td style={{ ...s.td, fontWeight: 600, verticalAlign: "top" }} rowSpan={g.lines.length}>
-                                  {fmtDate(row.date)}
+                                  {g.client}
                                 </td>
                                 <td style={{ ...s.td, fontWeight: 600, verticalAlign: "top" }} rowSpan={g.lines.length}>
-                                  {g.client}
+                                  {fmtDate(row.date)}
                                 </td>
                               </>
                             )}
