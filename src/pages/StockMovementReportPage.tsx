@@ -6,7 +6,6 @@ import type { SpeciesResponse } from "../api/speciesApi";
 import { collectionRequestsApi } from "../api/collectionRequestsApi";
 import type { CollectionRequestDto } from "../api/collectionRequestsApi";
 import { stockLossApi } from "../api/stockLossApi";
-import type { StockLossDto } from "../api/stockLossApi";
 import { reportsApi } from "../api/reportsApi";
 import type { SalesReportRow } from "../api/reportsApi";
 
@@ -20,6 +19,13 @@ function fmtDate(s: string) {
   return new Date(s).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+type AdjustmentLine = {
+  date: string;
+  type: "under" | "over" | "short";
+  notes: string;
+  qty: number;
+};
+
 type ReportRow = {
   speciesId: string;
   speciesName: string;
@@ -31,7 +37,7 @@ type ReportRow = {
   short: number;
   closingStock: number;
   salesLines: SalesReportRow[];
-  lossLines: StockLossDto[];
+  adjustmentLines: AdjustmentLine[];
 };
 
 export default function StockMovementReportPage() {
@@ -114,21 +120,30 @@ export default function StockMovementReportPage() {
     const deaths_qty:  Record<string, number> = {};
     const surplus_qty: Record<string, number> = {};
     const short_qty:   Record<string, number> = {};
-    const salesBySpecies:  Record<string, SalesReportRow[]> = {};
-    const lossesBySpecies: Record<string, StockLossDto[]>   = {};
+    const salesBySpecies:      Record<string, SalesReportRow[]>  = {};
+    const adjustBySpecies:     Record<string, AdjustmentLine[]>  = {};
 
     for (const cr of crs) {
       if ((cr.supplierName || "").toLowerCase() === "hub") continue;
       const date = (cr.collectionDate ?? cr.createdAt).slice(0, 10);
       if (from && date < from) continue;
       if (to   && date > to)   continue;
+      const driver = cr.assignedDriverName || cr.supplierName || "—";
       for (const line of cr.lines) {
         if (line.loadedQty > 0)
           loaded_qty[line.speciesId] = (loaded_qty[line.speciesId] ?? 0) + line.loadedQty;
-        // Deaths/short/over recorded during hub confirmation live on the CR line
-        if (line.deadQty  > 0) deaths_qty[line.speciesId]  = (deaths_qty[line.speciesId]  ?? 0) + line.deadQty;
-        if (line.shortQty > 0) short_qty[line.speciesId]   = (short_qty[line.speciesId]   ?? 0) + line.shortQty;
-        if (line.overQty  > 0) surplus_qty[line.speciesId] = (surplus_qty[line.speciesId] ?? 0) + line.overQty;
+        if (line.deadQty > 0) {
+          deaths_qty[line.speciesId] = (deaths_qty[line.speciesId] ?? 0) + line.deadQty;
+          (adjustBySpecies[line.speciesId] ??= []).push({ date, type: "under", notes: driver, qty: line.deadQty });
+        }
+        if (line.shortQty > 0) {
+          short_qty[line.speciesId] = (short_qty[line.speciesId] ?? 0) + line.shortQty;
+          (adjustBySpecies[line.speciesId] ??= []).push({ date, type: "short", notes: driver, qty: line.shortQty });
+        }
+        if (line.overQty > 0) {
+          surplus_qty[line.speciesId] = (surplus_qty[line.speciesId] ?? 0) + line.overQty;
+          (adjustBySpecies[line.speciesId] ??= []).push({ date, type: "over", notes: driver, qty: line.overQty });
+        }
       }
     }
 
@@ -142,10 +157,9 @@ export default function StockMovementReportPage() {
       if (from && date < from) continue;
       if (to   && date > to)   continue;
       const t = (l.adjustmentType || "").toLowerCase();
-      if      (t === "under") deaths_qty[l.speciesId]  = (deaths_qty[l.speciesId]  ?? 0) + l.qty;
-      else if (t === "over")  surplus_qty[l.speciesId] = (surplus_qty[l.speciesId] ?? 0) + l.qty;
-      else if (t === "short") short_qty[l.speciesId]   = (short_qty[l.speciesId]   ?? 0) + l.qty;
-      (lossesBySpecies[l.speciesId] ??= []).push(l);
+      if      (t === "under") { deaths_qty[l.speciesId]  = (deaths_qty[l.speciesId]  ?? 0) + l.qty; (adjustBySpecies[l.speciesId] ??= []).push({ date, type: "under", notes: l.notes || "—", qty: l.qty }); }
+      else if (t === "over")  { surplus_qty[l.speciesId] = (surplus_qty[l.speciesId] ?? 0) + l.qty; (adjustBySpecies[l.speciesId] ??= []).push({ date, type: "over",  notes: l.notes || "—", qty: l.qty }); }
+      else if (t === "short") { short_qty[l.speciesId]   = (short_qty[l.speciesId]   ?? 0) + l.qty; (adjustBySpecies[l.speciesId] ??= []).push({ date, type: "short", notes: l.notes || "—", qty: l.qty }); }
     }
 
     return allSpecies
@@ -158,19 +172,17 @@ export default function StockMovementReportPage() {
         const srt    = short_qty[sp.speciesId]   ?? 0;
         const opening = sp.qtyOnHandHub - load + sold + deaths + srt - surp;
         return {
-          speciesId:    sp.speciesId,
-          speciesName:  sp.name,
-          openingStock: opening,
-          loaded:       load,
-          sold:         sold,
-          deaths:       deaths,
-          surplus:      surp,
-          short:        srt,
-          closingStock: sp.qtyOnHandHub,
-          salesLines:   (salesBySpecies[sp.speciesId] ?? []).sort((a, b) => a.date.localeCompare(b.date)),
-          lossLines:    (lossesBySpecies[sp.speciesId] ?? [])
-                          .filter(l => { const d = l.createdAt.slice(0, 10); return (!from || d >= from) && (!to || d <= to); })
-                          .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+          speciesId:       sp.speciesId,
+          speciesName:     sp.name,
+          openingStock:    opening,
+          loaded:          load,
+          sold:            sold,
+          deaths:          deaths,
+          surplus:         surp,
+          short:           srt,
+          closingStock:    sp.qtyOnHandHub,
+          salesLines:      (salesBySpecies[sp.speciesId] ?? []).sort((a, b) => a.date.localeCompare(b.date)),
+          adjustmentLines: (adjustBySpecies[sp.speciesId] ?? []).sort((a, b) => a.date.localeCompare(b.date)),
         };
       })
       .sort((a, b) => a.speciesName.localeCompare(b.speciesName));
@@ -337,7 +349,7 @@ export default function StockMovementReportPage() {
                               )}
 
                               {/* Adjustments detail */}
-                              {r.lossLines.length > 0 && (
+                              {r.adjustmentLines.length > 0 && (
                                 <div style={s.detailSection}>
                                   <div style={s.detailTitle}>Adjustments — {r.speciesName}</div>
                                   <table style={s.subTable}>
@@ -350,28 +362,24 @@ export default function StockMovementReportPage() {
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {r.lossLines.map((ll, li) => {
-                                        const t = (ll.adjustmentType || "").toLowerCase();
-                                        const typeColor = t === "under" ? "#dc2626" : t === "over" ? "#16a34a" : "#d97706";
-                                        const typeLabel = t === "under" ? "Dead/Loss" : t === "over" ? "Surplus" : "Short";
+                                      {r.adjustmentLines.map((ll, li) => {
+                                        const typeColor = ll.type === "under" ? "#dc2626" : ll.type === "over" ? "#16a34a" : "#d97706";
+                                        const typeLabel = ll.type === "under" ? "Dead/Loss" : ll.type === "over" ? "Surplus" : "Short";
                                         return (
                                           <tr key={li} style={li % 2 === 0 ? s.subRowEven : s.subRowOdd}>
-                                            <td style={s.subTd}>{fmtDate(ll.createdAt.slice(0, 10))}</td>
+                                            <td style={s.subTd}>{fmtDate(ll.date)}</td>
                                             <td style={{ ...s.subTd, color: typeColor, fontWeight: 600 }}>{typeLabel}</td>
-                                            <td style={s.subTd}>{ll.notes || "—"}</td>
+                                            <td style={s.subTd}>{ll.notes}</td>
                                             <td style={{ ...s.subTd, ...s.right, fontWeight: 600, color: typeColor }}>{ll.qty.toLocaleString()}</td>
                                           </tr>
                                         );
                                       })}
                                     </tbody>
                                   </table>
-
-                                  {/* Driver / notes count summary */}
-                                  <DriverCountSummary lossLines={r.lossLines} />
                                 </div>
                               )}
 
-                              {r.salesLines.length === 0 && r.lossLines.length === 0 && (
+                              {r.salesLines.length === 0 && r.adjustmentLines.length === 0 && (
                                 <p style={{ margin: "12px 16px", color: "#9ca3af", fontSize: 13 }}>No detail entries for this period.</p>
                               )}
                             </div>
@@ -444,63 +452,6 @@ export default function StockMovementReportPage() {
   );
 }
 
-// Summarises loss entries by notes (driver name) per adjustment type
-function DriverCountSummary({ lossLines }: { lossLines: StockLossDto[] }) {
-  // Group by notes → { under, over, short } counts and qty
-  type DriverRow = { name: string; dead: number; deadQty: number; over: number; overQty: number; short: number; shortQty: number };
-  const map = new Map<string, DriverRow>();
-  for (const l of lossLines) {
-    const key = (l.notes || "—").trim();
-    if (!map.has(key)) map.set(key, { name: key, dead: 0, deadQty: 0, over: 0, overQty: 0, short: 0, shortQty: 0 });
-    const g = map.get(key)!;
-    const t = (l.adjustmentType || "").toLowerCase();
-    if      (t === "under") { g.dead++;  g.deadQty  += l.qty; }
-    else if (t === "over")  { g.over++;  g.overQty  += l.qty; }
-    else if (t === "short") { g.short++; g.shortQty += l.qty; }
-  }
-  const rows = Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-
-  return (
-    <div style={{ marginTop: 8 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", padding: "6px 0 4px 0" }}>
-        Driver / Notes Count
-      </div>
-      <table style={{ ...dS.table, width: "auto", minWidth: 360 }}>
-        <thead>
-          <tr>
-            <th style={dS.th}>Driver / Notes</th>
-            <th style={{ ...dS.th, ...dS.right, color: "#dc2626" }}>Dead (entries)</th>
-            <th style={{ ...dS.th, ...dS.right, color: "#dc2626" }}>Dead QTY</th>
-            <th style={{ ...dS.th, ...dS.right, color: "#16a34a" }}>Over (entries)</th>
-            <th style={{ ...dS.th, ...dS.right, color: "#16a34a" }}>Over QTY</th>
-            <th style={{ ...dS.th, ...dS.right, color: "#d97706" }}>Short (entries)</th>
-            <th style={{ ...dS.th, ...dS.right, color: "#d97706" }}>Short QTY</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} style={i % 2 === 0 ? { background: "#fff" } : { background: "#f9fafb" }}>
-              <td style={dS.td}>{r.name}</td>
-              <td style={{ ...dS.td, ...dS.right, color: r.dead > 0 ? "#dc2626" : "#9ca3af" }}>{r.dead > 0 ? r.dead : "—"}</td>
-              <td style={{ ...dS.td, ...dS.right, color: r.dead > 0 ? "#dc2626" : "#9ca3af" }}>{r.deadQty > 0 ? r.deadQty : "—"}</td>
-              <td style={{ ...dS.td, ...dS.right, color: r.over > 0 ? "#16a34a" : "#9ca3af" }}>{r.over > 0 ? r.over : "—"}</td>
-              <td style={{ ...dS.td, ...dS.right, color: r.over > 0 ? "#16a34a" : "#9ca3af" }}>{r.overQty > 0 ? r.overQty : "—"}</td>
-              <td style={{ ...dS.td, ...dS.right, color: r.short > 0 ? "#d97706" : "#9ca3af" }}>{r.short > 0 ? r.short : "—"}</td>
-              <td style={{ ...dS.td, ...dS.right, color: r.short > 0 ? "#d97706" : "#9ca3af" }}>{r.shortQty > 0 ? r.shortQty : "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-const dS: Record<string, CSSProperties> = {
-  table: { borderCollapse: "collapse", fontSize: 12, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 6 },
-  th: { padding: "7px 10px", background: "#f3f4f6", color: "#374151", fontWeight: 700, textAlign: "left", borderBottom: "1px solid #e5e7eb", whiteSpace: "nowrap" },
-  td: { padding: "6px 10px", color: "#111827", borderBottom: "1px solid #f3f4f6" },
-  right: { textAlign: "right" },
-};
 
 const s: Record<string, CSSProperties> = {
   page: { padding: "24px 16px", maxWidth: 1200, margin: "0 auto", fontFamily: "system-ui, -apple-system, sans-serif" },
