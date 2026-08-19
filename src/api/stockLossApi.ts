@@ -15,7 +15,7 @@ export type StockLossDto = {
 export type RecordStockLossRequest = {
   speciesId: string;
   qty: number;
-  adjustmentType?: "Over" | "Under";
+  adjustmentType?: "Over" | "Under" | "Short";
   notes?: string;
 };
 
