@@ -16,9 +16,6 @@ function defaultRange() {
   const from = new Date(to.getFullYear(), to.getMonth(), 1);
   return { from: iso(from), to: iso(to) };
 }
-function fmt(n: number) {
-  return "R " + n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 function fmtDate(s: string) {
   return new Date(s).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" });
 }
