@@ -55,22 +55,30 @@ export default function StockMovementReportPage() {
   const [losses,     setLosses]     = useState<StockLossDto[]>([]);
   const [salesRows,  setSalesRows]  = useState<SalesReportRow[]>([]);
   const [loaded,     setLoaded]     = useState(false);
+  // Dates actually used for the last successful load — used in memos so
+  // changing the date inputs without clicking Apply never corrupts results.
+  const [appliedFrom, setAppliedFrom] = useState("");
+  const [appliedTo,   setAppliedTo]   = useState("");
 
   async function load() {
     setLoading(true);
     setError("");
     setExpanded(new Set());
+    const f = from;
+    const t = to;
     try {
       const [sp, crList, lossList, salesData] = await Promise.all([
         speciesApi.list(),
         collectionRequestsApi.list(),
         stockLossApi.list(),
-        reportsApi.getSalesReport(from || undefined, to || undefined),
+        reportsApi.getSalesReport(f || undefined, t || undefined),
       ]);
       setAllSpecies(sp.filter(s => s.isActive));
       setCrs(crList);
       setLosses(lossList);
       setSalesRows(salesData.rows);
+      setAppliedFrom(f);
+      setAppliedTo(t);
       setLoaded(true);
     } catch {
       setError("Failed to load report data.");
@@ -100,8 +108,8 @@ export default function StockMovementReportPage() {
     for (const cr of crs) {
       if ((cr.supplierName || "").toLowerCase() === "hub") continue;
       const date = (cr.collectionDate ?? cr.createdAt).slice(0, 10);
-      if (from && date < from) continue;
-      if (to   && date > to)   continue;
+      if (appliedFrom && date < appliedFrom) continue;
+      if (appliedTo   && date > appliedTo)   continue;
       const driver = cr.assignedDriverName || "Unknown";
       for (const line of cr.lines) {
         if (!line.deadQty && !line.overQty && !line.shortQty) continue;
@@ -126,7 +134,7 @@ export default function StockMovementReportPage() {
         };
       })
       .sort((a, b) => a.driver.localeCompare(b.driver));
-  }, [loaded, crs, from, to]);
+  }, [loaded, crs, appliedFrom, appliedTo]);
 
   const reportRows = useMemo((): ReportRow[] => {
     if (!loaded) return [];
@@ -142,8 +150,8 @@ export default function StockMovementReportPage() {
     for (const cr of crs) {
       if ((cr.supplierName || "").toLowerCase() === "hub") continue;
       const date = (cr.collectionDate ?? cr.createdAt).slice(0, 10);
-      if (from && date < from) continue;
-      if (to   && date > to)   continue;
+      if (appliedFrom && date < appliedFrom) continue;
+      if (appliedTo   && date > appliedTo)   continue;
       const driver = cr.assignedDriverName || cr.supplierName || "—";
       for (const line of cr.lines) {
         if (line.loadedQty > 0)
@@ -170,8 +178,8 @@ export default function StockMovementReportPage() {
 
     for (const l of losses) {
       const date = l.createdAt.slice(0, 10);
-      if (from && date < from) continue;
-      if (to   && date > to)   continue;
+      if (appliedFrom && date < appliedFrom) continue;
+      if (appliedTo   && date > appliedTo)   continue;
       const t = (l.adjustmentType || "").toLowerCase();
       if      (t === "under") { deaths_qty[l.speciesId]  = (deaths_qty[l.speciesId]  ?? 0) + l.qty; (adjustBySpecies[l.speciesId] ??= []).push({ date, type: "under", notes: l.notes || "—", qty: l.qty }); }
       else if (t === "over")  { surplus_qty[l.speciesId] = (surplus_qty[l.speciesId] ?? 0) + l.qty; (adjustBySpecies[l.speciesId] ??= []).push({ date, type: "over",  notes: l.notes || "—", qty: l.qty }); }
@@ -202,16 +210,16 @@ export default function StockMovementReportPage() {
         };
       })
       .sort((a, b) => a.speciesName.localeCompare(b.speciesName));
-  }, [loaded, allSpecies, crs, losses, salesRows, from, to, speciesFilter]);
+  }, [loaded, allSpecies, crs, losses, salesRows, appliedFrom, appliedTo, speciesFilter]);
 
   function exportToExcel() {
-    const openingDate = from ? iso(new Date(new Date(from).getTime() - 86400000)) : "prior";
-    const headers = ["Species", `Opening Stock (${openingDate})`, "Total Loaded", "Total Sold", "Deaths", "Surplus", "Short", `Closing Stock (${to || "today"})`];
+    const openingDate = appliedFrom ? iso(new Date(new Date(appliedFrom).getTime() - 86400000)) : "prior";
+    const headers = ["Species", `Opening Stock (${openingDate})`, "Total Loaded", "Total Sold", "Deaths", "Surplus", "Short", `Closing Stock (${appliedTo || "today"})`];
     const data = reportRows.map(r => [r.speciesName, r.openingStock, r.loaded, r.sold, r.deaths, r.surplus, r.short, r.closingStock]);
     const ws = XLSX.utils.aoa_to_sheet([
       ["Stock Movement Report"],
-      [`Period: ${from ? fmtDate(from) : "—"} — ${to ? fmtDate(to) : "—"}`],
-      [`Opening stock as at: ${from ? fmtDate(iso(new Date(new Date(from).getTime() - 86400000))) : "—"}`],
+      [`Period: ${appliedFrom ? fmtDate(appliedFrom) : "—"} — ${appliedTo ? fmtDate(appliedTo) : "—"}`],
+      [`Opening stock as at: ${appliedFrom ? fmtDate(iso(new Date(new Date(appliedFrom).getTime() - 86400000))) : "—"}`],
       [],
       headers,
       ...data,
@@ -219,11 +227,11 @@ export default function StockMovementReportPage() {
     ws["!cols"] = [{ wch: 22 }, { wch: 18 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 18 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Stock Movement");
-    XLSX.writeFile(wb, `stock-movement-${from || "all"}-to-${to || "all"}.xlsx`);
+    XLSX.writeFile(wb, `stock-movement-${appliedFrom || "all"}-to-${appliedTo || "all"}.xlsx`);
   }
 
-  const openingLabel = from
-    ? `Opening Stock (${fmtDate(iso(new Date(new Date(from).getTime() - 86400000)))})`
+  const openingLabel = appliedFrom
+    ? `Opening Stock (${fmtDate(iso(new Date(new Date(appliedFrom).getTime() - 86400000)))})`
     : "Opening Stock";
 
   const COL_COUNT = 8;
@@ -266,9 +274,9 @@ export default function StockMovementReportPage() {
         <>
           <div style={s.banner}>
             <span style={s.bannerLabel}>Period</span>
-            <strong>{from ? fmtDate(from) : "—"}</strong>{" — "}<strong>{to ? fmtDate(to) : "—"}</strong>
+            <strong>{appliedFrom ? fmtDate(appliedFrom) : "—"}</strong>{" — "}<strong>{appliedTo ? fmtDate(appliedTo) : "—"}</strong>
             <span style={s.bannerSep}>·</span>
-            Opening stock as at <strong>{from ? fmtDate(iso(new Date(new Date(from).getTime() - 86400000))) : "—"}</strong>
+            Opening stock as at <strong>{appliedFrom ? fmtDate(iso(new Date(new Date(appliedFrom).getTime() - 86400000))) : "—"}</strong>
           </div>
 
           {reportRows.length === 0 ? (
