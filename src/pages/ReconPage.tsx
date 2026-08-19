@@ -1,4 +1,5 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { invoicesApi } from "../api/invoicesApi";
 import type { ReconInvoiceItem, InvoiceResponse } from "../api/invoicesApi";
 import { bankStatementsApi } from "../api/bankStatementsApi";
@@ -457,6 +458,33 @@ function BankStatementsTab() {
       type === "NonClient" ? { background:"#f3e8ff", color:"#7c3aed" } :
                              { background:"#f1f5f9", color:"#374151" };
 
+    function exportDebitExcel() {
+      const headers = ["Date", "Description", "Reference", "Amount", "Status", "Type", "Allocated To", "Allocated At", "Statement"];
+      const data = visibleItems.map(item => [
+        fmtDate(item.date),
+        item.description,
+        item.reference || "",
+        item.amount,
+        item.isAllocated ? "Allocated" : "Unallocated",
+        item.isAllocated ? item.allocationType : "",
+        item.isAllocated ? (item.allocatedTo || "") : "",
+        item.isAllocated ? fmtDate(item.allocatedAt) : "",
+        item.fileName || "",
+      ]);
+      const ws = XLSX.utils.aoa_to_sheet([
+        ["Debit Report"],
+        [`Period: ${fmtDate(debitReportFrom)} — ${fmtDate(debitReportTo)}`],
+        [`Total Debits: R ${debitReport!.totalDebits.toFixed(2)}   Allocated: R ${debitReport!.totalAllocated.toFixed(2)}   Unallocated: R ${debitReport!.totalUnallocated.toFixed(2)}`],
+        [],
+        headers,
+        ...data,
+      ]);
+      ws["!cols"] = [{ wch: 14 }, { wch: 36 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 24 }, { wch: 14 }, { wch: 28 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Debit Report");
+      XLSX.writeFile(wb, `debit-report-${debitReportFrom}-to-${debitReportTo}.xlsx`);
+    }
+
     return (
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
         {error && <div style={s.errorBanner}>{error}</div>}
@@ -469,6 +497,9 @@ function BankStatementsTab() {
             <div style={s.filterGroup}><label style={s.filterLabel}>From</label><input type="date" style={s.input} value={debitReportFrom} onChange={e=>setDebitReportFrom(e.target.value)} /></div>
             <div style={s.filterGroup}><label style={s.filterLabel}>To</label><input type="date" style={s.input} value={debitReportTo} onChange={e=>setDebitReportTo(e.target.value)} /></div>
             <button style={s.applyBtn} onClick={loadDebitReport} disabled={debitReportLoading}>{debitReportLoading?"Loading…":"Apply"}</button>
+            {debitReport && visibleItems.length > 0 && (
+              <button style={{ ...s.applyBtn, background:"#fff", color:"#166534", border:"2px solid #166534" }} onClick={exportDebitExcel}>↓ Export Excel</button>
+            )}
           </div>
         </div>
 
