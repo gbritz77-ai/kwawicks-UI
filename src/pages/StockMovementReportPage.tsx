@@ -103,6 +103,10 @@ export default function StockMovementReportPage() {
       for (const line of cr.lines) {
         if (line.loadedQty > 0)
           loaded_qty[line.speciesId] = (loaded_qty[line.speciesId] ?? 0) + line.loadedQty;
+        // Deaths/short/over recorded during hub confirmation live on the CR line
+        if (line.deadQty  > 0) deaths_qty[line.speciesId]  = (deaths_qty[line.speciesId]  ?? 0) + line.deadQty;
+        if (line.shortQty > 0) short_qty[line.speciesId]   = (short_qty[line.speciesId]   ?? 0) + line.shortQty;
+        if (line.overQty  > 0) surplus_qty[line.speciesId] = (surplus_qty[line.speciesId] ?? 0) + line.overQty;
       }
     }
 
