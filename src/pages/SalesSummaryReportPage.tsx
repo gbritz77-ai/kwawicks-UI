@@ -3,6 +3,10 @@ import type { CSSProperties } from "react";
 import * as XLSX from "xlsx";
 import { reportsApi } from "../api/reportsApi";
 import type { SalesReportRow } from "../api/reportsApi";
+import { suppliersApi } from "../api/suppliersApi";
+import type { SupplierDto } from "../api/suppliersApi";
+import { collectionRequestsApi } from "../api/collectionRequestsApi";
+import type { CollectionRequestDto } from "../api/collectionRequestsApi";
 
 function iso(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -35,19 +39,26 @@ type SummaryRow = {
 
 export default function SalesSummaryReportPage() {
   const range = defaultRange();
-  const [from,          setFrom]          = useState(range.from);
-  const [to,            setTo]            = useState(range.to);
-  const [speciesFilter, setSpeciesFilter] = useState("");
-  const [rows,          setRows]          = useState<SalesReportRow[]>([]);
-  const [loading,       setLoading]       = useState(false);
-  const [error,         setError]         = useState("");
+  const [from,             setFrom]             = useState(range.from);
+  const [to,               setTo]               = useState(range.to);
+  const [speciesFilter,    setSpeciesFilter]    = useState("");
+  const [supplierFilter,   setSupplierFilter]   = useState("");
+  const [rows,             setRows]             = useState<SalesReportRow[]>([]);
+  const [suppliers,        setSuppliers]        = useState<SupplierDto[]>([]);
+  const [crs,              setCrs]              = useState<CollectionRequestDto[]>([]);
+  const [loading,          setLoading]          = useState(false);
+  const [error,            setError]            = useState("");
 
   async function load(f = from, t = to) {
     setLoading(true);
     setError("");
     try {
-      const res = await reportsApi.getSalesReport(f || undefined, t || undefined);
+      const [res, crList] = await Promise.all([
+        reportsApi.getSalesReport(f || undefined, t || undefined),
+        collectionRequestsApi.list(),
+      ]);
       setRows(res.rows);
+      setCrs(crList);
     } catch {
       setError("Failed to load report.");
     } finally {
@@ -55,7 +66,10 @@ export default function SalesSummaryReportPage() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    suppliersApi.list().then(s => setSuppliers(s.filter(x => x.name.toLowerCase() !== "hub").sort((a, b) => a.name.localeCompare(b.name))));
+    load();
+  }, []);
 
   const speciesOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -63,7 +77,25 @@ export default function SalesSummaryReportPage() {
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [rows]);
 
-  const filtered = speciesFilter ? rows.filter(r => r.speciesId === speciesFilter) : rows;
+  // When a supplier is selected, find which speciesIds they supplied in the period
+  const supplierSpeciesIds = useMemo((): Set<string> | null => {
+    if (!supplierFilter) return null;
+    const ids = new Set<string>();
+    for (const cr of crs) {
+      if (cr.supplierId !== supplierFilter && cr.supplierName !== supplierFilter) continue;
+      const date = (cr.collectionDate ?? cr.createdAt).slice(0, 10);
+      if (from && date < from) continue;
+      if (to   && date > to)   continue;
+      for (const line of cr.lines) {
+        if (line.loadedQty > 0) ids.add(line.speciesId);
+      }
+    }
+    return ids;
+  }, [supplierFilter, crs, from, to]);
+
+  const filtered = rows
+    .filter(r => !speciesFilter || r.speciesId === speciesFilter)
+    .filter(r => !supplierSpeciesIds || supplierSpeciesIds.has(r.speciesId));
 
   const summaryRows = useMemo((): SummaryRow[] => {
     const map = new Map<string, SummaryRow>();
@@ -174,6 +206,15 @@ export default function SalesSummaryReportPage() {
             <option value="">All Species</option>
             {speciesOptions.map(([id, name]) => (
               <option key={id} value={id}>{name}</option>
+            ))}
+          </select>
+        </div>
+        <div style={s.filterGroup}>
+          <label style={s.label}>Supplier</label>
+          <select value={supplierFilter} onChange={e => setSupplierFilter(e.target.value)} style={s.dateInput}>
+            <option value="">All Suppliers</option>
+            {suppliers.map(s => (
+              <option key={s.supplierId} value={s.supplierId}>{s.name}</option>
             ))}
           </select>
         </div>
