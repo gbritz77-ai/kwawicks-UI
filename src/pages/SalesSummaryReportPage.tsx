@@ -35,11 +35,12 @@ type SummaryRow = {
 
 export default function SalesSummaryReportPage() {
   const range = defaultRange();
-  const [from, setFrom] = useState(range.from);
-  const [to,   setTo]   = useState(range.to);
-  const [rows, setRows] = useState<SalesReportRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState("");
+  const [from,          setFrom]          = useState(range.from);
+  const [to,            setTo]            = useState(range.to);
+  const [speciesFilter, setSpeciesFilter] = useState("");
+  const [rows,          setRows]          = useState<SalesReportRow[]>([]);
+  const [loading,       setLoading]       = useState(false);
+  const [error,         setError]         = useState("");
 
   async function load(f = from, t = to) {
     setLoading(true);
@@ -56,9 +57,17 @@ export default function SalesSummaryReportPage() {
 
   useEffect(() => { load(); }, []);
 
+  const speciesOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    rows.forEach(r => { if (r.speciesId) map.set(r.speciesId, r.speciesName); });
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [rows]);
+
+  const filtered = speciesFilter ? rows.filter(r => r.speciesId === speciesFilter) : rows;
+
   const summaryRows = useMemo((): SummaryRow[] => {
     const map = new Map<string, SummaryRow>();
-    rows.forEach(r => {
+    filtered.forEach(r => {
       const priceCents = Math.round(r.unitPrice * 100);
       const key = `${r.speciesId}|${priceCents}`;
       if (!map.has(key)) {
@@ -88,7 +97,7 @@ export default function SalesSummaryReportPage() {
     return Array.from(map.values()).sort((a, b) =>
       a.speciesName.localeCompare(b.speciesName) || a.unitPrice - b.unitPrice
     );
-  }, [rows]);
+  }, [filtered]);
 
   function exportToExcel() {
     const headers = ["Species", "QTY", "Unit Price (incl VAT)", "Cash", "EFT", "Card", "Credit", "Total"];
@@ -121,7 +130,7 @@ export default function SalesSummaryReportPage() {
     XLSX.utils.book_append_sheet(wb, ws, "Sales Summary");
 
     // Credit detail sheet
-    const creditLines = rows
+    const creditLines = filtered
       .filter(r => (r.paymentType || "").toLowerCase() === "credit")
       .sort((a, b) => a.clientName.localeCompare(b.clientName) || a.date.localeCompare(b.date));
     if (creditLines.length > 0) {
@@ -158,6 +167,15 @@ export default function SalesSummaryReportPage() {
         <div style={s.filterGroup}>
           <label style={s.label}>To</label>
           <input type="date" value={to} onChange={e => setTo(e.target.value)} style={s.dateInput} />
+        </div>
+        <div style={s.filterGroup}>
+          <label style={s.label}>Species</label>
+          <select value={speciesFilter} onChange={e => setSpeciesFilter(e.target.value)} style={s.dateInput}>
+            <option value="">All Species</option>
+            {speciesOptions.map(([id, name]) => (
+              <option key={id} value={id}>{name}</option>
+            ))}
+          </select>
         </div>
         <button style={s.applyBtn} onClick={() => load()} disabled={loading}>
           {loading ? "Loading…" : "Apply"}
@@ -278,7 +296,7 @@ export default function SalesSummaryReportPage() {
           {/* Credit Detail */}
           {hasCredit && (() => {
             // All credit rows, sorted date desc → client asc → invoiceNumber
-            const creditLines = rows
+            const creditLines = filtered
               .filter(r => (r.paymentType || "").toLowerCase() === "credit")
               .sort((a, b) => a.clientName.localeCompare(b.clientName) || a.date.localeCompare(b.date) || a.invoiceNumber.localeCompare(b.invoiceNumber));
 
