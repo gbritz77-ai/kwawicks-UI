@@ -123,7 +123,7 @@ export default function SalesSummaryReportPage() {
     // Credit detail sheet
     const creditLines = rows
       .filter(r => (r.paymentType || "").toLowerCase() === "credit")
-      .sort((a, b) => a.clientName.localeCompare(b.clientName) || b.date.localeCompare(a.date));
+      .sort((a, b) => a.clientName.localeCompare(b.clientName) || a.date.localeCompare(b.date));
     if (creditLines.length > 0) {
       const creditHeaders = ["Date", "Client", "Inv No", "Species", "QTY", "Unit Price (incl VAT)", "Total (incl VAT)"];
       const creditData = creditLines.map(r => [fmtDate(r.date), r.clientName, r.invoiceNumber, r.speciesName, r.qty, r.unitPrice, r.lineTotal]);
@@ -280,7 +280,7 @@ export default function SalesSummaryReportPage() {
             // All credit rows, sorted date desc → client asc → invoiceNumber
             const creditLines = rows
               .filter(r => (r.paymentType || "").toLowerCase() === "credit")
-              .sort((a, b) => a.clientName.localeCompare(b.clientName) || b.date.localeCompare(a.date) || a.invoiceNumber.localeCompare(b.invoiceNumber));
+              .sort((a, b) => a.clientName.localeCompare(b.clientName) || a.date.localeCompare(b.date) || a.invoiceNumber.localeCompare(b.invoiceNumber));
 
             // Group by client + date
             type CreditGroup = { date: string; client: string; lines: typeof creditLines };
