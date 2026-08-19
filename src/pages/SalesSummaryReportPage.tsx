@@ -119,6 +119,20 @@ export default function SalesSummaryReportPage() {
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sales Summary");
+
+    // Credit detail sheet
+    const creditLines = rows
+      .filter(r => (r.paymentType || "").toLowerCase() === "credit")
+      .sort((a, b) => b.date.localeCompare(a.date) || a.clientName.localeCompare(b.clientName));
+    if (creditLines.length > 0) {
+      const creditHeaders = ["Date", "Client", "Inv No", "Species", "QTY", "Unit Price (incl VAT)", "Total (incl VAT)"];
+      const creditData = creditLines.map(r => [fmtDate(r.date), r.clientName, r.invoiceNumber, r.speciesName, r.qty, r.unitPrice, r.lineTotal]);
+      const creditTotals = ["", "", "", "Total Credit", creditLines.reduce((s, r) => s + r.qty, 0), "", creditLines.reduce((s, r) => s + r.lineTotal, 0)];
+      const ws2 = XLSX.utils.aoa_to_sheet([creditHeaders, ...creditData, [], creditTotals]);
+      ws2["!cols"] = [{ wch: 16 }, { wch: 24 }, { wch: 12 }, { wch: 20 }, { wch: 8 }, { wch: 22 }, { wch: 20 }];
+      XLSX.utils.book_append_sheet(wb, ws2, "Credit Detail");
+    }
+
     const fileName = `sales-summary-${from || "all"}-to-${to || "all"}.xlsx`;
     XLSX.writeFile(wb, fileName);
   }
@@ -260,6 +274,80 @@ export default function SalesSummaryReportPage() {
               </table>
             </div>
           )}
+
+          {/* Credit Detail */}
+          {hasCredit && (() => {
+            // All credit rows, sorted date desc → client asc → invoiceNumber
+            const creditLines = rows
+              .filter(r => (r.paymentType || "").toLowerCase() === "credit")
+              .sort((a, b) => b.date.localeCompare(a.date) || a.clientName.localeCompare(b.clientName) || a.invoiceNumber.localeCompare(b.invoiceNumber));
+
+            // Group by date + client
+            type CreditGroup = { date: string; client: string; lines: typeof creditLines };
+            const groups: CreditGroup[] = [];
+            for (const row of creditLines) {
+              const last = groups[groups.length - 1];
+              if (last && last.date === row.date && last.client === row.clientName) {
+                last.lines.push(row);
+              } else {
+                groups.push({ date: row.date, client: row.clientName, lines: [row] });
+              }
+            }
+
+            const creditTotal = creditLines.reduce((s, r) => s + r.lineTotal, 0);
+
+            return (
+              <div style={{ marginTop: 32 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: "#92400e", marginBottom: 10 }}>
+                  Credit Sales Detail
+                </h3>
+                <div style={s.scrollWrap}>
+                  <table style={s.table}>
+                    <thead>
+                      <tr>
+                        <th style={s.th}>Date</th>
+                        <th style={s.th}>Client</th>
+                        <th style={s.th}>Inv No</th>
+                        <th style={s.th}>Species</th>
+                        <th style={{ ...s.th, ...s.right }}>QTY</th>
+                        <th style={{ ...s.th, ...s.right }}>Unit Price (incl VAT)</th>
+                        <th style={{ ...s.th, ...s.right }}>Total (incl VAT)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groups.map((g, gi) =>
+                        g.lines.map((row, li) => (
+                          <tr key={`${gi}-${li}`} style={gi % 2 === 0 ? s.rowEven : s.rowOdd}>
+                            {li === 0 && (
+                              <>
+                                <td style={{ ...s.td, fontWeight: 600, verticalAlign: "top" }} rowSpan={g.lines.length}>
+                                  {fmtDate(row.date)}
+                                </td>
+                                <td style={{ ...s.td, fontWeight: 600, verticalAlign: "top" }} rowSpan={g.lines.length}>
+                                  {g.client}
+                                </td>
+                              </>
+                            )}
+                            <td style={s.td}>{row.invoiceNumber}</td>
+                            <td style={s.td}>{row.speciesName}</td>
+                            <td style={{ ...s.td, ...s.right }}>{row.qty.toLocaleString()}</td>
+                            <td style={{ ...s.td, ...s.right }}>{fmt(row.unitPrice)}</td>
+                            <td style={{ ...s.td, ...s.right, fontWeight: 700 }}>{fmt(row.lineTotal)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                    <tfoot>
+                      <tr style={s.footerRow}>
+                        <td colSpan={6} style={{ ...s.td, fontWeight: 700 }}>Total Credit</td>
+                        <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#92400e" }}>{fmt(creditTotal)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
         </>
       )}
     </div>
