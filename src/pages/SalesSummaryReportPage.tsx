@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import type { CSSProperties } from "react";
+import * as XLSX from "xlsx";
 import { reportsApi } from "../api/reportsApi";
 import type { SalesReportRow } from "../api/reportsApi";
 
@@ -89,6 +90,39 @@ export default function SalesSummaryReportPage() {
     );
   }, [rows]);
 
+  function exportToExcel() {
+    const headers = ["Species", "QTY", "Unit Price (incl VAT)", "Cash", "EFT", "Card", "Credit", "Total"];
+    const dataRows = summaryRows.map(r => [
+      r.speciesName,
+      r.qty,
+      r.unitPrice,
+      r.cash,
+      r.eft,
+      r.card,
+      r.credit,
+      r.total,
+    ]);
+    const totalsRow = ["Total", totalQty, "", totalCash, totalEft, totalCard, totalCred, grandTotal];
+
+    const ws = XLSX.utils.aoa_to_sheet([
+      [`Sales Summary Report`],
+      [`Period: ${from ? fmtDate(from) : "—"} — ${to ? fmtDate(to) : "—"}`],
+      [],
+      headers,
+      ...dataRows,
+      [],
+      totalsRow,
+    ]);
+
+    // Column widths
+    ws["!cols"] = [{ wch: 24 }, { wch: 10 }, { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Sales Summary");
+    const fileName = `sales-summary-${from || "all"}-to-${to || "all"}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  }
+
   const hasCredit = summaryRows.some(r => r.credit > 0);
   const totalQty  = summaryRows.reduce((s, r) => s + r.qty,    0);
   const totalCash = summaryRows.reduce((s, r) => s + r.cash,   0);
@@ -114,6 +148,11 @@ export default function SalesSummaryReportPage() {
         <button style={s.applyBtn} onClick={() => load()} disabled={loading}>
           {loading ? "Loading…" : "Apply"}
         </button>
+        {summaryRows.length > 0 && (
+          <button style={s.exportBtn} onClick={exportToExcel}>
+            ↓ Export Excel
+          </button>
+        )}
       </div>
 
       {error   && <p style={s.error}>{error}</p>}
@@ -239,7 +278,8 @@ const s: Record<string, CSSProperties> = {
   filterGroup: { display: "flex", flexDirection: "column", gap: 4 },
   label: { fontSize: 12, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.04em" },
   dateInput: { border: "1px solid #d1d5db", borderRadius: 6, padding: "7px 10px", fontSize: 14, color: "#111827", background: "#fff" },
-  applyBtn: { padding: "8px 20px", fontSize: 14, fontWeight: 700, background: "#166534", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", alignSelf: "flex-end" },
+  applyBtn:  { padding: "8px 20px", fontSize: 14, fontWeight: 700, background: "#166534", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", alignSelf: "flex-end" },
+  exportBtn: { padding: "8px 20px", fontSize: 14, fontWeight: 700, background: "#fff", color: "#166534", border: "2px solid #166534", borderRadius: 8, cursor: "pointer", alignSelf: "flex-end" },
 
   banner: {
     background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8,
