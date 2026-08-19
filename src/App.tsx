@@ -33,6 +33,7 @@ import OtpReportPage from "./pages/OtpReportPage";
 import ReconPage from "./pages/ReconPage";
 import SalesReportPage from "./pages/SalesReportPage";
 import SalesSummaryReportPage from "./pages/SalesSummaryReportPage";
+import StockMovementReportPage from "./pages/StockMovementReportPage";
 import StockLossPage from "./pages/StockLossPage";
 import VehicleTrackingPage from "./pages/VehicleTrackingPage";
 import FleetPage from "./pages/FleetPage";
@@ -78,7 +79,8 @@ export default function App() {
       <Route path="/app/otp-report"          element={<AuthLayout><OtpReportPage /></AuthLayout>} />
       <Route path="/app/recon"               element={<AuthLayout><ReconPage /></AuthLayout>} />
       <Route path="/app/sales-report"         element={<AuthLayout><SalesReportPage /></AuthLayout>} />
-      <Route path="/app/sales-summary"        element={<AuthLayout><SalesSummaryReportPage /></AuthLayout>} />
+      <Route path="/app/sales-summary"         element={<AuthLayout><SalesSummaryReportPage /></AuthLayout>} />
+      <Route path="/app/stock-movement"        element={<AuthLayout><StockMovementReportPage /></AuthLayout>} />
       <Route path="/app/stock-losses"         element={<AuthLayout><StockLossPage /></AuthLayout>} />
       <Route path="/app/vehicle-tracking"    element={<AuthLayout><VehicleTrackingPage /></AuthLayout>} />
       <Route path="/app/fleet"              element={<AuthLayout><FleetPage /></AuthLayout>} />

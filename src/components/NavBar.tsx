@@ -125,7 +125,8 @@ export default function NavBar() {
       financeItems.push(leaf("Invoices",        "/app/reports",         "invoices"));
       financeItems.push(leaf("Statements",      "/app/reports",         "statement"));
       financeItems.push(leaf("Recon",           "/app/recon"));
-      financeItems.push(leaf("Sales Summary",   "/app/sales-summary"));
+      financeItems.push(leaf("Sales Summary",      "/app/sales-summary"));
+      financeItems.push(leaf("Stock Movement",     "/app/stock-movement"));
       financeItems.push(leaf("Client Accounts", "/app/client-accounts"));
       financeItems.push(leaf("Cost Averages",   "/app/cost-averages"));
     }
