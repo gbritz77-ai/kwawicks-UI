@@ -1,4 +1,5 @@
 ﻿import { useState, useEffect } from "react";
+import * as XLSX from "xlsx";
 import type { CSSProperties } from "react";
 import { useSearchParams } from "react-router-dom";
 import { hasAnyRole } from "../api/auth";
@@ -605,6 +606,29 @@ export default function AdminReportsPage() {
 
         const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" });
 
+        function exportSupplierSpend() {
+          const headers = ["Date", "Supplier", "Species", "Unit Cost (incl. VAT)", "Qty Loaded", "Total Value (incl. VAT)"];
+          const rows: (string | number)[][] = [];
+          for (const g of groups) {
+            for (const row of g.lines) {
+              rows.push([g.date, g.supplier, row.speciesName, row.unitCost, row.loadedQty, row.totalValue]);
+            }
+          }
+          rows.push(["TOTAL", "", "", "", totalQty, totalValue]);
+          const ws = XLSX.utils.aoa_to_sheet([
+            ["Supplier Spend Report"],
+            [`Period: ${from ?? ""} — ${to ?? ""}`],
+            [`Total Spend (incl. VAT): R ${totalValue.toFixed(2)}   Suppliers: ${suppliers}   Total Qty: ${totalQty.toLocaleString()}`],
+            [],
+            headers,
+            ...rows,
+          ]);
+          ws["!cols"] = [{ wch: 14 }, { wch: 30 }, { wch: 20 }, { wch: 22 }, { wch: 12 }, { wch: 24 }];
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "Supplier Spend");
+          XLSX.writeFile(wb, `supplier-spend-${from ?? "all"}-to-${to ?? "all"}.xlsx`);
+        }
+
         return (
           <div>
             <div style={s.kpiRow}>
@@ -612,6 +636,13 @@ export default function AdminReportsPage() {
               <KpiCard label="Suppliers"  value={String(suppliers)} />
               <KpiCard label="Total Qty Loaded" value={totalQty.toLocaleString()} />
             </div>
+            {details.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <button onClick={exportSupplierSpend} style={{ padding: "6px 14px", background: "#166534", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>
+                  ↓ Export Excel
+                </button>
+              </div>
+            )}
             {groups.length === 0 ? (
               <p style={s.muted}>No loaded collections for the selected period.</p>
             ) : (
