@@ -465,7 +465,7 @@ export default function CollectionRequestsPage() {
     const existingAlloc = (cr.deliveryAllocations ?? [])
       .flatMap(a => a.lines)
       .filter(l => l.speciesId === speciesId)
-      .reduce((sum, l) => sum + l.qty, 0);
+      .reduce((sum, l) => sum + (l.deliveredQty > 0 ? l.deliveredQty : l.qty), 0);
     const otherSlots = allocSlots
       .filter((_, j) => j !== excludeSlotIdx)
       .reduce((sum, slot) => sum + (slot.lines.find(l => l.speciesId === speciesId)?.qty ?? 0), 0);
