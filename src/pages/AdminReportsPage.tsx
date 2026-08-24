@@ -14,6 +14,8 @@ import { procurementOrdersApi } from "../api/procurementOrdersApi";
 import type { ProcurementOrderDto } from "../api/procurementOrdersApi";
 import { collectionRequestsApi } from "../api/collectionRequestsApi";
 import type { CollectionRequestDto } from "../api/collectionRequestsApi";
+import { stockLossApi } from "../api/stockLossApi";
+import type { StockLossDto } from "../api/stockLossApi";
 import { deliveryOrdersApi } from "../api/deliveryOrdersApi";
 import { deliveryRunsApi } from "../api/deliveryRunsApi";
 import type { DeliveryRunDto } from "../api/deliveryRunsApi";
@@ -36,7 +38,7 @@ import type { CostAverageRecordDto } from "../api/costAveragesApi";
 import type { ClientDto } from "../api/clientsApi";
 import { NumericInput } from "../components/NumericInput";
 
-type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability" | "collection-returns" | "client-orders" | "sales" | "delivery-runs" | "staff-deductions" | "client-balances";
+type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability" | "collection-returns" | "client-orders" | "sales" | "delivery-runs" | "staff-deductions" | "client-balances" | "species-audit";
 
 export default function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -96,6 +98,12 @@ export default function AdminReportsPage() {
 
   // ── Client Balances tab state ───────────────────────────────────────────────
   const [clientBalances, setClientBalances] = useState<ClientCreditStatementSummary[] | null>(null);
+
+  // ── Species Audit tab state ──────────────────────────────────────────────────
+  const [auditSpeciesId,   setAuditSpeciesId]   = useState("");
+  const [auditCrs,         setAuditCrs]         = useState<CollectionRequestDto[] | null>(null);
+  const [auditSalesRows,   setAuditSalesRows]   = useState<SalesReportRow[] | null>(null);
+  const [auditLosses,      setAuditLosses]      = useState<StockLossDto[] | null>(null);
 
   async function load() {
     setLoading(true);
@@ -164,6 +172,18 @@ export default function AdminReportsPage() {
       if (tab === "client-balances") {
         setClientBalances(await reportsApi.getClientBalances(from || undefined, to || undefined));
       }
+      if (tab === "species-audit") {
+        const [spc, crs, sales, losses] = await Promise.all([
+          allSpecies.length ? Promise.resolve(allSpecies) : speciesApi.list(),
+          collectionRequestsApi.list(),
+          reportsApi.getSalesReport(from || undefined, to || undefined),
+          stockLossApi.list({ from: from || undefined, to: to || undefined }),
+        ]);
+        if (!allSpecies.length) setAllSpecies(spc);
+        setAuditCrs(crs);
+        setAuditSalesRows(sales.rows);
+        setAuditLosses(losses);
+      }
     } catch {
       setError("Failed to load report.");
     } finally {
@@ -182,9 +202,9 @@ export default function AdminReportsPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["revenue", "outstanding", "invoices", "sales", "client-balances", "staff-deductions", "client-orders", "drivers", "returns", "deliveries", "delivery-runs", "species", "statement", "supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability", "collection-returns"] as Tab[])
+        {(["revenue", "outstanding", "invoices", "sales", "client-balances", "staff-deductions", "client-orders", "drivers", "returns", "deliveries", "delivery-runs", "species", "species-audit", "statement", "supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability", "collection-returns"] as Tab[])
           .filter(t => {
-            const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "statement", "sales", "staff-deductions", "client-balances"];
+            const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "species-audit", "statement", "sales", "staff-deductions", "client-balances"];
             const procurementTabs: Tab[] = ["supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability", "collection-returns"];
             if (procurementTabs.includes(t)) return isProcurementUser;
             return isFinancialUser || !financialTabs.includes(t);
@@ -202,6 +222,7 @@ export default function AdminReportsPage() {
             {t === "deliveries"            && "📬 Deliveries"}
             {t === "delivery-runs"         && "🚚 Delivery Runs"}
             {t === "species"               && "🐔 Species Revenue"}
+            {t === "species-audit"         && "🔍 Species Audit"}
             {t === "statement"             && "📄 Customer Statement"}
             {t === "supplier-spend"        && "💼 Supplier Spend"}
             {t === "margin"                && "📊 Cost vs Sell Margin"}
@@ -215,7 +236,7 @@ export default function AdminReportsPage() {
       </div>
 
       {/* Date filter (not shown for outstanding, statement, client-orders, or sales — sales has its own) */}
-      {tab !== "outstanding" && tab !== "statement" && tab !== "client-orders" && tab !== "sales" && (
+      {tab !== "outstanding" && tab !== "statement" && tab !== "client-orders" && tab !== "sales" && tab !== "species-audit" && (
         <div style={s.filterRow}>
           <label style={s.label}>From</label>
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={s.dateInput} />
@@ -1516,6 +1537,140 @@ export default function AdminReportsPage() {
                   ))}
                 </tbody>
               </ScrollTable>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ── Species Audit ── */}
+      {tab === "species-audit" && !loading && (() => {
+        // Species selector + date filters
+        const selectedSpecies = allSpecies.find(s => s.speciesId === auditSpeciesId);
+
+        // Build audit entries
+        type AuditEntry = {
+          date: string;
+          kind: "collection" | "sale" | "adjustment";
+          label: string;
+          detail: string;
+          qty: number; // positive = in, negative = out
+        };
+
+        const entries: AuditEntry[] = [];
+
+        if (auditSpeciesId && auditCrs) {
+          for (const cr of auditCrs) {
+            if ((cr.supplierName || "").toLowerCase() === "hub") continue;
+            const date = (cr.collectionDate ?? cr.createdAt).slice(0, 10);
+            if (from && date < from) continue;
+            if (to   && date > to)   continue;
+            for (const line of cr.lines) {
+              if (line.speciesId !== auditSpeciesId) continue;
+              if (line.loadedQty > 0) {
+                entries.push({ date, kind: "collection", label: cr.supplierName || cr.supplierId, detail: `Driver: ${cr.assignedDriverName || "—"}`, qty: line.loadedQty });
+              }
+              if (line.deadQty > 0)  entries.push({ date, kind: "adjustment", label: "Hub Confirmed — Dead",  detail: `CR: ${cr.collectionRequestId.slice(0, 8)}`, qty: -line.deadQty });
+              if (line.shortQty > 0) entries.push({ date, kind: "adjustment", label: "Hub Confirmed — Short", detail: `CR: ${cr.collectionRequestId.slice(0, 8)}`, qty: -line.shortQty });
+              if (line.overQty > 0)  entries.push({ date, kind: "adjustment", label: "Hub Confirmed — Over",  detail: `CR: ${cr.collectionRequestId.slice(0, 8)}`, qty: line.overQty });
+            }
+          }
+        }
+
+        if (auditSpeciesId && auditSalesRows) {
+          for (const row of auditSalesRows) {
+            if (row.speciesId !== auditSpeciesId) continue;
+            entries.push({ date: row.date, kind: "sale", label: row.clientName || "Walk-in", detail: `Inv: ${row.invoiceNumber || row.invoiceId.slice(0, 8)}`, qty: -row.qty });
+          }
+        }
+
+        if (auditSpeciesId && auditLosses) {
+          for (const loss of auditLosses) {
+            if (loss.speciesId !== auditSpeciesId) continue;
+            const date = loss.createdAt.slice(0, 10);
+            if (from && date < from) continue;
+            if (to   && date > to)   continue;
+            const isOut = loss.adjustmentType === "Under" || loss.adjustmentType === "Short";
+            entries.push({ date, kind: "adjustment", label: `Stock Adj — ${loss.adjustmentType}`, detail: loss.notes || "—", qty: isOut ? -loss.qty : loss.qty });
+          }
+        }
+
+        entries.sort((a, b) => a.date.localeCompare(b.date));
+
+        // Running balance
+        let running = 0;
+        const withBal = entries.map(e => { running += e.qty; return { ...e, running }; });
+        const totalIn  = entries.filter(e => e.qty > 0).reduce((s, e) => s + e.qty, 0);
+        const totalOut = entries.filter(e => e.qty < 0).reduce((s, e) => s + Math.abs(e.qty), 0);
+
+        const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" });
+
+        return (
+          <div>
+            {/* Controls */}
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" as const, marginBottom: 16, background: "#fff", padding: "14px 16px", borderRadius: 10, border: "1px solid #e2e8f0", alignItems: "center" }}>
+              <label style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>Species</label>
+              <select
+                value={auditSpeciesId}
+                onChange={e => setAuditSpeciesId(e.target.value)}
+                style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 14, background: "#f9fafb", minWidth: 180 }}
+              >
+                <option value="">— Select species —</option>
+                {allSpecies.map(sp => <option key={sp.speciesId} value={sp.speciesId}>{sp.name}</option>)}
+              </select>
+              <label style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>From</label>
+              <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 13 }} />
+              <label style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>To</label>
+              <input type="date" value={to} onChange={e => setTo(e.target.value)} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 13 }} />
+              <button onClick={load} style={{ padding: "8px 20px", borderRadius: 8, background: "#15803d", color: "#fff", border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Apply</button>
+            </div>
+
+            {!auditSpeciesId ? (
+              <p style={s.muted}>Select a species above to view its full movement audit trail.</p>
+            ) : entries.length === 0 ? (
+              <p style={s.muted}>No movements found for {selectedSpecies?.name ?? auditSpeciesId} in the selected period.</p>
+            ) : (
+              <>
+                <div style={s.kpiRow}>
+                  <KpiCard label="Total In (Loaded)" value={totalIn.toLocaleString()} />
+                  <KpiCard label="Total Out (Sales + Adj)" value={totalOut.toLocaleString()} />
+                  <KpiCard label={`Closing Balance`} value={running.toLocaleString()} highlight={running < 0} />
+                  <KpiCard label="Transactions" value={String(entries.length)} />
+                </div>
+                <ScrollTable>
+                  <thead>
+                    <tr>
+                      <Th>Date</Th>
+                      <Th>Type</Th>
+                      <Th>Description</Th>
+                      <Th>Detail</Th>
+                      <Th>Qty In</Th>
+                      <Th>Qty Out</Th>
+                      <Th>Running Balance</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {withBal.map((row, i) => (
+                      <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#f9fafb" }}>
+                        <Td>{fmtDate(row.date)}</Td>
+                        <Td>
+                          <span style={{
+                            display: "inline-block", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
+                            background: row.kind === "collection" ? "#dcfce7" : row.kind === "sale" ? "#dbeafe" : "#fef9c3",
+                            color:      row.kind === "collection" ? "#166534" : row.kind === "sale" ? "#1d4ed8" : "#854d0e",
+                          }}>
+                            {row.kind === "collection" ? "▲ Collection" : row.kind === "sale" ? "▼ Sale" : "⚠ Adjustment"}
+                          </span>
+                        </Td>
+                        <Td style={{ fontWeight: 600 }}>{row.label}</Td>
+                        <Td style={{ color: "#64748b", fontSize: 12 }}>{row.detail}</Td>
+                        <Td style={{ color: "#16a34a", fontWeight: 700 }}>{row.qty > 0 ? row.qty.toLocaleString() : ""}</Td>
+                        <Td style={{ color: "#dc2626", fontWeight: 700 }}>{row.qty < 0 ? Math.abs(row.qty).toLocaleString() : ""}</Td>
+                        <Td style={{ fontWeight: 800, color: row.running < 0 ? "#dc2626" : "#0f172a" }}>{row.running.toLocaleString()}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </ScrollTable>
+              </>
             )}
           </div>
         );
