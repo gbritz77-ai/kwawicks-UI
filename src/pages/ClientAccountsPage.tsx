@@ -7,15 +7,13 @@ import { whatsappApi } from "../api/whatsappApi";
 import { invoicesApi } from "../api/invoicesApi";
 import type { InvoiceResponse } from "../api/invoicesApi";
 import { speciesApi } from "../api/speciesApi";
-import { reportsApi } from "../api/reportsApi";
-import type { ClientCreditStatementSummary } from "../api/reportsApi";
 import { NumericInput } from "../components/NumericInput";
 
 function todayIso() { return new Date().toISOString().slice(0, 10); }
 function thirtyAgoIso() { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); }
 
 export default function ClientAccountsPage() {
-  const [allBalances, setAllBalances] = useState<ClientCreditStatementSummary[]>([]);
+  const [allBalances, setAllBalances] = useState<{ clientId: string; clientName: string; balance: number }[]>([]);
   const [balanceSearch, setBalanceSearch] = useState("");
   const [clients, setClients] = useState<ClientDto[]>([]);
   const [clientSearch, setClientSearch] = useState("");
@@ -86,8 +84,18 @@ export default function ClientAccountsPage() {
   const [speciesNameMap, setSpeciesNameMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    reportsApi.getClientBalances().then(data => setAllBalances(data)).catch(() => {});
-    clientsApi.list().then(data => setClients(data.filter((c: ClientDto) => !c.isWalkIn))).catch(() => setError("Failed to load clients."));
+    clientsApi.list().then(async (data) => {
+      const nonWalkIn = data.filter((c: ClientDto) => !c.isWalkIn);
+      setClients(nonWalkIn);
+      const results = await Promise.all(
+        nonWalkIn.map((c: ClientDto) =>
+          clientCreditApi.getBalance(c.clientId)
+            .then(r => ({ clientId: c.clientId, clientName: c.clientName, balance: r.balance }))
+            .catch(() => ({ clientId: c.clientId, clientName: c.clientName, balance: 0 }))
+        )
+      );
+      setAllBalances(results);
+    }).catch(() => setError("Failed to load clients."));
     speciesApi.list().then(data => {
       const map: Record<string, string> = {};
       data.forEach((sp: { speciesId: string; name: string }) => { map[sp.speciesId] = sp.name; });
@@ -301,36 +309,33 @@ export default function ClientAccountsPage() {
               <tr>
                 <th style={s.th}>Client</th>
                 <th style={{ ...s.th, textAlign: "right" as const }}>Balance</th>
-                <th style={{ ...s.th, textAlign: "right" as const }}>Total Deposits</th>
-                <th style={{ ...s.th, textAlign: "right" as const }}>Total Charges</th>
+                <th style={{ ...s.th, textAlign: "right" as const }}>Status</th>
               </tr>
             </thead>
             <tbody>
               {allBalances
-                .filter(b => !balanceSearch || b.customerName.toLowerCase().includes(balanceSearch.toLowerCase()))
-                .sort((a, b) => a.closingBalance - b.closingBalance)
+                .filter(b => !balanceSearch || b.clientName.toLowerCase().includes(balanceSearch.toLowerCase()))
+                .sort((a, b) => a.balance - b.balance)
                 .map((b, i) => {
-                  const bal = b.closingBalance;
+                  const bal = b.balance;
                   const isNeg = bal < 0;
+                  const isZero = Math.round(bal * 100) === 0;
                   return (
                     <tr
-                      key={b.customerId}
+                      key={b.clientId}
                       style={{ background: i % 2 === 0 ? "#fff" : "#fafafa", cursor: "pointer" }}
                       onClick={() => {
-                        setSelectedClientId(b.customerId);
-                        setClientSearch(b.customerName);
+                        setSelectedClientId(b.clientId);
+                        setClientSearch(b.clientName);
                         window.scrollTo({ top: 999, behavior: "smooth" });
                       }}
                     >
-                      <td style={s.td}><span style={{ fontWeight: 600, color: "#0f172a" }}>{b.customerName}</span></td>
-                      <td style={{ ...s.td, textAlign: "right" as const, fontWeight: 800, color: isNeg ? "#dc2626" : "#15803d" }}>
-                        {isNeg ? "−" : "+"} R {Math.abs(bal).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <td style={s.td}><span style={{ fontWeight: 600, color: "#0f172a" }}>{b.clientName}</span></td>
+                      <td style={{ ...s.td, textAlign: "right" as const, fontWeight: 800, color: isNeg ? "#dc2626" : isZero ? "#64748b" : "#15803d" }}>
+                        {isNeg ? "−" : isZero ? "" : "+"} R {Math.abs(bal).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td style={{ ...s.td, textAlign: "right" as const, color: "#15803d" }}>
-                        R {b.totalDeposits.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td style={{ ...s.td, textAlign: "right" as const, color: "#dc2626" }}>
-                        R {Math.abs(b.totalCharges).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <td style={{ ...s.td, textAlign: "right" as const, fontSize: 12, color: isNeg ? "#dc2626" : isZero ? "#64748b" : "#15803d" }}>
+                        {isNeg ? "Owing" : isZero ? "Settled" : "Credit"}
                       </td>
                     </tr>
                   );
