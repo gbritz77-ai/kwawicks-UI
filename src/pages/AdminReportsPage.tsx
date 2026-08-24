@@ -1496,22 +1496,20 @@ export default function AdminReportsPage() {
 
       {/* ── Client Balances ── */}
       {tab === "client-balances" && !loading && (() => {
-        const rows = (clientBalances ?? [])
-          .filter(r => r.closingBalance < 0)
-          .sort((a, b) => a.closingBalance - b.closingBalance);
-        const allRows = clientBalances ?? [];
-        const totalOwing = allRows.reduce((s, r) => s + Math.min(0, r.closingBalance), 0);
+        const allRows = (clientBalances ?? []).sort((a, b) => a.closingBalance - b.closingBalance);
+        const totalOwing  = allRows.reduce((s, r) => s + Math.min(0, r.closingBalance), 0);
+        const totalCredit = allRows.reduce((s, r) => s + Math.max(0, r.closingBalance), 0);
 
         return (
           <div>
             <div style={s.kpiRow}>
               <KpiCard label="Clients" value={String(allRows.length)} />
-              <KpiCard label="Clients with Balance" value={String(rows.length)} />
               <KpiCard label="Total Outstanding" value={fmt(Math.abs(totalOwing))} highlight />
+              <KpiCard label="Total Credit" value={fmt(totalCredit)} />
             </div>
 
-            {rows.length === 0 ? (
-              <p style={s.muted}>{allRows.length === 0 ? "No data — click Apply to load." : "No clients have an outstanding balance in this period."}</p>
+            {allRows.length === 0 ? (
+              <p style={s.muted}>No data — click Apply to load.</p>
             ) : (
               <ScrollTable>
                 <thead>
@@ -1520,18 +1518,21 @@ export default function AdminReportsPage() {
                     <Th>Opening Balance</Th>
                     <Th>Charges</Th>
                     <Th>Payments / Deposits</Th>
-                    <Th>Outstanding Balance</Th>
+                    <Th>Balance</Th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r, i) => (
+                  {allRows.map((r, i) => (
                     <tr key={r.customerId} style={{ background: i % 2 === 0 ? "#fff" : "#f9fafb" }}>
                       <Td>{r.customerName}</Td>
                       <Td>{fmt(r.openingBalance)}</Td>
                       <Td style={{ color: "#dc2626" }}>{fmt(Math.abs(r.totalCharges))}</Td>
                       <Td style={{ color: "#16a34a" }}>{fmt(r.totalDeposits)}</Td>
                       <Td style={{ color: Math.round(r.closingBalance * 100) < 0 ? "#dc2626" : "#16a34a", fontWeight: 700 }}>
-                        {fmt(Math.abs(r.closingBalance))} {Math.round(r.closingBalance * 100) < 0 ? "owing" : "credit"}
+                        {Math.round(r.closingBalance * 100) < 0 ? "−" : "+"}{fmt(Math.abs(r.closingBalance))}
+                        <span style={{ fontSize: 11, fontWeight: 400, marginLeft: 4 }}>
+                          {Math.round(r.closingBalance * 100) < 0 ? "owing" : Math.round(r.closingBalance * 100) === 0 ? "settled" : "credit"}
+                        </span>
                       </Td>
                     </tr>
                   ))}
