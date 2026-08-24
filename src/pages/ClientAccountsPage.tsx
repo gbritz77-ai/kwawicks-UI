@@ -7,12 +7,16 @@ import { whatsappApi } from "../api/whatsappApi";
 import { invoicesApi } from "../api/invoicesApi";
 import type { InvoiceResponse } from "../api/invoicesApi";
 import { speciesApi } from "../api/speciesApi";
+import { reportsApi } from "../api/reportsApi";
+import type { ClientCreditStatementSummary } from "../api/reportsApi";
 import { NumericInput } from "../components/NumericInput";
 
 function todayIso() { return new Date().toISOString().slice(0, 10); }
 function thirtyAgoIso() { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); }
 
 export default function ClientAccountsPage() {
+  const [allBalances, setAllBalances] = useState<ClientCreditStatementSummary[]>([]);
+  const [balanceSearch, setBalanceSearch] = useState("");
   const [clients, setClients] = useState<ClientDto[]>([]);
   const [clientSearch, setClientSearch] = useState("");
   const [clientDropOpen, setClientDropOpen] = useState(false);
@@ -82,6 +86,7 @@ export default function ClientAccountsPage() {
   const [speciesNameMap, setSpeciesNameMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    reportsApi.getClientBalances().then(data => setAllBalances(data)).catch(() => {});
     clientsApi.list().then(data => setClients(data.filter((c: ClientDto) => !c.isWalkIn))).catch(() => setError("Failed to load clients."));
     speciesApi.list().then(data => {
       const map: Record<string, string> = {};
@@ -277,6 +282,63 @@ export default function ClientAccountsPage() {
       </div>
 
       {error && <div style={s.errorBanner}>{error}</div>}
+
+      {/* All clients balance overview */}
+      {allBalances.length > 0 && (
+        <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0", marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid #e2e8f0", flexWrap: "wrap" as const, gap: 8 }}>
+            <span style={{ fontWeight: 700, fontSize: 14, color: "#0f172a" }}>All Client Balances</span>
+            <input
+              type="text"
+              placeholder="Search clients…"
+              value={balanceSearch}
+              onChange={e => setBalanceSearch(e.target.value)}
+              style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 13, background: "#f9fafb", outline: "none", width: 200 }}
+            />
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse" as const, fontSize: 13 }}>
+            <thead style={{ background: "#f8fafc" }}>
+              <tr>
+                <th style={s.th}>Client</th>
+                <th style={{ ...s.th, textAlign: "right" as const }}>Balance</th>
+                <th style={{ ...s.th, textAlign: "right" as const }}>Total Deposits</th>
+                <th style={{ ...s.th, textAlign: "right" as const }}>Total Charges</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allBalances
+                .filter(b => !balanceSearch || b.customerName.toLowerCase().includes(balanceSearch.toLowerCase()))
+                .sort((a, b) => a.closingBalance - b.closingBalance)
+                .map((b, i) => {
+                  const bal = b.closingBalance;
+                  const isNeg = bal < 0;
+                  return (
+                    <tr
+                      key={b.customerId}
+                      style={{ background: i % 2 === 0 ? "#fff" : "#fafafa", cursor: "pointer" }}
+                      onClick={() => {
+                        setSelectedClientId(b.customerId);
+                        setClientSearch(b.customerName);
+                        window.scrollTo({ top: 999, behavior: "smooth" });
+                      }}
+                    >
+                      <td style={s.td}><span style={{ fontWeight: 600, color: "#0f172a" }}>{b.customerName}</span></td>
+                      <td style={{ ...s.td, textAlign: "right" as const, fontWeight: 800, color: isNeg ? "#dc2626" : "#15803d" }}>
+                        {isNeg ? "−" : "+"} R {Math.abs(bal).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ ...s.td, textAlign: "right" as const, color: "#15803d" }}>
+                        R {b.totalDeposits.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ ...s.td, textAlign: "right" as const, color: "#dc2626" }}>
+                        R {Math.abs(b.totalCharges).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Client selector + date range */}
       <div style={s.selectorCard}>
