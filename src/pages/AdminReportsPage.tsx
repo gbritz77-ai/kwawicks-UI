@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import type { CSSProperties } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -37,6 +37,93 @@ import { costAveragesApi } from "../api/costAveragesApi";
 import type { CostAverageRecordDto } from "../api/costAveragesApi";
 import type { ClientDto } from "../api/clientsApi";
 import { NumericInput } from "../components/NumericInput";
+
+// ── Searchable select ──────────────────────────────────────────────────────
+
+type SelectOption = { value: string; label: string };
+
+function SearchableSelect({
+  value, onChange, options, placeholder = "All", style,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: SelectOption[];
+  placeholder?: string;
+  style?: CSSProperties;
+}) {
+  const [query, setQuery]     = useState("");
+  const [open, setOpen]       = useState(false);
+  const ref                   = useRef<HTMLDivElement>(null);
+
+  const selected = options.find(o => o.value === value);
+  const filtered = options.filter(o =>
+    !query || o.label.toLowerCase().includes(query.toLowerCase())
+  );
+
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
+
+  const inputStyle: CSSProperties = {
+    padding: "6px 10px", borderRadius: 8, border: "1px solid #d1d5db",
+    fontSize: 13, background: "#f9fafb", width: "100%", boxSizing: "border-box",
+    outline: "none",
+  };
+
+  return (
+    <div ref={ref} style={{ position: "relative", ...style }}>
+      <div
+        style={{ display: "flex", alignItems: "center", border: "1px solid #d1d5db", borderRadius: 8, background: "#f9fafb", overflow: "hidden", cursor: "text" }}
+        onClick={() => { setOpen(true); setQuery(""); }}
+      >
+        <input
+          style={{ ...inputStyle, border: "none", background: "transparent", flex: 1 }}
+          value={open ? query : (selected ? selected.label : "")}
+          placeholder={open ? "Type to search…" : placeholder}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => { setOpen(true); setQuery(""); }}
+        />
+        {value && (
+          <button
+            style={{ background: "none", border: "none", color: "#9ca3af", cursor: "pointer", padding: "0 6px", fontSize: 14, lineHeight: 1 }}
+            onMouseDown={e => { e.stopPropagation(); onChange(""); setQuery(""); setOpen(false); }}
+          >×</button>
+        )}
+        <span style={{ color: "#9ca3af", fontSize: 11, padding: "0 8px", pointerEvents: "none" }}>▾</span>
+      </div>
+      {open && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999,
+          background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
+          boxShadow: "0 4px 16px rgba(0,0,0,0.10)", maxHeight: 220, overflowY: "auto", marginTop: 2,
+        }}>
+          <div
+            style={{ padding: "7px 12px", fontSize: 13, color: "#6b7280", cursor: "pointer", borderBottom: "1px solid #f3f4f6" }}
+            onMouseDown={() => { onChange(""); setQuery(""); setOpen(false); }}
+          >{placeholder}</div>
+          {filtered.length === 0
+            ? <div style={{ padding: "10px 12px", fontSize: 13, color: "#9ca3af" }}>No results</div>
+            : filtered.map(o => (
+              <div
+                key={o.value}
+                style={{
+                  padding: "7px 12px", fontSize: 13, cursor: "pointer",
+                  background: o.value === value ? "#eff6ff" : undefined,
+                  color: o.value === value ? "#2563eb" : "#111827",
+                  fontWeight: o.value === value ? 600 : undefined,
+                }}
+                onMouseDown={() => { onChange(o.value); setQuery(""); setOpen(false); }}
+              >{o.label}</div>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability" | "collection-returns" | "client-orders" | "sales" | "delivery-runs" | "staff-deductions" | "client-balances" | "species-audit";
 
@@ -528,17 +615,16 @@ export default function AdminReportsPage() {
           </p>
           <div style={s.filterRow}>
             <label style={s.label}>Customer</label>
-            <select
+            <SearchableSelect
               value={stmtCustomer}
-              onChange={(e) => setStmtCustomer(e.target.value)}
-              style={s.select}
-            >
-              <option value="">— Select customer —</option>
-              <option value="ALL">All Customers</option>
-              {clients.map((c) => (
-                <option key={c.clientId} value={c.clientId}>{c.clientName}</option>
-              ))}
-            </select>
+              onChange={setStmtCustomer}
+              options={[
+                { value: "ALL", label: "All Customers" },
+                ...clients.map(c => ({ value: c.clientId, label: c.clientName })),
+              ]}
+              placeholder="— Select customer —"
+              style={{ minWidth: 220 }}
+            />
             <label style={s.label}>From</label>
             <input type="date" value={stmtFrom} onChange={(e) => setStmtFrom(e.target.value)} style={s.dateInput} />
             <label style={s.label}>To</label>
@@ -1118,14 +1204,13 @@ export default function AdminReportsPage() {
             {/* Driver filter */}
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" as const }}>
               <label style={s.label}>Driver</label>
-              <select
+              <SearchableSelect
                 value={crDriverFilter}
-                onChange={e => setCrDriverFilter(e.target.value)}
-                style={{ ...s.dateInput, minWidth: 160 }}
-              >
-                <option value="">All Drivers</option>
-                {allDrivers.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
+                onChange={setCrDriverFilter}
+                options={allDrivers.map(d => ({ value: d, label: d }))}
+                placeholder="All Drivers"
+                style={{ minWidth: 180 }}
+              />
               {crDriverFilter && (
                 <button
                   onClick={() => setCrDriverFilter("")}
@@ -1610,14 +1695,13 @@ export default function AdminReportsPage() {
             {/* Controls */}
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" as const, marginBottom: 16, background: "#fff", padding: "14px 16px", borderRadius: 10, border: "1px solid #e2e8f0", alignItems: "center" }}>
               <label style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>Species</label>
-              <select
+              <SearchableSelect
                 value={auditSpeciesId}
-                onChange={e => setAuditSpeciesId(e.target.value)}
-                style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 14, background: "#f9fafb", minWidth: 180 }}
-              >
-                <option value="">— Select species —</option>
-                {allSpecies.map(sp => <option key={sp.speciesId} value={sp.speciesId}>{sp.name}</option>)}
-              </select>
+                onChange={setAuditSpeciesId}
+                options={allSpecies.map(sp => ({ value: sp.speciesId, label: sp.name }))}
+                placeholder="— Select species —"
+                style={{ minWidth: 200 }}
+              />
               <label style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>From</label>
               <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #d1d5db", fontSize: 13 }} />
               <label style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>To</label>
@@ -1946,45 +2030,44 @@ function InvoicesTab({
       {/* Filters */}
       <div style={{ ...s.filterRow, marginBottom: 16 }}>
         <label style={s.label}>Customer</label>
-        <select
+        <SearchableSelect
           value={customer}
-          onChange={(e) => setCustomer(e.target.value)}
-          style={{ ...s.dateInput, minWidth: 180 }}
-        >
-          <option value="">All customers</option>
-          {clients.map((c) => (
-            <option key={c.clientId} value={c.clientId}>{c.clientName}</option>
-          ))}
-        </select>
+          onChange={setCustomer}
+          options={clients.map(c => ({ value: c.clientId, label: c.clientName }))}
+          placeholder="All customers"
+          style={{ minWidth: 200 }}
+        />
 
         <label style={s.label}>Sale Source</label>
-        <select
+        <SearchableSelect
           value={saleTypeFilter}
-          onChange={e => setSaleTypeFilter(e.target.value)}
-          style={{ ...s.dateInput, minWidth: 150 }}
-        >
-          <option value="">All Sources</option>
-          <option value="HubDirect">Hub Sale</option>
-          <option value="DriverDirect">Driver Sale</option>
-          <option value="Delivery">Delivery</option>
-        </select>
+          onChange={setSaleTypeFilter}
+          options={[
+            { value: "HubDirect",    label: "Hub Sale" },
+            { value: "DriverDirect", label: "Driver Sale" },
+            { value: "Delivery",     label: "Delivery" },
+          ]}
+          placeholder="All Sources"
+          style={{ minWidth: 160 }}
+        />
 
         <label style={s.label}>Payment Type</label>
-        <select
+        <SearchableSelect
           value={payTypeFilter}
-          onChange={e => setPayTypeFilter(e.target.value)}
-          style={{ ...s.dateInput, minWidth: 150 }}
-        >
-          <option value="">All Types</option>
-          <option value="Cash">Cash</option>
-          <option value="EFT">EFT</option>
-          <option value="Card">Card</option>
-          <option value="CardMachine">Card Machine</option>
-          <option value="Split">Split</option>
-          <option value="AccountCredit">Account Credit</option>
-          <option value="Credit">Credit</option>
-          <option value="OnAccount">On Account</option>
-        </select>
+          onChange={setPayTypeFilter}
+          options={[
+            { value: "Cash",          label: "Cash" },
+            { value: "EFT",           label: "EFT" },
+            { value: "Card",          label: "Card" },
+            { value: "CardMachine",   label: "Card Machine" },
+            { value: "Split",         label: "Split" },
+            { value: "AccountCredit", label: "Account Credit" },
+            { value: "Credit",        label: "Credit" },
+            { value: "OnAccount",     label: "On Account" },
+          ]}
+          placeholder="All Types"
+          style={{ minWidth: 160 }}
+        />
 
         <label style={s.label}>Invoice #</label>
         <input
@@ -2844,21 +2927,28 @@ function ClientOrdersTab({ clients, species, fmt }: {
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" as const, marginBottom: 20, alignItems: "flex-end" }}>
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Client</div>
-          <select style={{ ...s.select, minWidth: 240 }} value={clientId}
-            onChange={e => { setClientId(e.target.value); setExpandedId(null); }}>
-            <option value="">— All Clients —</option>
-            {clients.map(c => <option key={c.clientId} value={c.clientId}>{c.clientName}</option>)}
-          </select>
+          <SearchableSelect
+            value={clientId}
+            onChange={v => { setClientId(v); setExpandedId(null); }}
+            options={clients.map(c => ({ value: c.clientId, label: c.clientName }))}
+            placeholder="— All Clients —"
+            style={{ minWidth: 240 }}
+          />
         </div>
         <div>
           <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Status</div>
-          <select style={s.select} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="All">All Statuses</option>
-            <option value="Open">Open</option>
-            <option value="OutForDelivery">Out for Delivery</option>
-            <option value="Delivered">Delivered</option>
-            <option value="MarkedAtHub">Marked at Hub</option>
-          </select>
+          <SearchableSelect
+            value={statusFilter === "All" ? "" : statusFilter}
+            onChange={v => setStatusFilter(v || "All")}
+            options={[
+              { value: "Open",           label: "Open" },
+              { value: "OutForDelivery", label: "Out for Delivery" },
+              { value: "Delivered",      label: "Delivered" },
+              { value: "MarkedAtHub",    label: "Marked at Hub" },
+            ]}
+            placeholder="All Statuses"
+            style={{ minWidth: 180 }}
+          />
         </div>
         {!ordersLoading && (
           <div style={{ display: "flex", gap: 8, alignSelf: "flex-end", alignItems: "center" }}>
@@ -3147,31 +3237,39 @@ function SalesTab({
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <span style={s.label}>View</span>
-          <select value={salesView} onChange={e => { setSalesView(e.target.value as "client" | "walkin" | "species"); setSalesClientId(""); setSalesSpeciesId(""); }} style={s.dateInput}>
-            <option value="client">By Client</option>
-            <option value="walkin">By Walk-in</option>
-            <option value="species">By Species</option>
-          </select>
+          <SearchableSelect
+            value={salesView}
+            onChange={v => { setSalesView((v || "client") as "client" | "walkin" | "species"); setSalesClientId(""); setSalesSpeciesId(""); }}
+            options={[
+              { value: "client",  label: "By Client" },
+              { value: "walkin",  label: "By Walk-in" },
+              { value: "species", label: "By Species" },
+            ]}
+            placeholder="By Client"
+            style={{ minWidth: 150 }}
+          />
         </div>
         {salesView !== "species" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <span style={s.label}>Client</span>
-            <select value={salesClientId} onChange={e => setSalesClientId(e.target.value)} style={{ ...s.dateInput, minWidth: 180 }}>
-              <option value="">All</option>
-              {clientDropdown.map(c => (
-                <option key={c.clientId} value={c.clientId}>{c.clientName}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              value={salesClientId}
+              onChange={setSalesClientId}
+              options={clientDropdown.map(c => ({ value: c.clientId, label: c.clientName }))}
+              placeholder="All"
+              style={{ minWidth: 200 }}
+            />
           </div>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <span style={s.label}>Species</span>
-          <select value={salesSpeciesId} onChange={e => setSalesSpeciesId(e.target.value)} style={{ ...s.dateInput, minWidth: 160 }}>
-            <option value="">All Species</option>
-            {speciesOptions.map(([id, name]) => (
-              <option key={id} value={id}>{name}</option>
-            ))}
-          </select>
+          <SearchableSelect
+            value={salesSpeciesId}
+            onChange={setSalesSpeciesId}
+            options={speciesOptions.map(([id, name]) => ({ value: id, label: name }))}
+            placeholder="All Species"
+            style={{ minWidth: 180 }}
+          />
         </div>
         <button style={s.applyBtn} onClick={onApply} disabled={loading}>{loading ? "Loading…" : "Apply"}</button>
       </div>
