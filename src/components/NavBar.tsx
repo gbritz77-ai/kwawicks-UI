@@ -99,9 +99,7 @@ export default function NavBar() {
     const salesItems: Leaf[] = [];
     if (canSeeHubSales)    salesItems.push(leaf("Hub Sales",           "/app/hub-sales"));
     if (canSeeHubSales)    salesItems.push(leaf("Client Accounts",    "/app/client-accounts"));
-    if (canSeeHubRequests) salesItems.push(leaf("Hub Requests",       "/app/hub-requests"));
     if (canSeeCollections) salesItems.push(leaf("Collections",        "/app/collection-requests"));
-    if (isOperational)     salesItems.push(leaf("Driver Allocations", "/app/driver-allocations"));
     if (isOperational)     salesItems.push(leaf("Slaughter",          "/app/slaughter"));
     if (isUserManager)     salesItems.push(leaf("Dead Stock",          "/app/stock-losses"));
     if (salesItems.length) entries.push(group("Sales", salesItems));
