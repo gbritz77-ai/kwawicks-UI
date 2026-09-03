@@ -287,7 +287,7 @@ function BankStatementsTab() {
     try {
       const res = await bankStatementsApi.allocateClientCredit(
         selected.statementId, activeTx.transactionId,
-        { clientId: pickedCreditClient.clientId, notes: creditNotes.trim() || undefined }
+        { clientId: pickedCreditClient.clientId, notes: creditNotes.trim() || undefined, statementDate: activeTx.date }
       );
       setSelected(res.statement);
       resetRightPanel();

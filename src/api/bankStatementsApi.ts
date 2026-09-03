@@ -90,6 +90,7 @@ export type AllocateSupplierRequest = {
 export type AllocateClientCreditRequest = {
   clientId: string;
   notes?: string;
+  statementDate?: string; // "yyyy-MM-dd" — bank statement transaction date, used as ledger entry date
 };
 
 export type BankReconAllocationReportItem = {
