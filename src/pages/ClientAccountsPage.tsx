@@ -291,8 +291,8 @@ export default function ClientAccountsPage() {
 
       {error && <div style={s.errorBanner}>{error}</div>}
 
-      {/* All clients balance overview */}
-      {allBalances.length > 0 && (
+      {/* All clients balance overview — hidden once a client is selected */}
+      {allBalances.length > 0 && !selectedClientId && (
         <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid #e2e8f0", flexWrap: "wrap" as const, gap: 8 }}>
             <span style={{ fontWeight: 700, fontSize: 14, color: "#0f172a" }}>All Client Balances</span>
