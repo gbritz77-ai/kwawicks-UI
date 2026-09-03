@@ -68,7 +68,6 @@ export default function NavBar() {
   const canManageClients   = hasAnyRole("Owner", "Finance", "Admin", "Procurement");
   const canSeeStaff        = hasAnyRole("Owner", "Finance", "Admin");
   const isOwner            = hasRole("Owner");
-  const canSeeHubRequests  = hasAnyRole("Owner", "Finance", "Admin", "HubStaff", "Procurement");
 
   const [menuOpen,     setMenuOpen]     = useState(false);
   const [openGroup,    setOpenGroup]    = useState<string | null>(null);

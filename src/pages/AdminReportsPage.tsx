@@ -17,8 +17,6 @@ import type { CollectionRequestDto } from "../api/collectionRequestsApi";
 import { stockLossApi } from "../api/stockLossApi";
 import type { StockLossDto } from "../api/stockLossApi";
 import { deliveryOrdersApi } from "../api/deliveryOrdersApi";
-import { deliveryRunsApi } from "../api/deliveryRunsApi";
-import type { DeliveryRunDto } from "../api/deliveryRunsApi";
 import { clientCreditApi } from "../api/clientCreditApi";
 import type { DeliveryOrderResponse } from "../api/deliveryOrdersApi";
 import type {
@@ -159,7 +157,6 @@ export default function AdminReportsPage() {
   const [crData, setCrData]   = useState<CollectionRequestDto[]  | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [runReport, setRunReport] = useState<DeliveryRunDto[] | null>(null);
 
   // ── Sales tab state ─────────────────────────────────────────────────────────
   const salesDefaultFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -238,8 +235,7 @@ export default function AdminReportsPage() {
         setMarginSalesRows(salesData.rows);
       }
       if (["load-discrepancy","transit-discrepancy","supplier-reliability","collection-returns"].includes(tab)) setCrData(await collectionRequestsApi.list());
-      if (tab === "delivery-runs") setRunReport(await deliveryRunsApi.list());
-      if (tab === "client-orders") {
+if (tab === "client-orders") {
         if (!clients.length) setClients((await clientsApi.list()).filter((c: ClientDto) => !c.isWalkIn));
         if (!allSpecies.length) setAllSpecies(await speciesApi.list());
       }

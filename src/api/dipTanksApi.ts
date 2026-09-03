@@ -50,6 +50,7 @@ export type LoadTankRequest = {
   litres: number;
   costPerLitre?: number | null;
   notes?: string;
+  supplier?: string;
 };
 
 export const dipTanksApi = {
@@ -59,4 +60,6 @@ export const dipTanksApi = {
   listReadings: () => api.get<DipReadingDto[]>("/api/dip-tanks/readings"),
   createReading: (req: CreateDipReadingRequest) => api.post<DipReadingDto>("/api/dip-tanks/readings", req),
   loadTank: (tankId: string, req: LoadTankRequest) => api.post<DipReadingDto>(`/api/dip-tanks/${tankId}/load`, req),
+  getFuelSuppliers: () => api.get<string[]>("/api/dip-tanks/fuel-suppliers"),
+  addFuelSupplier: (supplier: string) => api.post<string[]>("/api/dip-tanks/fuel-suppliers", { supplier }),
 };
