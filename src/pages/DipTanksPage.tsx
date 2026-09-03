@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { dipTanksApi } from "../api/dipTanksApi";
 import { sitesApi } from "../api/sitesApi";
 import type { DipTankDto, DipReadingDto, TankSummaryDto, CreateDipTankRequest, CreateDipReadingRequest, LoadTankRequest } from "../api/dipTanksApi";
@@ -8,6 +8,63 @@ import { hasAnyRole } from "../api/auth";
 const canManage = () => hasAnyRole("Owner", "Admin");
 
 type Tab = "tanks" | "readings";
+
+function SupplierSelect({ value, onChange, suppliers }: {
+  value: string;
+  onChange: (v: string) => void;
+  suppliers: string[];
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
+
+  const filtered = suppliers.filter(s => !query || s.toLowerCase().includes(query.toLowerCase()));
+
+  const inputStyle: React.CSSProperties = {
+    padding: "6px 10px", borderRadius: 8, border: "1px solid #d1d5db",
+    fontSize: 13, background: "#f9fafb", width: "100%", boxSizing: "border-box",
+    outline: "none",
+  };
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <div style={{ display: "flex", alignItems: "center", border: "1px solid #d1d5db", borderRadius: 8, background: "#f9fafb", overflow: "hidden" }}
+        onClick={() => setOpen(true)}>
+        <input
+          style={{ ...inputStyle, border: "none", background: "transparent", flex: 1 }}
+          placeholder="Type or select supplier…"
+          value={open ? query : value}
+          onChange={e => { setQuery(e.target.value); onChange(e.target.value); setOpen(true); }}
+          onFocus={() => { setQuery(""); setOpen(true); }}
+        />
+        {value && <button onClick={e => { e.stopPropagation(); onChange(""); setQuery(""); }} style={{ background: "none", border: "none", cursor: "pointer", padding: "0 8px", color: "#6b7280" }}>×</button>}
+      </div>
+      {open && (
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #d1d5db", borderRadius: 8, zIndex: 100, maxHeight: 180, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+          {filtered.length === 0 && query && (
+            <div style={{ padding: "8px 12px", fontSize: 13, color: "#6b7280" }}>
+              Press Enter to add "{query}"
+            </div>
+          )}
+          {filtered.map(s => (
+            <div key={s} style={{ padding: "8px 12px", fontSize: 13, cursor: "pointer" }}
+              onMouseDown={e => { e.preventDefault(); onChange(s); setQuery(""); setOpen(false); }}>
+              {s}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function LevelBar({ pct, isLow }: { pct: number; isLow: boolean }) {
   const color = isLow ? "#ef4444" : pct < 40 ? "#f59e0b" : "#22c55e";
@@ -46,9 +103,10 @@ export default function DipTanksPage() {
   const [readingBusy, setReadingBusy] = useState(false);
 
   const [loadingTankId, setLoadingTankId] = useState<string | null>(null);
-  const [loadForm, setLoadForm] = useState<LoadTankRequest>({ litres: 0, costPerLitre: null, notes: "" });
+  const [loadForm, setLoadForm] = useState<LoadTankRequest>({ litres: 0, costPerLitre: null, notes: "", supplier: "" });
   const [loadError, setLoadError] = useState("");
   const [loadBusy, setLoadBusy] = useState(false);
+  const [fuelSuppliers, setFuelSuppliers] = useState<string[]>([]);
 
   useEffect(() => { loadAll(); }, []);
   useEffect(() => { if (tab === "readings" && readings.length === 0) loadReadings(); }, [tab]);
@@ -56,14 +114,16 @@ export default function DipTanksPage() {
   async function loadAll() {
     try {
       setLoading(true);
-      const [t, s, sites_] = await Promise.all([
+      const [t, s, sites_, suppliers] = await Promise.all([
         dipTanksApi.listTanks(),
         dipTanksApi.getSummary(),
         sitesApi.list(),
+        dipTanksApi.getFuelSuppliers(),
       ]);
       setTanks(t);
       setSummary(Object.fromEntries(s.map(x => [x.tankId, x])));
       setSites(sites_);
+      setFuelSuppliers(suppliers);
     } catch { setError("Failed to load dip tanks."); }
     finally { setLoading(false); }
   }
@@ -114,7 +174,8 @@ export default function DipTanksPage() {
         setReadings(updatedReadings);
       }
       setLoadingTankId(null);
-      setLoadForm({ litres: 0, costPerLitre: null, notes: "" });
+      setLoadForm({ litres: 0, costPerLitre: null, notes: "", supplier: "" });
+      setFuelSuppliers(await dipTanksApi.getFuelSuppliers());
     } catch (e: any) { setLoadError(e?.message ?? "Load failed."); }
     finally { setLoadBusy(false); }
   }
@@ -227,7 +288,7 @@ export default function DipTanksPage() {
                         )}
                         <button
                           style={{ ...s.loadBtn, marginTop: 10 }}
-                          onClick={() => { setLoadingTankId(loadingTankId === tank.tankId ? null : tank.tankId); setLoadError(""); setLoadForm({ litres: 0, costPerLitre: null, notes: "" }); }}
+                          onClick={() => { setLoadingTankId(loadingTankId === tank.tankId ? null : tank.tankId); setLoadError(""); setLoadForm({ litres: 0, costPerLitre: null, notes: "", supplier: "" }); }}
                         >
                           {loadingTankId === tank.tankId ? "✕ Cancel" : "⛽ Load Fuel"}
                         </button>
@@ -243,8 +304,16 @@ export default function DipTanksPage() {
                                 <input style={s.input} type="number" step="0.0001" min="0" value={loadForm.costPerLitre ?? ""} onChange={e => setLoadForm(f => ({ ...f, costPerLitre: e.target.value ? Number(e.target.value) : null }))} placeholder="e.g. 22.50" />
                               </div>
                               <div style={{ gridColumn: "span 2" }}>
+                                <label style={s.label}>Supplier</label>
+                                <SupplierSelect
+                                  value={loadForm.supplier ?? ""}
+                                  onChange={v => setLoadForm(f => ({ ...f, supplier: v }))}
+                                  suppliers={fuelSuppliers}
+                                />
+                              </div>
+                              <div style={{ gridColumn: "span 2" }}>
                                 <label style={s.label}>Notes</label>
-                                <input style={s.input} value={loadForm.notes ?? ""} onChange={e => setLoadForm(f => ({ ...f, notes: e.target.value }))} placeholder="e.g. Supplier, delivery ref" />
+                                <input style={s.input} value={loadForm.notes ?? ""} onChange={e => setLoadForm(f => ({ ...f, notes: e.target.value }))} placeholder="e.g. delivery ref" />
                               </div>
                             </div>
                             {loadError && <div style={{ color: "#dc2626", fontSize: 12, marginTop: 6 }}>{loadError}</div>}
