@@ -20,6 +20,7 @@ export type BankTransactionResponse = {
   allocatedClientName: string;
   expenseCategory: string;
   allocatedAt: string | null;
+  splitLines: SplitAllocationLineResponse[];
   /** True when this unallocated credit matches (same date + amount) a transaction that was
    * already allocated under a different, previously-imported statement. */
   isPossibleDuplicate: boolean;
@@ -91,6 +92,24 @@ export type AllocateClientCreditRequest = {
   clientId: string;
   notes?: string;
   statementDate?: string; // "yyyy-MM-dd" — bank statement transaction date, used as ledger entry date
+};
+
+export type SplitAllocationLine = {
+  clientId: string;
+  amount: number;
+  notes?: string;
+};
+
+export type SplitClientCreditRequest = {
+  lines: SplitAllocationLine[];
+  statementDate?: string;
+};
+
+export type SplitAllocationLineResponse = {
+  clientId: string;
+  clientName: string;
+  amount: number;
+  notes: string;
 };
 
 export type BankReconAllocationReportItem = {
@@ -227,6 +246,17 @@ export const bankStatementsApi = {
     api.del<BankStatementResponse>(
       `/api/bank-statements/${statementId}/transactions/${transactionId}/allocate`
     ),
+
+  /** Split one bank credit transaction across multiple client credit accounts. */
+  splitClientCredit: (statementId: string, transactionId: string, req: SplitClientCreditRequest) =>
+    api.put<AllocateResponse>(
+      `/api/bank-statements/${statementId}/transactions/${transactionId}/split-client-credit`,
+      req
+    ),
+
+  /** Delete a bank statement CSV (only if no transactions are allocated). */
+  deleteStatement: (statementId: string) =>
+    api.del<void>(`/api/bank-statements/${statementId}`),
 
   /** Debit report across all statements by date range. */
   getDebitReport: (params?: { from?: string; to?: string }) => {

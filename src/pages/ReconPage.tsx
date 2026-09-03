@@ -10,6 +10,7 @@ import type {
   AllocationWarning,
   BankReconAllocationReportItem,
   DebitReportResponse,
+  SplitAllocationLine,
 } from "../api/bankStatementsApi";
 import { clientsApi } from "../api/clientsApi";
 import type { ClientDto } from "../api/clientsApi";
@@ -47,7 +48,7 @@ export default function ReconPage() {
 
 // ── Bank Statements tab ────────────────────────────────────────────────────
 
-type RightMode = "matches" | "browse" | "clientcredit" | "suppliers" | "nonclient" | "expense";
+type RightMode = "matches" | "browse" | "clientcredit" | "splitcredit" | "suppliers" | "nonclient" | "expense";
 
 function BankStatementsTab() {
   // Statement list
@@ -116,6 +117,12 @@ function BankStatementsTab() {
   const [creditBalance,         setCreditBalance]         = useState<number | null>(null);
   const [creditBalanceLoading,  setCreditBalanceLoading]  = useState(false);
   const [creditNotes,           setCreditNotes]           = useState("");
+
+  // Split credit allocation
+  const [splitLines,       setSplitLines]       = useState<SplitAllocationLine[]>([{ clientId: "", amount: 0, notes: "" }, { clientId: "", amount: 0, notes: "" }]);
+  const [splitClientSearch, setSplitClientSearch] = useState<string[]>(["", ""]);
+  const [splitError,       setSplitError]       = useState("");
+  const [splitBusy,        setSplitBusy]        = useState(false);
 
   // Browse suppliers
   const [suppliers,       setSuppliers]       = useState<SupplierResponse[]>([]);
@@ -208,6 +215,8 @@ function BankStatementsTab() {
     setPickedSupplier(null); setSupplierNotes(""); setSupplierSearch("");
     setPickedCreditClient(null); setCreditClientSearch(""); setCreditBalance(null); setCreditNotes("");
     setPickedExpenseCategory(""); setNewExpenseCategory("");
+    setSplitLines([{ clientId: "", amount: 0, notes: "" }, { clientId: "", amount: 0, notes: "" }]);
+    setSplitClientSearch(["", ""]); setSplitError("");
   }
 
   async function selectTx(tx: BankTransactionResponse) {
@@ -294,6 +303,41 @@ function BankStatementsTab() {
       await loadStatements();
     } catch (e: any) { setAllocError(e?.message ?? "Failed to allocate."); }
     finally { setAllocBusy(null); }
+  }
+
+  // ── Split credit allocation ───────────────────────────────────────────────
+
+  async function doSplitClientCredit() {
+    if (!selected || !activeTx) return;
+    const validLines = splitLines.filter(l => l.clientId && l.amount > 0);
+    if (validLines.length < 2) { setSplitError("Add at least 2 lines with a client and amount."); return; }
+    const total = validLines.reduce((s, l) => s + l.amount, 0);
+    if (Math.abs(total - activeTx.amount) > 0.01) {
+      setSplitError(`Split totals ${total.toFixed(2)} but transaction is ${activeTx.amount.toFixed(2)}. Amounts must match.`);
+      return;
+    }
+    setSplitBusy(true); setSplitError("");
+    try {
+      const res = await bankStatementsApi.splitClientCredit(
+        selected.statementId, activeTx.transactionId,
+        { lines: validLines, statementDate: activeTx.date }
+      );
+      setSelected(res.statement);
+      resetRightPanel();
+      await loadStatements();
+    } catch (e: any) { setSplitError(e?.message ?? "Failed to split."); }
+    finally { setSplitBusy(false); }
+  }
+
+  // ── Delete statement ──────────────────────────────────────────────────────
+
+  async function deleteStatement(statementId: string, fileName: string) {
+    if (!window.confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
+    try {
+      await bankStatementsApi.deleteStatement(statementId);
+      await loadStatements();
+      if (selected?.statementId === statementId) { setSelected(null); resetRightPanel(); }
+    } catch (e: any) { setError(e?.message ?? "Failed to delete statement."); }
   }
 
   // ── Browse suppliers ──────────────────────────────────────────────────────
@@ -758,6 +802,8 @@ function BankStatementsTab() {
                   ? (tx.allocatedSupplierName || tx.allocatedSupplierId)
                   : tx.allocationType === "ClientCredit"
                   ? (tx.allocatedClientName || tx.allocatedClientId)
+                  : tx.allocationType === "SplitClientCredit"
+                  ? (tx.splitLines?.map(l => l.clientName).join(", ") || tx.allocatedClientName)
                   : tx.allocationType === "Expense"
                   ? tx.expenseCategory
                   : tx.nonClientDescription || "Non-client";
@@ -784,17 +830,19 @@ function BankStatementsTab() {
                       <div style={sp.txAllocBadge}>
                         <span style={{
                           ...s.badge,
-                          ...(tx.allocationType === "Invoice"       ? s.badgeEFT
-                            : tx.allocationType === "Supplier"      ? { background:"#fef3c7", color:"#92400e" }
-                            : tx.allocationType === "ClientCredit"  ? { background:"#dcfce7", color:"#166534" }
-                            : tx.allocationType === "Expense"       ? { background:"#fce7f3", color:"#9d174d" }
+                          ...(tx.allocationType === "Invoice"            ? s.badgeEFT
+                            : tx.allocationType === "Supplier"            ? { background:"#fef3c7", color:"#92400e" }
+                            : tx.allocationType === "ClientCredit"        ? { background:"#dcfce7", color:"#166534" }
+                            : tx.allocationType === "SplitClientCredit"   ? { background:"#d1fae5", color:"#065f46" }
+                            : tx.allocationType === "Expense"             ? { background:"#fce7f3", color:"#9d174d" }
                             : { background:"#f3e8ff", color:"#7c3aed" }),
                           fontSize: 11
                         }}>
-                          {tx.allocationType === "Invoice"         ? "Invoice"
-                            : tx.allocationType === "Supplier"     ? "Supplier"
-                            : tx.allocationType === "ClientCredit" ? "Credit Payment"
-                            : tx.allocationType === "Expense"      ? "Expense"
+                          {tx.allocationType === "Invoice"              ? "Invoice"
+                            : tx.allocationType === "Supplier"            ? "Supplier"
+                            : tx.allocationType === "ClientCredit"        ? "Credit Payment"
+                            : tx.allocationType === "SplitClientCredit"   ? "Split Credit"
+                            : tx.allocationType === "Expense"             ? "Expense"
                             : "Non-client"}
                         </span>
                         <span style={{ fontSize:12, color:"#374151" }}>{allocLabel}</span>
@@ -894,6 +942,7 @@ function BankStatementsTab() {
                   <button style={rightMode==="matches"     ? sp.modeTabActive : sp.modeTab} onClick={()=>setRightMode("matches")}>Smart Matches</button>
                   <button style={rightMode==="browse"      ? sp.modeTabActive : sp.modeTab} onClick={switchToBrowse}>Browse Clients</button>
                   <button style={rightMode==="clientcredit"? sp.modeTabActive : sp.modeTab} onClick={switchToClientCredit}>Client Credit</button>
+                  <button style={rightMode==="splitcredit" ? sp.modeTabActive : sp.modeTab} onClick={()=>{ setRightMode("splitcredit"); ensureClients(); }}>Split Credit</button>
                   <button style={rightMode==="suppliers"   ? sp.modeTabActive : sp.modeTab} onClick={switchToSuppliers}>Browse Suppliers</button>
                   <button style={rightMode==="nonclient"   ? sp.modeTabActive : sp.modeTab} onClick={()=>setRightMode("nonclient")}>Non-Client</button>
                   <button style={rightMode==="expense"     ? sp.modeTabActive : sp.modeTab} onClick={switchToExpense}>Expense</button>
@@ -1145,6 +1194,109 @@ function BankStatementsTab() {
                   </div>
                 )}
 
+                {/* ─ Split Credit ─ */}
+                {rightMode === "splitcredit" && (
+                  <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "auto", gap: 10 }}>
+                    <div style={{ fontSize: 13, color: "#6b7280", padding: "2px 0 4px" }}>
+                      Split one bank transaction across multiple clients. Amounts must add up to <strong>{activeTx ? fmt(activeTx.amount) : "—"}</strong>.
+                    </div>
+                    {splitLines.map((line, idx) => {
+                      const search = splitClientSearch[idx] ?? "";
+                      const picked = clients.find(c => c.clientId === line.clientId);
+                      const visibleForLine = clients.filter(c =>
+                        !search || c.clientName.toLowerCase().includes(search.toLowerCase())
+                      ).slice(0, 8);
+                      return (
+                        <div key={idx} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#f9fafb" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                            <span style={{ fontWeight: 700, fontSize: 13, color: "#374151" }}>Client {idx + 1}</span>
+                            {splitLines.length > 2 && (
+                              <button
+                                style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 12 }}
+                                onClick={() => {
+                                  setSplitLines(splitLines.filter((_, i) => i !== idx));
+                                  setSplitClientSearch(splitClientSearch.filter((_, i) => i !== idx));
+                                }}
+                              >Remove</button>
+                            )}
+                          </div>
+                          {picked ? (
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                              <span style={{ fontWeight: 600, fontSize: 14 }}>{picked.clientName}</span>
+                              <button style={{ background: "none", border: "1px solid #d1d5db", borderRadius: 5, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}
+                                onClick={() => {
+                                  const updated = [...splitLines]; updated[idx] = { ...updated[idx], clientId: "" };
+                                  setSplitLines(updated);
+                                  const s2 = [...splitClientSearch]; s2[idx] = ""; setSplitClientSearch(s2);
+                                }}>Change</button>
+                            </div>
+                          ) : (
+                            <div style={{ marginBottom: 8 }}>
+                              <input
+                                style={{ ...s.input, width: "100%", boxSizing: "border-box", marginBottom: 4 }}
+                                placeholder="Search client…"
+                                value={search}
+                                onChange={e => { const s2 = [...splitClientSearch]; s2[idx] = e.target.value; setSplitClientSearch(s2); }}
+                              />
+                              <div style={{ maxHeight: 100, overflowY: "auto", border: "1px solid #e5e7eb", borderRadius: 6 }}>
+                                {visibleForLine.map(c => (
+                                  <div key={c.clientId}
+                                    style={{ padding: "6px 10px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #f3f4f6" }}
+                                    onClick={() => {
+                                      const updated = [...splitLines]; updated[idx] = { ...updated[idx], clientId: c.clientId };
+                                      setSplitLines(updated);
+                                      const s2 = [...splitClientSearch]; s2[idx] = c.clientName; setSplitClientSearch(s2);
+                                    }}
+                                  >{c.clientName}</div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <div style={{ flex: 1 }}>
+                              <label style={s.label}>Amount (R)</label>
+                              <input
+                                type="number" min="0" step="0.01"
+                                style={s.input}
+                                value={line.amount || ""}
+                                onChange={e => { const updated = [...splitLines]; updated[idx] = { ...updated[idx], amount: parseFloat(e.target.value) || 0 }; setSplitLines(updated); }}
+                              />
+                            </div>
+                            <div style={{ flex: 2 }}>
+                              <label style={s.label}>Notes (optional)</label>
+                              <input
+                                style={s.input}
+                                value={line.notes ?? ""}
+                                onChange={e => { const updated = [...splitLines]; updated[idx] = { ...updated[idx], notes: e.target.value }; setSplitLines(updated); }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <button
+                      style={{ background: "none", border: "1px dashed #9ca3af", borderRadius: 8, padding: "8px 16px", fontSize: 13, color: "#6b7280", cursor: "pointer" }}
+                      onClick={() => { setSplitLines([...splitLines, { clientId: "", amount: 0, notes: "" }]); setSplitClientSearch([...splitClientSearch, ""]); }}
+                    >+ Add client</button>
+                    <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
+                        <span style={{ color: "#374151" }}>Split total</span>
+                        <span style={{ fontWeight: 700, color: Math.abs(splitLines.reduce((s,l)=>s+l.amount,0) - (activeTx?.amount??0)) < 0.01 ? "#15803d" : "#dc2626" }}>
+                          {fmt(splitLines.reduce((s,l)=>s+l.amount,0))} / {activeTx ? fmt(activeTx.amount) : "—"}
+                        </span>
+                      </div>
+                      {splitError && <div style={{ ...s.errorBanner, margin: "0 0 8px" }}>{splitError}</div>}
+                      <button
+                        style={{ ...sp.allocBtn, padding: "10px 20px", fontSize: 14, background: "#16a34a", width: "100%", opacity: splitBusy ? 0.6 : 1 }}
+                        disabled={splitBusy}
+                        onClick={doSplitClientCredit}
+                      >
+                        {splitBusy ? "Allocating…" : "✔ Record Split Credit Payment"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* ─ Browse Suppliers ─ */}
                 {rightMode === "suppliers" && (
                   <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", gap: 6 }}>
@@ -1377,7 +1529,14 @@ function BankStatementsTab() {
                     <span style={{fontSize:11,color:"#6b7280"}}>{pct}%</span>
                   </td>
                   <td style={s.td}>
-                    <button style={s.reconBtn} onClick={()=>openStatement(stmt.statementId)} disabled={detailLoading}>Open</button>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button style={s.reconBtn} onClick={()=>openStatement(stmt.statementId)} disabled={detailLoading}>Open</button>
+                      <button
+                        style={{ background: "none", border: "1px solid #fca5a5", color: "#dc2626", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                        onClick={() => deleteStatement(stmt.statementId, stmt.fileName)}
+                        title="Delete this statement"
+                      >🗑</button>
+                    </div>
                   </td>
                 </tr>
               );
