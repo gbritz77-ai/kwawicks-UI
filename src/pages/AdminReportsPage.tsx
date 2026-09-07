@@ -3062,16 +3062,14 @@ function SalesTab({
       const g = map.get(key)!;
       g.qty += r.qty; g.total += r.lineTotal;
       if (pt === "split" && r.splitPayments?.length) {
-        // Distribute line total across methods proportionally to the split amounts
-        const splitTotal = r.splitPayments.reduce((s, sp) => s + sp.amount, 0);
+        // Backend already prorated split amounts to this line's share — just accumulate directly
         r.splitPayments.forEach(sp => {
-          const share = splitTotal > 0 ? (sp.amount / splitTotal) * r.lineTotal : 0;
           const m = sp.method.toLowerCase();
-          if (m === "cash") g.cash += share;
-          else if (m === "eft") g.eft += share;
-          else if (m === "card" || m === "cardmachine") g.card += share;
-          else if (m === "credit") g.credit += share;
-          else g.other += share;
+          if (m === "cash") g.cash += sp.amount;
+          else if (m === "eft") g.eft += sp.amount;
+          else if (m === "card" || m === "cardmachine") g.card += sp.amount;
+          else if (m === "credit") g.credit += sp.amount;
+          else g.other += sp.amount;
         });
       } else if (pt === "cash") g.cash += r.lineTotal;
       else if (pt === "eft") g.eft += r.lineTotal;
