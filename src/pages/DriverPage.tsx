@@ -63,7 +63,7 @@ export default function DriverPage() {
   const [completing, setCompleting] = useState<DeliveryOrderResponse | null>(null);
   const [step, setStep] = useState<CompletionStep>("returns");
   const [returnLines, setReturnLines] = useState<ReturnLine[]>([]);
-  const [paymentType, setPaymentType] = useState<PaymentType>("Cash");
+  const [paymentType, setPaymentType] = useState<PaymentType>("Credit");
   const [splitLines, setSplitLines] = useState<SplitLine[]>([{ method: "Cash", amount: "" }, { method: "CardMachine", amount: "" }]);
   const [completionBusy, setCompletionBusy] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
@@ -181,7 +181,7 @@ export default function DriverPage() {
     setCreatedInvoiceId(null);
     setReceiptFile(null);
     setReceiptDone(false);
-    setPaymentType("Cash");
+    setPaymentType("Credit");
     setSplitLines([{ method: "Cash", amount: "" }, { method: "CardMachine", amount: "" }]);
     setClientPhone("");
     setReturnLines(
