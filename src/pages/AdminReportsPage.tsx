@@ -173,6 +173,7 @@ export default function AdminReportsPage() {
   // ── Dead / Short / Over driver filter + per-order expand ───────────────────
   const [crDriverFilter, setCrDriverFilter] = useState("");
   const [crOrdersOpen, setCrOrdersOpen] = useState(false);
+  const [crHubRecordsOpen, setCrHubRecordsOpen] = useState(false);
 
   // ── Staff Stock Deductions tab state ────────────────────────────────────────
   const [staffDeductions, setStaffDeductions] = useState<StaffStockDeductionsReportResponse | null>(null);
@@ -1284,25 +1285,33 @@ if (tab === "client-orders") {
                         </tbody>
                       </ScrollTable>
 
-                      <h4 style={{ fontSize: 13, fontWeight: 600, color: "#374151", margin: "16px 0 8px" }}>All Records</h4>
-                      <ScrollTable>
-                        <thead><tr><Th>Date</Th><Th>Species</Th><Th>Type</Th><Th>Qty</Th><Th>Notes</Th></tr></thead>
-                        <tbody>
-                          {[...auditLosses!].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((l, i) => (
-                            <tr key={i}>
-                              <Td style={{ whiteSpace: "nowrap" as const }}>{new Date(l.createdAt).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" })}</Td>
-                              <Td>{l.speciesName || l.speciesId}</Td>
-                              <Td>
-                                <span style={{ fontWeight: 700, color: l.adjustmentType === "Over" ? "#16a34a" : "#dc2626" }}>
-                                  {l.adjustmentType === "Over" ? "Over / Surplus" : "Under / Loss"}
-                                </span>
-                              </Td>
-                              <Td style={{ fontWeight: 700 }}>{l.qty.toLocaleString()}</Td>
-                              <Td style={{ color: "#6b7280", fontSize: 12 }}>{l.notes || "—"}</Td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </ScrollTable>
+                      <button
+                        onClick={() => setCrHubRecordsOpen(o => !o)}
+                        style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", padding: 0, margin: "16px 0 8px" }}
+                      >
+                        <h4 style={{ fontSize: 13, fontWeight: 600, color: "#374151", margin: 0 }}>All Records</h4>
+                        <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 500 }}>{crHubRecordsOpen ? "▲ Hide" : "▼ Show"}</span>
+                      </button>
+                      {crHubRecordsOpen && (
+                        <ScrollTable>
+                          <thead><tr><Th>Date</Th><Th>Species</Th><Th>Type</Th><Th>Qty</Th><Th>Notes</Th></tr></thead>
+                          <tbody>
+                            {[...auditLosses!].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((l, i) => (
+                              <tr key={i}>
+                                <Td style={{ whiteSpace: "nowrap" as const }}>{new Date(l.createdAt).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" })}</Td>
+                                <Td>{l.speciesName || l.speciesId}</Td>
+                                <Td>
+                                  <span style={{ fontWeight: 700, color: l.adjustmentType === "Over" ? "#16a34a" : "#dc2626" }}>
+                                    {l.adjustmentType === "Over" ? "Over / Surplus" : "Under / Loss"}
+                                  </span>
+                                </Td>
+                                <Td style={{ fontWeight: 700 }}>{l.qty.toLocaleString()}</Td>
+                                <Td style={{ color: "#6b7280", fontSize: 12 }}>{l.notes || "—"}</Td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </ScrollTable>
+                      )}
                     </>
                   )}
                 </>
