@@ -170,8 +170,9 @@ export default function AdminReportsPage() {
   const [salesCostRecords, setSalesCostRecords] = useState<CostAverageRecordDto[]>([]);
   const [marginSalesRows,  setMarginSalesRows]  = useState<SalesReportRow[]>([]);
 
-  // ── Dead / Short / Over driver filter ──────────────────────────────────────
+  // ── Dead / Short / Over driver filter + per-order expand ───────────────────
   const [crDriverFilter, setCrDriverFilter] = useState("");
+  const [crOrdersOpen, setCrOrdersOpen] = useState(false);
 
   // ── Staff Stock Deductions tab state ────────────────────────────────────────
   const [staffDeductions, setStaffDeductions] = useState<StaffStockDeductionsReportResponse | null>(null);
@@ -1240,38 +1241,13 @@ if (tab === "client-orders") {
               </ScrollTable>
             )}
 
-            <h3 style={s.subHeading}>Per Order{crDriverFilter ? ` — ${crDriverFilter}` : ""}</h3>
-            {orderRows.length === 0 ? <p style={s.muted}>No data.</p> : (
-              <ScrollTable>
-                <thead><tr><Th>Date</Th><Th>Order ID</Th><Th>Supplier</Th><Th>Driver</Th><Th>Species</Th><Th>Ordered</Th><Th>Loaded</Th><Th>Received</Th><Th>Dead</Th><Th>Short</Th><Th>Over</Th></tr></thead>
-                <tbody>
-                  {orderRows.map((r, i) => (
-                    <tr key={i}>
-                      <Td>{r.date}</Td>
-                      <Td style={{ fontSize: 11, color: "#64748b" }}>{r.id.split("-")[0].toUpperCase()}</Td>
-                      <Td>{r.supplier}</Td>
-                      <Td style={{ fontWeight: 600 }}>{r.driver}</Td>
-                      <Td>{r.species}</Td>
-                      <Td>{r.orderedQty}</Td>
-                      <Td>{r.loadedQty}</Td>
-                      <Td>{r.receivedQty}</Td>
-                      <Td style={{ fontWeight: 700, color: r.deadQty  > 0 ? "#dc2626" : "#94a3b8" }}>{r.deadQty  || "—"}</Td>
-                      <Td style={{ fontWeight: 700, color: r.shortQty > 0 ? "#f59e0b" : "#94a3b8" }}>{r.shortQty || "—"}</Td>
-                      <Td style={{ fontWeight: 700, color: r.overQty  > 0 ? "#22c55e" : "#94a3b8" }}>{r.overQty  || "—"}</Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </ScrollTable>
-            )}
-
-            {/* Hub Losses */}
+            {/* Hub Losses — between By Driver and Per Order */}
             {(() => {
               const hubUnder = auditLosses!.filter(l => (l.adjustmentType || "Under") !== "Over");
               const hubOver  = auditLosses!.filter(l => l.adjustmentType === "Over");
               const totalHubLoss = hubUnder.reduce((s, l) => s + l.qty, 0);
               const totalHubOver = hubOver.reduce((s, l) => s + l.qty, 0);
 
-              // Per-species summary
               type HubSpeciesRow = { speciesName: string; loss: number; over: number };
               const speciesMap = new Map<string, HubSpeciesRow>();
               for (const l of auditLosses!) {
@@ -1332,6 +1308,41 @@ if (tab === "client-orders") {
                 </>
               );
             })()}
+
+            {/* Per Order — collapsible */}
+            <div style={{ marginTop: 32 }}>
+              <button
+                onClick={() => setCrOrdersOpen(o => !o)}
+                style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: crOrdersOpen ? 12 : 0 }}
+              >
+                <h3 style={{ ...s.subHeading, margin: 0 }}>Per Order{crDriverFilter ? ` — ${crDriverFilter}` : ""}</h3>
+                <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 500 }}>{crOrdersOpen ? "▲ Hide" : "▼ Show"}</span>
+              </button>
+              {crOrdersOpen && (
+                orderRows.length === 0 ? <p style={s.muted}>No data.</p> : (
+                  <ScrollTable>
+                    <thead><tr><Th>Date</Th><Th>Order ID</Th><Th>Supplier</Th><Th>Driver</Th><Th>Species</Th><Th>Ordered</Th><Th>Loaded</Th><Th>Received</Th><Th>Dead</Th><Th>Short</Th><Th>Over</Th></tr></thead>
+                    <tbody>
+                      {orderRows.map((r, i) => (
+                        <tr key={i}>
+                          <Td>{r.date}</Td>
+                          <Td style={{ fontSize: 11, color: "#64748b" }}>{r.id.split("-")[0].toUpperCase()}</Td>
+                          <Td>{r.supplier}</Td>
+                          <Td style={{ fontWeight: 600 }}>{r.driver}</Td>
+                          <Td>{r.species}</Td>
+                          <Td>{r.orderedQty}</Td>
+                          <Td>{r.loadedQty}</Td>
+                          <Td>{r.receivedQty}</Td>
+                          <Td style={{ fontWeight: 700, color: r.deadQty  > 0 ? "#dc2626" : "#94a3b8" }}>{r.deadQty  || "—"}</Td>
+                          <Td style={{ fontWeight: 700, color: r.shortQty > 0 ? "#f59e0b" : "#94a3b8" }}>{r.shortQty || "—"}</Td>
+                          <Td style={{ fontWeight: 700, color: r.overQty  > 0 ? "#22c55e" : "#94a3b8" }}>{r.overQty  || "—"}</Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </ScrollTable>
+                )
+              )}
+            </div>
           </div>
         );
       })()}
