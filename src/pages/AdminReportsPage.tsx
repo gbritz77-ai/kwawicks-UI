@@ -235,6 +235,7 @@ export default function AdminReportsPage() {
         setMarginSalesRows(salesData.rows);
       }
       if (["load-discrepancy","transit-discrepancy","supplier-reliability","collection-returns"].includes(tab)) setCrData(await collectionRequestsApi.list());
+      if (tab === "collection-returns") setAuditLosses(await stockLossApi.list({ from: from || undefined, to: to || undefined }));
 if (tab === "client-orders") {
         if (!clients.length) setClients((await clientsApi.list()).filter((c: ClientDto) => !c.isWalkIn));
         if (!allSpecies.length) setAllSpecies(await speciesApi.list());
@@ -1133,7 +1134,7 @@ if (tab === "client-orders") {
       })()}
 
       {/* Collection Returns — Dead / Short / Over */}
-      {tab === "collection-returns" && !loading && crData && (() => {
+      {tab === "collection-returns" && !loading && crData && auditLosses !== null && (() => {
         const fFrom = from ? new Date(from) : null;
         const fTo   = to   ? new Date(to)   : null;
         const confirmed = crData.filter(cr => {
@@ -1262,6 +1263,75 @@ if (tab === "client-orders") {
                 </tbody>
               </ScrollTable>
             )}
+
+            {/* Hub Losses */}
+            {(() => {
+              const hubUnder = auditLosses!.filter(l => (l.adjustmentType || "Under") !== "Over");
+              const hubOver  = auditLosses!.filter(l => l.adjustmentType === "Over");
+              const totalHubLoss = hubUnder.reduce((s, l) => s + l.qty, 0);
+              const totalHubOver = hubOver.reduce((s, l) => s + l.qty, 0);
+
+              // Per-species summary
+              type HubSpeciesRow = { speciesName: string; loss: number; over: number };
+              const speciesMap = new Map<string, HubSpeciesRow>();
+              for (const l of auditLosses!) {
+                const key = l.speciesName || l.speciesId;
+                const ex = speciesMap.get(key) ?? { speciesName: key, loss: 0, over: 0 };
+                if (l.adjustmentType === "Over") ex.over += l.qty;
+                else                             ex.loss += l.qty;
+                speciesMap.set(key, ex);
+              }
+              const hubSpeciesRows = [...speciesMap.values()].sort((a, b) => b.loss - a.loss);
+
+              return (
+                <>
+                  <h3 style={{ ...s.subHeading, marginTop: 32 }}>Hub Losses</h3>
+                  <div style={s.kpiRow}>
+                    <KpiCard label="Hub Under / Loss" value={totalHubLoss.toLocaleString()} highlight />
+                    <KpiCard label="Hub Over / Surplus" value={totalHubOver.toLocaleString()} />
+                    <KpiCard label="Records" value={auditLosses!.length.toLocaleString()} />
+                  </div>
+
+                  {auditLosses!.length === 0 ? <p style={s.muted}>No hub losses recorded in this period.</p> : (
+                    <>
+                      <h4 style={{ fontSize: 13, fontWeight: 600, color: "#374151", margin: "16px 0 8px" }}>By Species</h4>
+                      <ScrollTable>
+                        <thead><tr><Th>Species</Th><Th>Under (Loss)</Th><Th>Over (Surplus)</Th></tr></thead>
+                        <tbody>
+                          {hubSpeciesRows.map((r, i) => (
+                            <tr key={i}>
+                              <Td style={{ fontWeight: 600 }}>{r.speciesName}</Td>
+                              <Td style={{ fontWeight: 700, color: r.loss > 0 ? "#dc2626" : "#94a3b8" }}>{r.loss || "—"}</Td>
+                              <Td style={{ fontWeight: 700, color: r.over > 0 ? "#22c55e" : "#94a3b8" }}>{r.over || "—"}</Td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </ScrollTable>
+
+                      <h4 style={{ fontSize: 13, fontWeight: 600, color: "#374151", margin: "16px 0 8px" }}>All Records</h4>
+                      <ScrollTable>
+                        <thead><tr><Th>Date</Th><Th>Species</Th><Th>Type</Th><Th>Qty</Th><Th>Notes</Th></tr></thead>
+                        <tbody>
+                          {[...auditLosses!].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((l, i) => (
+                            <tr key={i}>
+                              <Td style={{ whiteSpace: "nowrap" as const }}>{new Date(l.createdAt).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" })}</Td>
+                              <Td>{l.speciesName || l.speciesId}</Td>
+                              <Td>
+                                <span style={{ fontWeight: 700, color: l.adjustmentType === "Over" ? "#16a34a" : "#dc2626" }}>
+                                  {l.adjustmentType === "Over" ? "Over / Surplus" : "Under / Loss"}
+                                </span>
+                              </Td>
+                              <Td style={{ fontWeight: 700 }}>{l.qty.toLocaleString()}</Td>
+                              <Td style={{ color: "#6b7280", fontSize: 12 }}>{l.notes || "—"}</Td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </ScrollTable>
+                    </>
+                  )}
+                </>
+              );
+            })()}
           </div>
         );
       })()}
