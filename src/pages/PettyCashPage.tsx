@@ -767,7 +767,22 @@ export default function PettyCashPage() {
             {depositLoading ? (
               <div style={{ color: "#94a3b8", textAlign: "center", padding: "24px 0" }}>Loading…</div>
             ) : !depositDetails || depositDetails.length === 0 ? (
-              <div style={{ color: "#94a3b8", textAlign: "center", padding: "20px 0" }}>No cash deposits in this period.</div>
+              summary?.clientDepositsCashOverride != null ? (
+                <div style={{ padding: "16px 0" }}>
+                  <div style={{ background: "#1e3a5f", border: "1px solid #2563eb", borderRadius: 8, padding: "12px 16px", marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, color: "#93c5fd", fontWeight: 700, marginBottom: 4, textTransform: "uppercase" as const }}>Manual Override Active</div>
+                    <div style={{ fontSize: 13, color: "#cbd5e1" }}>
+                      This value has been manually set. The override amount is{" "}
+                      <span style={{ color: "#22c55e", fontWeight: 700 }}>{fmt(summary.clientDepositsCashOverride)}</span>.
+                    </div>
+                    <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
+                      No individual deposit records are available for this overridden value.
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ color: "#94a3b8", textAlign: "center", padding: "20px 0" }}>No cash deposits in this period.</div>
+              )
             ) : (
               <>
                 <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 6, fontSize: 11, fontWeight: 700, textTransform: "uppercase" as const, color: "#64748b", marginBottom: 8, padding: "0 4px" }}>
