@@ -150,17 +150,26 @@ export default function SalesReportPage() {
         });
       }
       const g = map.get(key)!;
-      g.qty   += r.qty;
-      g.total += r.lineTotal;
+      g.qty += r.qty;
       const pt = (r.paymentType || "").toLowerCase();
-      if (pt === "cash")   g.cash   += r.lineTotal;
-      else if (pt === "eft")    g.eft    += r.lineTotal;
-      else if (pt === "card")   g.card   += r.lineTotal;
-      else if (pt === "credit") g.credit += r.lineTotal;
+      if (pt === "split") {
+        (r.splitPayments ?? []).forEach(sp => {
+          const m = (sp.method || "").toLowerCase();
+          if (m === "cash")        g.cash   += sp.amount;
+          else if (m === "eft")    g.eft    += sp.amount;
+          else if (m === "card")   g.card   += sp.amount;
+          else if (m === "credit") g.credit += sp.amount;
+        });
+      } else if (pt === "cash")   g.cash   += r.lineTotal;
+      else if (pt === "eft")      g.eft    += r.lineTotal;
+      else if (pt === "card")     g.card   += r.lineTotal;
+      else if (pt === "credit")   g.credit += r.lineTotal;
     });
-    return Array.from(map.values()).sort((a, b) =>
-      a.date === b.date ? a.speciesName.localeCompare(b.speciesName) : a.date.localeCompare(b.date)
-    );
+    return Array.from(map.values())
+      .map(g => ({ ...g, total: g.cash + g.eft + g.card + g.credit }))
+      .sort((a, b) =>
+        a.date === b.date ? a.speciesName.localeCompare(b.speciesName) : a.date.localeCompare(b.date)
+      );
   }, [filtered]);
 
   const isMobile = window.innerWidth < 700;
