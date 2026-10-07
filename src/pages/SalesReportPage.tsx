@@ -2,6 +2,8 @@ import { useEffect, useState, useMemo } from "react";
 import type { CSSProperties } from "react";
 import { reportsApi } from "../api/reportsApi";
 import type { SalesReportRow } from "../api/reportsApi";
+import { invoicesApi } from "../api/invoicesApi";
+import { hasRole } from "../api/auth";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -39,6 +41,14 @@ export default function SalesReportPage() {
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState("");
 
+  const isAdmin = hasRole("Admin");
+
+  // Change payment type modal
+  const [editRow,      setEditRow]      = useState<SalesReportRow | null>(null);
+  const [editPt,       setEditPt]       = useState("");
+  const [editSaving,   setEditSaving]   = useState(false);
+  const [editError,    setEditError]    = useState("");
+
   async function load(f = from, t = to) {
     setLoading(true);
     setError("");
@@ -55,6 +65,29 @@ export default function SalesReportPage() {
   useEffect(() => { load(); }, []);
 
   function apply() { load(); }
+
+  function openEdit(r: SalesReportRow) {
+    setEditRow(r);
+    setEditPt(r.paymentType || "Cash");
+    setEditError("");
+  }
+
+  async function savePaymentType() {
+    if (!editRow) return;
+    setEditSaving(true);
+    setEditError("");
+    try {
+      await invoicesApi.fixPaymentType(editRow.invoiceNumber, editPt);
+      setRows(prev => prev.map(r =>
+        r.invoiceId === editRow.invoiceId ? { ...r, paymentType: editPt } : r
+      ));
+      setEditRow(null);
+    } catch {
+      setEditError("Failed to update payment type.");
+    } finally {
+      setEditSaving(false);
+    }
+  }
 
   // Distinct species for the filter dropdown (derived from loaded data)
   const speciesOptions = useMemo(() => {
@@ -367,6 +400,7 @@ export default function SalesReportPage() {
                           {!isMobile && <th style={{ ...s.th, ...s.right }}>Unit Price</th>}
                           <th style={s.th}>Payment</th>
                           <th style={{ ...s.th, ...s.right }}>Total</th>
+                          {isAdmin && <th style={s.th} />}
                         </tr>
                       </thead>
                       <tbody>
@@ -383,6 +417,17 @@ export default function SalesReportPage() {
                               </span>
                             </td>
                             <td style={{ ...s.td, ...s.right, fontWeight: 600 }}>{fmt(r.lineTotal)}</td>
+                            {isAdmin && (
+                              <td style={s.td}>
+                                <button
+                                  onClick={() => openEdit(r)}
+                                  title="Change payment type"
+                                  style={s.editBtn}
+                                >
+                                  ✏️
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -401,6 +446,54 @@ export default function SalesReportPage() {
             )
           )}
         </>
+      )}
+
+      {/* Change payment type modal */}
+      {editRow && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <h3 style={s.modalTitle}>Change Payment Type</h3>
+            <p style={s.modalSub}>
+              Invoice <strong>{editRow.invoiceNumber}</strong> — {editRow.clientName}
+            </p>
+            <p style={s.modalSub}>
+              Current: <span style={{ ...s.badge, ...payBadgeStyle(editRow.paymentType) }}>
+                {editRow.paymentType || "—"}
+              </span>
+            </p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={s.label}>New payment type</label>
+              <div style={s.ptGrid}>
+                {(["Cash", "EFT", "Card", "Credit"] as const).map(pt => (
+                  <button
+                    key={pt}
+                    onClick={() => setEditPt(pt)}
+                    style={{
+                      ...s.ptBtn,
+                      ...(editPt === pt ? s.ptBtnActive : {}),
+                      ...(editPt === pt ? payBadgeStyle(pt) : {}),
+                    }}
+                  >
+                    {pt}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {editError && <p style={s.error}>{editError}</p>}
+            <div style={s.modalActions}>
+              <button style={s.cancelBtn} onClick={() => setEditRow(null)} disabled={editSaving}>
+                Cancel
+              </button>
+              <button
+                style={{ ...s.applyBtn, opacity: editPt === (editRow.paymentType || "") ? 0.5 : 1 }}
+                onClick={savePaymentType}
+                disabled={editSaving || editPt === (editRow.paymentType || "")}
+              >
+                {editSaving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -602,4 +695,79 @@ const s: Record<string, CSSProperties> = {
   // Status
   error: { color: "#dc2626", fontSize: 14 },
   muted: { color: "#9ca3af", fontSize: 14 },
+
+  // Edit button
+  editBtn: {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: "2px 6px",
+    borderRadius: 4,
+    fontSize: 14,
+    opacity: 0.6,
+  },
+
+  // Modal
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.4)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+  },
+  modal: {
+    background: "#fff",
+    borderRadius: 12,
+    padding: "28px 32px",
+    width: "100%",
+    maxWidth: 400,
+    boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 700,
+    color: "#111827",
+    marginBottom: 8,
+  },
+  modalSub: {
+    fontSize: 14,
+    color: "#374151",
+    marginBottom: 12,
+  },
+  ptGrid: {
+    display: "flex",
+    gap: 8,
+    marginTop: 8,
+    flexWrap: "wrap" as const,
+  },
+  ptBtn: {
+    padding: "8px 18px",
+    borderRadius: 8,
+    border: "2px solid #e5e7eb",
+    background: "#f9fafb",
+    cursor: "pointer",
+    fontWeight: 600,
+    fontSize: 14,
+    color: "#374151",
+  },
+  ptBtnActive: {
+    border: "2px solid #374151",
+  },
+  modalActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 20,
+  },
+  cancelBtn: {
+    padding: "8px 18px",
+    borderRadius: 8,
+    border: "1px solid #e5e7eb",
+    background: "#fff",
+    cursor: "pointer",
+    fontWeight: 600,
+    color: "#374151",
+  },
 };

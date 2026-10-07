@@ -172,4 +172,8 @@ export const invoicesApi = {
   /** List all invoices for a specific customer */
   listByClient: (customerId: string) =>
     api.get<InvoiceResponse[]>(`/api/invoices?customerId=${encodeURIComponent(customerId)}`),
+
+  /** Admin: correct the payment type on an existing invoice */
+  fixPaymentType: (invoiceNumber: string, paymentType: string) =>
+    api.patch<void>(`/api/invoices/by-number/${encodeURIComponent(invoiceNumber)}/payment-type`, { paymentType }),
 };
