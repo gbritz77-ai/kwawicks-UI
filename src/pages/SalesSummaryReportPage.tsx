@@ -3,6 +3,8 @@ import type { CSSProperties } from "react";
 import * as XLSX from "xlsx";
 import { reportsApi } from "../api/reportsApi";
 import type { SalesReportRow } from "../api/reportsApi";
+import { invoicesApi } from "../api/invoicesApi";
+import { hasRole } from "../api/auth";
 
 function iso(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -42,6 +44,47 @@ export default function SalesSummaryReportPage() {
   const [rows,             setRows]             = useState<SalesReportRow[]>([]);
   const [loading,          setLoading]          = useState(false);
   const [error,            setError]            = useState("");
+
+  const isAdmin = hasRole("Admin");
+  // Fix-payment modal: list of unrecognised invoices for the selected group
+  type FixRow = { invoiceNumber: string; clientName: string; lineTotal: number; date: string; speciesName: string; qty: number; unitPrice: number; newPt: string; saving: boolean; saved: boolean; err: string };
+  const [fixRows, setFixRows] = useState<FixRow[] | null>(null);
+
+  function openFixModal(groupKey?: string) {
+    const unrecognised = filtered.filter(r => {
+      const pt = (r.paymentType || "").toLowerCase();
+      const isKnown = pt === "cash" || pt === "eft" || pt === "card" || pt === "credit" || pt === "split";
+      if (isKnown) return false;
+      if (!groupKey) return true;
+      const priceCents = Math.round(r.unitPrice * 100);
+      return groupKey === `${r.speciesId}|${priceCents}`;
+    });
+    setFixRows(unrecognised.map(r => ({
+      invoiceNumber: r.invoiceNumber,
+      clientName: r.clientName,
+      lineTotal: r.lineTotal,
+      date: r.date,
+      speciesName: r.speciesName,
+      qty: r.qty,
+      unitPrice: r.unitPrice,
+      newPt: "Cash",
+      saving: false,
+      saved: false,
+      err: "",
+    })));
+  }
+
+  async function saveFixRow(idx: number) {
+    if (!fixRows) return;
+    const row = fixRows[idx];
+    setFixRows(prev => prev!.map((r, i) => i === idx ? { ...r, saving: true, err: "" } : r));
+    try {
+      await invoicesApi.fixPaymentType(row.invoiceNumber, row.newPt);
+      setFixRows(prev => prev!.map((r, i) => i === idx ? { ...r, saving: false, saved: true } : r));
+    } catch {
+      setFixRows(prev => prev!.map((r, i) => i === idx ? { ...r, saving: false, err: "Failed to save" } : r));
+    }
+  }
 
   async function load(f = from, t = to) {
     setLoading(true);
@@ -226,8 +269,12 @@ export default function SalesSummaryReportPage() {
               </div>
             )}
             {hasUnrecognised && (
-              <div style={{ ...s.kpi, background: "#fef2f2", border: "1px solid #fca5a5" }}>
-                <span style={s.kpiLabel}>Unrecognised</span>
+              <div
+                style={{ ...s.kpi, background: "#fef2f2", border: "1px solid #fca5a5", cursor: isAdmin ? "pointer" : "default" }}
+                title={isAdmin ? "Click to fix payment types" : undefined}
+                onClick={isAdmin ? () => openFixModal() : undefined}
+              >
+                <span style={s.kpiLabel}>Unrecognised {isAdmin ? "🔧" : ""}</span>
                 <span style={{ ...s.kpiValue, color: "#dc2626" }}>{fmt(grandTotal - totalCash - totalEft - totalCard - totalCred)}</span>
               </div>
             )}
@@ -278,8 +325,14 @@ export default function SalesSummaryReportPage() {
                       )}
                       {hasUnrecognised && (() => {
                         const unrecog = r.total - r.cash - r.eft - r.card - r.credit;
+                        const priceCents = Math.round(r.unitPrice * 100);
+                        const groupKey = `${r.speciesId}|${priceCents}`;
                         return (
-                          <td style={{ ...s.td, ...s.right, color: unrecog > 0.005 ? "#dc2626" : "#9ca3af" }}>
+                          <td
+                            style={{ ...s.td, ...s.right, color: unrecog > 0.005 ? "#dc2626" : "#9ca3af", cursor: isAdmin && unrecog > 0.005 ? "pointer" : "default" }}
+                            title={isAdmin && unrecog > 0.005 ? "Click to fix payment type" : undefined}
+                            onClick={isAdmin && unrecog > 0.005 ? () => openFixModal(groupKey) : undefined}
+                          >
                             {unrecog > 0.005 ? fmt(unrecog) : "—"}
                           </td>
                         );
@@ -387,6 +440,72 @@ export default function SalesSummaryReportPage() {
             );
           })()}
         </>
+      )}
+
+      {/* ── Fix Unrecognised Payment Type Modal ── */}
+      {fixRows !== null && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setFixRows(null)}>
+          <div style={{ background: "#1e293b", borderRadius: 12, padding: "24px 28px", maxWidth: 620, width: "100%", maxHeight: "80vh", overflowY: "auto", color: "#f1f5f9" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>🔧 Fix Unrecognised Payment Types</div>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 20 }}>
+              {fixRows.length} invoice{fixRows.length !== 1 ? "s" : ""} with missing payment type
+            </div>
+            {fixRows.length === 0 ? (
+              <div style={{ color: "#94a3b8", textAlign: "center", padding: "16px 0" }}>No unrecognised invoices in this group.</div>
+            ) : (
+              <>
+                {fixRows.map((r, i) => (
+                  <div key={r.invoiceNumber} style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: 10, alignItems: "center", padding: "12px 0", borderTop: "1px solid #334155" }}>
+                    <div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 2 }}>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: "#f1f5f9" }}>{r.invoiceNumber}</span>
+                        <span style={{ fontSize: 11, color: "#64748b" }}>{fmtDate(r.date)}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: "#94a3b8" }}>{r.clientName}</div>
+                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                        {r.speciesName} · {r.qty} × {fmt(r.unitPrice)} = <span style={{ color: "#22c55e", fontWeight: 600 }}>{fmt(r.lineTotal)}</span>
+                      </div>
+                    </div>
+                    <select
+                      value={r.newPt}
+                      disabled={r.saving || r.saved}
+                      onChange={e => setFixRows(prev => prev!.map((x, j) => j === i ? { ...x, newPt: e.target.value } : x))}
+                      style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #475569", background: "#0f172a", color: "#f1f5f9", fontSize: 13 }}
+                    >
+                      <option value="Cash">Cash</option>
+                      <option value="EFT">EFT</option>
+                      <option value="Card">Card</option>
+                      <option value="Credit">Credit</option>
+                    </select>
+                    <button
+                      disabled={r.saving || r.saved}
+                      onClick={() => saveFixRow(i)}
+                      style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: r.saved ? "#166534" : "#2563eb", color: "#fff", fontSize: 13, fontWeight: 700, cursor: r.saving || r.saved ? "default" : "pointer" }}
+                    >
+                      {r.saved ? "✓ Saved" : r.saving ? "…" : "Save"}
+                    </button>
+                    {r.err && <div style={{ fontSize: 11, color: "#f87171" }}>{r.err}</div>}
+                  </div>
+                ))}
+                {fixRows.every(r => r.saved) && (
+                  <div style={{ marginTop: 16, textAlign: "center" }}>
+                    <button
+                      onClick={() => { setFixRows(null); load(); }}
+                      style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "#166534", color: "#fff", fontWeight: 700, cursor: "pointer" }}
+                    >
+                      Done — Reload Report
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
+              <button onClick={() => setFixRows(null)} style={{ padding: "7px 18px", borderRadius: 8, border: "1px solid #475569", background: "transparent", color: "#94a3b8", cursor: "pointer" }}>Close</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
