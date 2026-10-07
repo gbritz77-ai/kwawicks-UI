@@ -107,9 +107,10 @@ export default function DeliveryOrdersPage() {
   // Returns inspection modal state
   const [inspectOrder, setInspectOrder] = useState<DeliveryOrderResponse | null>(null);
   const [inspectLines, setInspectLines] = useState<{ speciesId: string; deadQty: string; mutilatedQty: string }[]>([]);
+  const [inspectCashReceived, setInspectCashReceived] = useState<string>("");
   const [inspectBusy, setInspectBusy] = useState(false);
   const [inspectError, setInspectError] = useState<string | null>(null);
-  const canInspect = hasAnyRole("Owner", "Admin", "Finance");
+  const canInspect = hasAnyRole("Owner", "Admin", "Finance", "HubStaff");
 
   // ── Loaders ──────────────────────────────────────────────────────────────
 
@@ -524,6 +525,27 @@ export default function DeliveryOrdersPage() {
                       </div>
                     )}
 
+                    {/* Cash discrepancy banner */}
+                    {order.cashConfirmed && order.cashExpected != null && (
+                      <div style={{
+                        marginTop: 10,
+                        padding: "10px 14px",
+                        borderRadius: 8,
+                        fontSize: 13,
+                        ...(order.cashDiscrepancy != null && Math.abs(order.cashDiscrepancy) >= 0.01
+                          ? (order.cashDiscrepancy > 0
+                            ? { background: "rgba(37,99,235,0.08)", border: "1px solid #93c5fd", color: "#1e40af" }
+                            : { background: "rgba(220,38,38,0.08)", border: "1px solid #fca5a5", color: "#dc2626" })
+                          : { background: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.3)", color: "#166534" })
+                      }}>
+                        {order.cashDiscrepancy != null && Math.abs(order.cashDiscrepancy) >= 0.01
+                          ? (order.cashDiscrepancy > 0
+                            ? `💵 Cash over R ${Math.abs(order.cashDiscrepancy).toFixed(2)} (expected R ${order.cashExpected.toFixed(2)}, received R ${order.cashReceived?.toFixed(2)})`
+                            : `💵 Cash short R ${Math.abs(order.cashDiscrepancy).toFixed(2)} (expected R ${order.cashExpected.toFixed(2)}, received R ${order.cashReceived?.toFixed(2)})`)
+                          : `💵 Cash confirmed R ${order.cashReceived?.toFixed(2)}`}
+                      </div>
+                    )}
+
                     {checkInError && <div style={{ ...s.error, marginTop: 8 }}>{checkInError}</div>}
 
                     <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
@@ -558,6 +580,7 @@ export default function DeliveryOrdersPage() {
                           onClick={() => {
                             setInspectOrder(order);
                             setInspectError(null);
+                            setInspectCashReceived(order.cashReceived != null ? String(order.cashReceived) : "");
                             setInspectLines(order.lines.filter(l => l.totalReturnedQty > 0).map(l => ({
                               speciesId: l.speciesId,
                               deadQty: String(l.inspectedDeadQty || 0),
@@ -664,8 +687,46 @@ export default function DeliveryOrdersPage() {
                 </div>
               );
             })}
-            {inspectError && <div style={{ ...s.error, marginBottom: 10 }}>{inspectError}</div>}
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
+            {/* Cash section — only shown for Cash or Split deliveries */}
+            {inspectOrder.cashExpected != null && inspectOrder.cashExpected > 0 && (
+              <div style={{ marginTop: 16, padding: "12px 14px", borderRadius: 10, background: "rgba(22,101,52,0.06)", border: "1px solid rgba(22,101,52,0.2)" }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: "#166534", marginBottom: 10 }}>💵 Cash Confirmation</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Expected from driver</div>
+                    <div style={{ fontWeight: 700, fontSize: 18, color: "#166534" }}>
+                      R {inspectOrder.cashExpected.toFixed(2)}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Cash received</div>
+                    <NumericInput
+                      style={{ ...s.input }}
+                      allowDecimal={true}
+                      min={0}
+                      value={inspectCashReceived}
+                      onChange={e => setInspectCashReceived(e.target.value)}
+                      disabled={inspectBusy}
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                {inspectCashReceived !== "" && (() => {
+                  const received = parseFloat(inspectCashReceived) || 0;
+                  const diff = received - inspectOrder.cashExpected;
+                  if (Math.abs(diff) < 0.01) return null;
+                  const isOver = diff > 0;
+                  return (
+                    <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: isOver ? "rgba(37,99,235,0.08)" : "rgba(220,38,38,0.08)", border: `1px solid ${isOver ? "#93c5fd" : "#fca5a5"}`, fontSize: 13, fontWeight: 700, color: isOver ? "#1e40af" : "#dc2626" }}>
+                      {isOver ? "⬆ Over" : "⬇ Short"} R {Math.abs(diff).toFixed(2)}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {inspectError && <div style={{ ...s.error, marginBottom: 10, marginTop: 10 }}>{inspectError}</div>}
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 12 }}>
               <button style={s.secondaryBtn} onClick={() => setInspectOrder(null)} disabled={inspectBusy}>Cancel</button>
               <button
                 style={{ ...s.markAtHubBtn, background: "#92400e", borderColor: "#92400e", color: "#fff", padding: "9px 20px" }}
@@ -685,17 +746,25 @@ export default function DeliveryOrdersPage() {
                   setInspectBusy(true);
                   setInspectError(null);
                   try {
+                    const cashReceived = inspectCashReceived !== "" ? parseFloat(inspectCashReceived) : undefined;
                     await deliveryOrdersApi.recordReturnsInspection(
                       inspectOrder.deliveryOrderId,
                       inspectLines.map(il => ({
                         speciesId: il.speciesId,
                         deadQty: parseInt(il.deadQty) || 0,
                         mutilatedQty: parseInt(il.mutilatedQty) || 0,
-                      }))
+                      })),
+                      cashReceived
                     );
+                    const cashDisc = (cashReceived != null && inspectOrder.cashExpected != null)
+                      ? cashReceived - inspectOrder.cashExpected
+                      : undefined;
                     setOrders(prev => prev.map(o => o.deliveryOrderId === inspectOrder.deliveryOrderId
                       ? {
                           ...o,
+                          cashReceived: cashReceived ?? o.cashReceived,
+                          cashConfirmed: cashReceived != null ? true : o.cashConfirmed,
+                          cashDiscrepancy: cashDisc ?? o.cashDiscrepancy,
                           lines: o.lines.map(l => {
                             const il = inspectLines.find(x => x.speciesId === l.speciesId);
                             return il ? { ...l, returnsInspected: true, inspectedDeadQty: parseInt(il.deadQty) || 0, inspectedMutilatedQty: parseInt(il.mutilatedQty) || 0 } : l;
