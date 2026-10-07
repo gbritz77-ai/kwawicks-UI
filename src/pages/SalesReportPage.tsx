@@ -151,6 +151,7 @@ export default function SalesReportPage() {
       }
       const g = map.get(key)!;
       g.qty += r.qty;
+      g.total += r.lineTotal;
       const pt = (r.paymentType || "").toLowerCase();
       if (pt === "split") {
         (r.splitPayments ?? []).forEach(sp => {
@@ -166,7 +167,6 @@ export default function SalesReportPage() {
       else if (pt === "credit")   g.credit += r.lineTotal;
     });
     return Array.from(map.values())
-      .map(g => ({ ...g, total: g.cash + g.eft + g.card + g.credit }))
       .sort((a, b) =>
         a.date === b.date ? a.speciesName.localeCompare(b.speciesName) : a.date.localeCompare(b.date)
       );

@@ -82,6 +82,7 @@ export default function SalesSummaryReportPage() {
       }
       const g = map.get(key)!;
       g.qty += r.qty;
+      g.total += r.lineTotal;
       const pt = (r.paymentType || "").toLowerCase();
       if (pt === "split") {
         (r.splitPayments ?? []).forEach(sp => {
@@ -95,10 +96,8 @@ export default function SalesSummaryReportPage() {
       else if (pt === "eft")      g.eft    += r.lineTotal;
       else if (pt === "card")     g.card   += r.lineTotal;
       else if (pt === "credit")   g.credit += r.lineTotal;
-      // total is always derived from the payment buckets — no separate tracking
     });
     return Array.from(map.values())
-      .map(g => ({ ...g, total: g.cash + g.eft + g.card + g.credit }))
       .sort((a, b) => a.speciesName.localeCompare(b.speciesName) || a.unitPrice - b.unitPrice);
   }, [filtered]);
 
