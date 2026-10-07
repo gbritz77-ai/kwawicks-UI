@@ -45,7 +45,7 @@ export default function SalesSummaryReportPage() {
   const [error,            setError]            = useState("");
 
   // Fix-payment modal: list of unrecognised invoices for the selected group
-  type FixRow = { invoiceNumber: string; clientName: string; lineTotal: number; date: string; speciesName: string; qty: number; unitPrice: number; newPt: string; saving: boolean; saved: boolean; err: string };
+  type FixRow = { invoiceNumber: string; clientName: string; lineTotal: number; date: string; speciesName: string; qty: number; unitPrice: number; currentPt: string; newPt: string; saving: boolean; saved: boolean; err: string };
   const [fixRows, setFixRows] = useState<FixRow[] | null>(null);
 
   function openFixModal(groupKey?: string) {
@@ -65,7 +65,14 @@ export default function SalesSummaryReportPage() {
       speciesName: r.speciesName,
       qty: r.qty,
       unitPrice: r.unitPrice,
-      newPt: "Cash",
+      currentPt: r.paymentType || "(blank)",
+      newPt: (() => {
+        const pt = (r.paymentType || "").toLowerCase();
+        if (pt.includes("card")) return "Card";
+        if (pt.includes("eft"))  return "EFT";
+        if (pt.includes("credit")) return "Credit";
+        return "Cash";
+      })(),
       saving: false,
       saved: false,
       err: "",
@@ -464,6 +471,10 @@ export default function SalesSummaryReportPage() {
                       <div style={{ fontSize: 12, color: "#94a3b8" }}>{r.clientName}</div>
                       <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
                         {r.speciesName} · {r.qty} × {fmt(r.unitPrice)} = <span style={{ color: "#22c55e", fontWeight: 600 }}>{fmt(r.lineTotal)}</span>
+                      </div>
+                      <div style={{ fontSize: 11, marginTop: 3 }}>
+                        <span style={{ color: "#64748b" }}>Stored as: </span>
+                        <span style={{ color: "#f87171", fontWeight: 600 }}>{r.currentPt}</span>
                       </div>
                     </div>
                     <select
