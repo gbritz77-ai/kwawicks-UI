@@ -216,7 +216,7 @@ export default function PettyCashPage() {
   async function loadDepositDetails() {
     setDepositLoading(true);
     try {
-      const details = await pettyCashApi.getDepositDetails();
+      const details = await pettyCashApi.getDepositDetails(summary?.depositsSinceUtc);
       setDepositDetails(details);
     } catch {
       setDepositDetails([]);

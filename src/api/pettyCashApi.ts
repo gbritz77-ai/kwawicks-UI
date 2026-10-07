@@ -26,6 +26,7 @@ export type PettyCashSummaryDto = {
   cashFromHubSales: number;
   cashFromCreditDeposits: number;
   totalCashInCustody: number;
+  depositsSinceUtc: string | null;
   hubSalesCashOverride: number | null;
   clientDepositsCashOverride: number | null;
 };
@@ -88,7 +89,8 @@ export const pettyCashApi = {
   setFloat: (floatAmount: number) => api.post<void>("/api/petty-cash/set-float", { floatAmount }),
   setCashOverrides: (hubSalesCash: number | null, clientDepositsCash: number | null) =>
     api.put<void>("/api/petty-cash/cash-overrides", { hubSalesCash, clientDepositsCash }),
-  getDepositDetails: () => api.get<CashDepositDetailDto[]>("/api/petty-cash/deposit-details"),
+  getDepositDetails: (since?: string | null) =>
+    api.get<CashDepositDetailDto[]>(`/api/petty-cash/deposit-details${since ? `?since=${encodeURIComponent(since)}` : ""}`),
 };
 
 export type CashDepositDetailDto = {
