@@ -141,11 +141,17 @@ export function clearAuthTokens() {
 }
 export function hasRole(role: string): boolean {
   const p = getProfileFromIdToken();
-  return !!p?.groups?.includes(role);
+  if (!p) return false;
+  // Master has all roles
+  if (p.groups.includes("Master")) return true;
+  return p.groups.includes(role);
 }
 export function hasAnyRole(...roles: string[]): boolean {
   const p = getProfileFromIdToken();
-  return !!p?.groups?.some(g => roles.includes(g));
+  if (!p) return false;
+  // Master has all roles
+  if (p.groups.includes("Master")) return true;
+  return p.groups.some(g => roles.includes(g));
 }
 export async function refreshTokens(): Promise<{ accessToken: string; idToken: string; expiresIn: number; tokenType: string }> {
   const refreshToken = localStorage.getItem("kw_refreshToken");
