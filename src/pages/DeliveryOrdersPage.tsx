@@ -104,6 +104,13 @@ export default function DeliveryOrdersPage() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Hub drop modal state
+  const [hubDropOrder, setHubDropOrder] = useState<DeliveryOrderResponse | null>(null);
+  const [hubDropLines, setHubDropLines] = useState<{ speciesId: string; qty: string }[]>([]);
+  const [hubDropBusy, setHubDropBusy] = useState(false);
+  const [hubDropError, setHubDropError] = useState<string | null>(null);
+  const canHubDrop = hasAnyRole("Owner", "Admin", "HubStaff");
+
   // Returns inspection modal state
   const [inspectOrder, setInspectOrder] = useState<DeliveryOrderResponse | null>(null);
   const [inspectLines, setInspectLines] = useState<{ speciesId: string; deadQty: string; mutilatedQty: string }[]>([]);
@@ -503,6 +510,15 @@ export default function DeliveryOrdersPage() {
                       ))}
                     </div>
 
+                    {/* Hub drop banner */}
+                    {order.status === "OutForDelivery" && order.lines.some(l => l.hubDropQty > 0) && (
+                      <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 8, fontSize: 13, background: "rgba(15,118,110,0.08)", border: "1px solid rgba(15,118,110,0.3)", color: "#0f766e" }}>
+                        📦 Hub drop recorded:{" "}
+                        {order.lines.filter(l => l.hubDropQty > 0).map(l => `${l.hubDropQty}× ${getSpeciesName(l.speciesId)}`).join(", ")}
+                        {" "}— stock is available now
+                      </div>
+                    )}
+
                     {/* Return status banner */}
                     {(order.status === "Delivered" || order.status === "MarkedAtHub") &&
                       order.lines.some(l => l.totalReturnedQty > 0) && (
@@ -591,6 +607,21 @@ export default function DeliveryOrdersPage() {
                           🔍 Record Inspection
                         </button>
                       )}
+                      {canHubDrop && order.status === "OutForDelivery" && (
+                        <button
+                          style={{ ...s.markAtHubBtn, background: "#0f766e", borderColor: "#0f766e", color: "#fff" }}
+                          onClick={() => {
+                            setHubDropOrder(order);
+                            setHubDropError(null);
+                            setHubDropLines(order.lines.map(l => ({
+                              speciesId: l.speciesId,
+                              qty: "",
+                            })));
+                          }}
+                        >
+                          📦 Hub Drop
+                        </button>
+                      )}
                       {canMarkAtHub && order.status === "Delivered" && (
                         <button
                           style={s.markAtHubBtn}
@@ -606,6 +637,88 @@ export default function DeliveryOrdersPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── Hub Drop Modal ── */}
+      {hubDropOrder && (
+        <div style={s.backdrop} onClick={() => !hubDropBusy && setHubDropOrder(null)}>
+          <div style={{ ...s.modal, maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+            <div style={s.modalTitle}>📦 Hub Drop</div>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>
+              Driver: <strong>{hubDropOrder.assignedDriverName}</strong>
+            </div>
+            <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(15,118,110,0.06)", border: "1px solid rgba(15,118,110,0.2)", fontSize: 13, color: "#0f766e", marginBottom: 14 }}>
+              Record stock the driver is dropping at the hub now. It will be made available immediately — before the delivery is completed.
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8, fontWeight: 700, fontSize: 12, textTransform: "uppercase" as const, color: "#64748b", padding: "0 2px 6px" }}>
+              <div>Species</div>
+              <div style={{ textAlign: "center" }}>On Order</div>
+              <div style={{ textAlign: "center" }}>Dropping Now</div>
+            </div>
+            {hubDropLines.map((dl, idx) => {
+              const doLine = hubDropOrder.lines.find(l => l.speciesId === dl.speciesId);
+              const alreadyDropped = doLine?.hubDropQty ?? 0;
+              const maxDrop = (doLine?.quantity ?? 0) - alreadyDropped;
+              return (
+                <div key={dl.speciesId} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                  <div style={{ padding: "10px 12px", background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0", fontSize: 14, fontWeight: 700 }}>
+                    {getSpeciesName(dl.speciesId)}
+                    {alreadyDropped > 0 && <div style={{ fontSize: 11, color: "#0f766e", fontWeight: 400 }}>Already dropped: {alreadyDropped}</div>}
+                  </div>
+                  <div style={{ textAlign: "center", fontWeight: 700, color: "#1e40af", fontSize: 16 }}>{doLine?.quantity ?? 0}</div>
+                  <NumericInput
+                    style={{ ...s.input, textAlign: "center" as const }}
+                    allowDecimal={false}
+                    min={0}
+                    value={dl.qty}
+                    onChange={e => setHubDropLines(prev => prev.map((x, i) => i === idx ? { ...x, qty: e.target.value } : x))}
+                    disabled={hubDropBusy || maxDrop <= 0}
+                    placeholder={maxDrop <= 0 ? "—" : "0"}
+                  />
+                </div>
+              );
+            })}
+            {hubDropError && <div style={{ ...s.error, marginBottom: 10 }}>{hubDropError}</div>}
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
+              <button style={s.secondaryBtn} onClick={() => setHubDropOrder(null)} disabled={hubDropBusy}>Cancel</button>
+              <button
+                style={{ ...s.markAtHubBtn, background: "#0f766e", borderColor: "#0f766e", color: "#fff", padding: "9px 20px" }}
+                disabled={hubDropBusy}
+                onClick={async () => {
+                  const lines = hubDropLines
+                    .map(dl => ({ speciesId: dl.speciesId, qty: parseInt(dl.qty) || 0 }))
+                    .filter(dl => dl.qty > 0);
+                  if (lines.length === 0) {
+                    setHubDropError("Enter at least one quantity to drop.");
+                    return;
+                  }
+                  setHubDropBusy(true);
+                  setHubDropError(null);
+                  try {
+                    await deliveryOrdersApi.hubDrop(hubDropOrder.deliveryOrderId, lines);
+                    setOrders(prev => prev.map(o => o.deliveryOrderId === hubDropOrder.deliveryOrderId
+                      ? {
+                          ...o,
+                          lines: o.lines.map(l => {
+                            const dl = lines.find(x => x.speciesId === l.speciesId);
+                            return dl ? { ...l, hubDropQty: (l.hubDropQty ?? 0) + dl.qty } : l;
+                          })
+                        }
+                      : o
+                    ));
+                    setHubDropOrder(null);
+                  } catch (e: any) {
+                    setHubDropError(e?.message || "Could not record hub drop.");
+                  } finally {
+                    setHubDropBusy(false);
+                  }
+                }}
+              >
+                {hubDropBusy ? "Saving…" : "Confirm Drop"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
