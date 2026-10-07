@@ -60,6 +60,7 @@ export default function PettyCashPage() {
   // Deposit details modal
   const [depositDetails, setDepositDetails] = useState<CashDepositDetailDto[] | null>(null);
   const [depositLoading, setDepositLoading] = useState(false);
+  const [depositError, setDepositError] = useState<string>("");
 
   // Cashup notes modal
   const [notesModalText, setNotesModalText] = useState<string | null>(null);
@@ -215,10 +216,13 @@ export default function PettyCashPage() {
 
   async function loadDepositDetails() {
     setDepositLoading(true);
+    setDepositError("");
     try {
       const details = await pettyCashApi.getDepositDetails(summary?.depositsSinceUtc);
       setDepositDetails(details);
-    } catch {
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setDepositError(msg);
       setDepositDetails([]);
     } finally {
       setDepositLoading(false);
@@ -759,13 +763,13 @@ export default function PettyCashPage() {
       )}
 
       {/* ── DEPOSIT DETAILS MODAL ── */}
-      {(depositDetails !== null || depositLoading) && (() => {
+      {(depositDetails !== null || depositLoading || depositError) && (() => {
         const sinceUtc = summary?.depositsSinceUtc ? new Date(summary.depositsSinceUtc) : null;
         const visibleDeposits = depositDetails
           ? depositDetails.filter(d => !sinceUtc || new Date(d.date) >= sinceUtc)
           : [];
         return (
-          <div style={s.modalOverlay} onClick={() => setDepositDetails(null)}>
+          <div style={s.modalOverlay} onClick={() => { setDepositDetails(null); setDepositError(""); }}>
             <div style={{ ...s.modalCard, maxWidth: 560, textAlign: "left", maxHeight: "80vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
               <div style={{ fontSize: 18, fontWeight: 700, color: "#f1f5f9", marginBottom: 4 }}>💰 Client Deposits (Cash)</div>
               <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
@@ -785,6 +789,10 @@ export default function PettyCashPage() {
                       No individual deposit records are linked to this overridden value.
                     </div>
                   </div>
+                </div>
+              ) : depositError ? (
+                <div style={{ color: "#f87171", background: "#1e1b1b", borderRadius: 8, padding: "12px 16px", fontSize: 13 }}>
+                  <strong>Error loading deposits:</strong> {depositError}
                 </div>
               ) : visibleDeposits.length === 0 ? (
                 <div style={{ color: "#94a3b8", textAlign: "center", padding: "20px 0" }}>No cash deposits in this period.</div>
@@ -813,7 +821,7 @@ export default function PettyCashPage() {
                 </>
               )}
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
-                <button style={s.btnSecondary} onClick={() => setDepositDetails(null)}>Close</button>
+                <button style={s.btnSecondary} onClick={() => { setDepositDetails(null); setDepositError(""); }}>Close</button>
               </div>
             </div>
           </div>
