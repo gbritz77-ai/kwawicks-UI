@@ -149,6 +149,7 @@ export type DebitReportItem = {
   allocationType: string;
   allocatedTo: string;
   allocatedAt: string | null;
+  source: string; // "Bank" | "PettyCash"
 };
 
 export type DebitReportCategorySummary = {

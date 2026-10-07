@@ -5,6 +5,7 @@ import type {
   PettyCashSummaryDto,
   PettyCashEntryDto,
   PettyCashupDto,
+  CashDepositDetailDto,
   CreatePettyCashEntryRequest,
   CreateCashupRequest,
 } from "../api/pettyCashApi";
@@ -55,6 +56,13 @@ export default function PettyCashPage() {
   const [clearBusy, setClearBusy] = useState(false);
   const [clearError, setClearError] = useState("");
   const [clearDone, setClearDone] = useState(false);
+
+  // Deposit details modal
+  const [depositDetails, setDepositDetails] = useState<CashDepositDetailDto[] | null>(null);
+  const [depositLoading, setDepositLoading] = useState(false);
+
+  // Cashup notes modal
+  const [notesModalText, setNotesModalText] = useState<string | null>(null);
 
   // Cash override modal
   const [overrideField, setOverrideField] = useState<"hub" | "deposits" | null>(null);
@@ -205,6 +213,18 @@ export default function PettyCashPage() {
     }
   }
 
+  async function loadDepositDetails() {
+    setDepositLoading(true);
+    try {
+      const details = await pettyCashApi.getDepositDetails();
+      setDepositDetails(details);
+    } catch {
+      setDepositDetails([]);
+    } finally {
+      setDepositLoading(false);
+    }
+  }
+
   if (loading) return <div style={s.page}><p style={{ color: "#94a3b8" }}>Loading…</p></div>;
   if (error) return <div style={s.page}><p style={{ color: "#ef4444" }}>{error}</p></div>;
 
@@ -311,8 +331,12 @@ export default function PettyCashPage() {
               <div style={s.kpiLabel}>Petty Cash Balance (till)</div>
               <div style={{ ...s.kpiValue, color: "#22c55e" }}>{fmt(summary.currentBalance)}</div>
             </div>
-            <div style={s.kpiCard}>
-              <div style={s.kpiLabel}>Client Deposits (Cash)</div>
+            <div
+              style={{ ...s.kpiCard, cursor: "pointer", border: "1px solid #22c55e" }}
+              onClick={() => { setDepositDetails(null); loadDepositDetails(); }}
+              title="Click to view deposit breakdown"
+            >
+              <div style={s.kpiLabel}>Client Deposits (Cash) 🔍</div>
               <div style={{ ...s.kpiValue, color: "#22c55e" }}>{fmt(summary.cashFromCreditDeposits)}</div>
             </div>
             <div style={s.kpiCard}>
@@ -719,13 +743,72 @@ export default function PettyCashPage() {
                         </span>
                       </td>
                       <td style={s.td}>{c.closedBy}</td>
-                      <td style={s.td}>{c.notes || "—"}</td>
+                      <td style={s.td}>
+                        {c.notes
+                          ? <button style={{ background: "none", border: "none", cursor: "pointer", color: "#6366f1", fontSize: 13, padding: 0, textDecoration: "underline" }}
+                              onClick={() => setNotesModalText(c.notes)}>View notes</button>
+                          : <span style={{ color: "#94a3b8" }}>—</span>}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── DEPOSIT DETAILS MODAL ── */}
+      {(depositDetails !== null || depositLoading) && (
+        <div style={s.modalOverlay} onClick={() => setDepositDetails(null)}>
+          <div style={{ ...s.modalCard, maxWidth: 560, textAlign: "left", maxHeight: "80vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#f1f5f9", marginBottom: 4 }}>💰 Client Deposits (Cash)</div>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>Cash deposits since last cashup</div>
+            {depositLoading ? (
+              <div style={{ color: "#94a3b8", textAlign: "center", padding: "24px 0" }}>Loading…</div>
+            ) : !depositDetails || depositDetails.length === 0 ? (
+              <div style={{ color: "#94a3b8", textAlign: "center", padding: "20px 0" }}>No cash deposits in this period.</div>
+            ) : (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 6, fontSize: 11, fontWeight: 700, textTransform: "uppercase" as const, color: "#64748b", marginBottom: 8, padding: "0 4px" }}>
+                  <div>Client</div><div>Date</div><div style={{ textAlign: "right" }}>Amount</div>
+                </div>
+                {depositDetails.map(d => (
+                  <div key={d.entryId} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 6, padding: "8px 4px", borderTop: "1px solid #1e293b", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontWeight: 600, color: "#f1f5f9", fontSize: 13 }}>{d.clientName}</div>
+                      {d.reference && <div style={{ fontSize: 11, color: "#64748b" }}>{d.reference}</div>}
+                      {d.notes && <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>{d.notes}</div>}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                      {new Date(d.date).toLocaleDateString("en-ZA")}
+                    </div>
+                    <div style={{ textAlign: "right", fontWeight: 700, color: "#22c55e", fontSize: 14 }}>{fmt(d.amount)}</div>
+                  </div>
+                ))}
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 4px 0", borderTop: "2px solid #334155", marginTop: 8 }}>
+                  <span style={{ fontWeight: 700, color: "#f1f5f9" }}>Total</span>
+                  <span style={{ fontWeight: 900, color: "#22c55e", fontSize: 16 }}>{fmt(depositDetails.reduce((s, d) => s + d.amount, 0))}</span>
+                </div>
+              </>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
+              <button style={s.btnSecondary} onClick={() => setDepositDetails(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CASHUP NOTES MODAL ── */}
+      {notesModalText !== null && (
+        <div style={s.modalOverlay} onClick={() => setNotesModalText(null)}>
+          <div style={{ ...s.modalCard, maxWidth: 420, textAlign: "left" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#f1f5f9", marginBottom: 14 }}>📝 Cashup Notes</div>
+            <div style={{ color: "#e2e8f0", fontSize: 14, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{notesModalText}</div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
+              <button style={s.btnSecondary} onClick={() => setNotesModalText(null)}>Close</button>
+            </div>
+          </div>
         </div>
       )}
 

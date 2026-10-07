@@ -618,11 +618,12 @@ function BankStatementsTab() {
                   <th style={s.th}>Status</th>
                   <th style={s.th}>Allocated To</th>
                   <th style={s.th}>Allocated At</th>
+                  <th style={s.th}>Source</th>
                   <th style={s.th}>Statement</th>
                 </tr></thead>
                 <tbody>
                   {visibleItems.map(item => (
-                    <tr key={item.transactionId} style={{ background: item.isAllocated ? "#f0fdf4" : "#fff" }}>
+                    <tr key={item.transactionId} style={{ background: item.source === "PettyCash" ? "#fffbeb" : item.isAllocated ? "#f0fdf4" : "#fff" }}>
                       <td style={s.td}>{fmtDate(item.date)}</td>
                       <td style={{...s.td, maxWidth:260, overflow:"hidden", textOverflow:"ellipsis"}}>{item.description}</td>
                       <td style={{...s.td,...s.mono, fontSize:12}}>{item.reference||"—"}</td>
@@ -641,7 +642,12 @@ function BankStatementsTab() {
                         ) : "—"}
                       </td>
                       <td style={s.td}>{item.isAllocated ? fmtDate(item.allocatedAt) : "—"}</td>
-                      <td style={{...s.td, fontSize:12, color:"#9ca3af", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis"}}>{item.fileName}</td>
+                      <td style={s.td}>
+                        {item.source === "PettyCash"
+                          ? <span style={{...s.badge, background:"#fef3c7", color:"#92400e", fontSize:11}}>Petty Cash</span>
+                          : <span style={{...s.badge, background:"#eff6ff", color:"#1d4ed8", fontSize:11}}>Bank</span>}
+                      </td>
+                      <td style={{...s.td, fontSize:12, color:"#9ca3af", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis"}}>{item.source === "PettyCash" ? "—" : item.fileName}</td>
                     </tr>
                   ))}
                 </tbody>

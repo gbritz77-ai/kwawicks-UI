@@ -88,4 +88,15 @@ export const pettyCashApi = {
   setFloat: (floatAmount: number) => api.post<void>("/api/petty-cash/set-float", { floatAmount }),
   setCashOverrides: (hubSalesCash: number | null, clientDepositsCash: number | null) =>
     api.put<void>("/api/petty-cash/cash-overrides", { hubSalesCash, clientDepositsCash }),
+  getDepositDetails: () => api.get<CashDepositDetailDto[]>("/api/petty-cash/deposit-details"),
+};
+
+export type CashDepositDetailDto = {
+  entryId: string;
+  clientId: string;
+  clientName: string;
+  amount: number;
+  reference: string;
+  notes: string;
+  date: string;
 };
