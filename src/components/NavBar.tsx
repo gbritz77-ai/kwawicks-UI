@@ -135,6 +135,7 @@ export default function NavBar() {
     // Procurement group
     const procItems: Leaf[] = [];
     if (isProcurement)                            procItems.push(leaf("Orders",    "/app/procurement-orders"));
+    if (isProcurement)                            procItems.push(leaf("Inbound",   "/app/inbound-shipments"));
     if (hasAnyRole("Owner", "Admin", "Procurement")) procItems.push(leaf("Suppliers", "/app/suppliers"));
     if (procItems.length) entries.push(group("Procurement", procItems));
 

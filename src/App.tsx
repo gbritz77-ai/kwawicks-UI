@@ -15,6 +15,7 @@ import UserManagementPage from "./pages/UserManagementPage";
 import HelpPage from "./pages/HelpPage";
 import SuppliersPage from "./pages/SuppliersPage";
 import ProcurementOrdersPage from "./pages/ProcurementOrdersPage";
+import InboundShipmentsPage from "./pages/InboundShipmentsPage";
 import CollectionRequestsPage from "./pages/CollectionRequestsPage";
 import DeliveryRunsPage from "./pages/DeliveryRunsPage";
 import HubSalesPage from "./pages/HubSalesPage";
@@ -64,7 +65,8 @@ export default function App() {
       <Route path="/app/reports"         element={<AuthLayout><AdminReportsPage /></AuthLayout>} />
       <Route path="/app/users"              element={<AuthLayout><UserManagementPage /></AuthLayout>} />
       <Route path="/app/suppliers"          element={<AuthLayout><SuppliersPage /></AuthLayout>} />
-      <Route path="/app/procurement-orders" element={<AuthLayout><ProcurementOrdersPage /></AuthLayout>} />
+      <Route path="/app/procurement-orders"  element={<AuthLayout><ProcurementOrdersPage /></AuthLayout>} />
+      <Route path="/app/inbound-shipments"   element={<AuthLayout><InboundShipmentsPage /></AuthLayout>} />
       <Route path="/app/collection-requests" element={<AuthLayout><CollectionRequestsPage /></AuthLayout>} />
       <Route path="/app/delivery-runs"       element={<AuthLayout><DeliveryRunsPage /></AuthLayout>} />
       <Route path="/app/hub-sales"    element={<AuthLayout><HubSalesPage /></AuthLayout>} />
