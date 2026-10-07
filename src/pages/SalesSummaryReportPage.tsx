@@ -4,7 +4,6 @@ import * as XLSX from "xlsx";
 import { reportsApi } from "../api/reportsApi";
 import type { SalesReportRow } from "../api/reportsApi";
 import { invoicesApi } from "../api/invoicesApi";
-import { hasRole } from "../api/auth";
 
 function iso(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -45,7 +44,6 @@ export default function SalesSummaryReportPage() {
   const [loading,          setLoading]          = useState(false);
   const [error,            setError]            = useState("");
 
-  const isAdmin = hasRole("Admin");
   // Fix-payment modal: list of unrecognised invoices for the selected group
   type FixRow = { invoiceNumber: string; clientName: string; lineTotal: number; date: string; speciesName: string; qty: number; unitPrice: number; newPt: string; saving: boolean; saved: boolean; err: string };
   const [fixRows, setFixRows] = useState<FixRow[] | null>(null);
@@ -270,11 +268,11 @@ export default function SalesSummaryReportPage() {
             )}
             {hasUnrecognised && (
               <div
-                style={{ ...s.kpi, background: "#fef2f2", border: "1px solid #fca5a5", cursor: isAdmin ? "pointer" : "default" }}
-                title={isAdmin ? "Click to fix payment types" : undefined}
-                onClick={isAdmin ? () => openFixModal() : undefined}
+                style={{ ...s.kpi, background: "#fef2f2", border: "1px solid #fca5a5", cursor: "pointer" }}
+                title="Click to fix payment types"
+                onClick={() => openFixModal()}
               >
-                <span style={s.kpiLabel}>Unrecognised {isAdmin ? "🔧" : ""}</span>
+                <span style={s.kpiLabel}>Unrecognised 🔧</span>
                 <span style={{ ...s.kpiValue, color: "#dc2626" }}>{fmt(grandTotal - totalCash - totalEft - totalCard - totalCred)}</span>
               </div>
             )}
@@ -329,9 +327,9 @@ export default function SalesSummaryReportPage() {
                         const groupKey = `${r.speciesId}|${priceCents}`;
                         return (
                           <td
-                            style={{ ...s.td, ...s.right, color: unrecog > 0.005 ? "#dc2626" : "#9ca3af", cursor: isAdmin && unrecog > 0.005 ? "pointer" : "default" }}
-                            title={isAdmin && unrecog > 0.005 ? "Click to fix payment type" : undefined}
-                            onClick={isAdmin && unrecog > 0.005 ? () => openFixModal(groupKey) : undefined}
+                            style={{ ...s.td, ...s.right, color: unrecog > 0.005 ? "#dc2626" : "#9ca3af", cursor: unrecog > 0.005 ? "pointer" : "default" }}
+                            title={unrecog > 0.005 ? "Click to fix payment type" : undefined}
+                            onClick={unrecog > 0.005 ? () => openFixModal(groupKey) : undefined}
                           >
                             {unrecog > 0.005 ? fmt(unrecog) : "—"}
                           </td>
