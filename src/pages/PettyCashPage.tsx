@@ -759,60 +759,66 @@ export default function PettyCashPage() {
       )}
 
       {/* ── DEPOSIT DETAILS MODAL ── */}
-      {(depositDetails !== null || depositLoading) && (
-        <div style={s.modalOverlay} onClick={() => setDepositDetails(null)}>
-          <div style={{ ...s.modalCard, maxWidth: 560, textAlign: "left", maxHeight: "80vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#f1f5f9", marginBottom: 4 }}>💰 Client Deposits (Cash)</div>
-            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>Cash deposits since last cashup</div>
-            {depositLoading ? (
-              <div style={{ color: "#94a3b8", textAlign: "center", padding: "24px 0" }}>Loading…</div>
-            ) : !depositDetails || depositDetails.length === 0 ? (
-              summary?.clientDepositsCashOverride != null ? (
+      {(depositDetails !== null || depositLoading) && (() => {
+        const sinceUtc = summary?.depositsSinceUtc ? new Date(summary.depositsSinceUtc) : null;
+        const visibleDeposits = depositDetails
+          ? depositDetails.filter(d => !sinceUtc || new Date(d.date) >= sinceUtc)
+          : [];
+        return (
+          <div style={s.modalOverlay} onClick={() => setDepositDetails(null)}>
+            <div style={{ ...s.modalCard, maxWidth: 560, textAlign: "left", maxHeight: "80vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#f1f5f9", marginBottom: 4 }}>💰 Client Deposits (Cash)</div>
+              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
+                {sinceUtc ? `Cash deposits since ${sinceUtc.toLocaleDateString("en-ZA")}` : "All cash deposits"}
+              </div>
+              {depositLoading ? (
+                <div style={{ color: "#94a3b8", textAlign: "center", padding: "24px 0" }}>Loading…</div>
+              ) : summary?.clientDepositsCashOverride != null ? (
                 <div style={{ padding: "16px 0" }}>
                   <div style={{ background: "#1e3a5f", border: "1px solid #2563eb", borderRadius: 8, padding: "12px 16px", marginBottom: 12 }}>
                     <div style={{ fontSize: 12, color: "#93c5fd", fontWeight: 700, marginBottom: 4, textTransform: "uppercase" as const }}>Manual Override Active</div>
                     <div style={{ fontSize: 13, color: "#cbd5e1" }}>
-                      This value has been manually set. The override amount is{" "}
+                      This value has been manually set to{" "}
                       <span style={{ color: "#22c55e", fontWeight: 700 }}>{fmt(summary.clientDepositsCashOverride)}</span>.
                     </div>
                     <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
-                      No individual deposit records are available for this overridden value.
+                      No individual deposit records are linked to this overridden value.
                     </div>
                   </div>
                 </div>
-              ) : (
+              ) : visibleDeposits.length === 0 ? (
                 <div style={{ color: "#94a3b8", textAlign: "center", padding: "20px 0" }}>No cash deposits in this period.</div>
-              )
-            ) : (
-              <>
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 6, fontSize: 11, fontWeight: 700, textTransform: "uppercase" as const, color: "#64748b", marginBottom: 8, padding: "0 4px" }}>
-                  <div>Client</div><div>Date</div><div style={{ textAlign: "right" }}>Amount</div>
-                </div>
-                {depositDetails.map(d => (
-                  <div key={d.entryId} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 6, padding: "8px 4px", borderTop: "1px solid #1e293b", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontWeight: 600, color: "#f1f5f9", fontSize: 13 }}>{d.clientName}</div>
-                      {d.reference && <div style={{ fontSize: 11, color: "#64748b" }}>{d.reference}</div>}
-                      {d.notes && <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>{d.notes}</div>}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#94a3b8" }}>
-                      {new Date(d.date).toLocaleDateString("en-ZA")}
-                    </div>
-                    <div style={{ textAlign: "right", fontWeight: 700, color: "#22c55e", fontSize: 14 }}>{fmt(d.amount)}</div>
+              ) : (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 6, fontSize: 11, fontWeight: 700, textTransform: "uppercase" as const, color: "#64748b", marginBottom: 8, padding: "0 4px" }}>
+                    <div>Client</div><div>Date</div><div style={{ textAlign: "right" }}>Amount</div>
                   </div>
-                ))}
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 4px 0", borderTop: "2px solid #334155", marginTop: 8 }}>
-                  <span style={{ fontWeight: 700, color: "#f1f5f9" }}>Total</span>
-                  <span style={{ fontWeight: 900, color: "#22c55e", fontSize: 16 }}>{fmt(depositDetails.reduce((s, d) => s + d.amount, 0))}</span>
-                </div>
-              </>
-            )}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
-              <button style={s.btnSecondary} onClick={() => setDepositDetails(null)}>Close</button>
+                  {visibleDeposits.map(d => (
+                    <div key={d.entryId} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 6, padding: "8px 4px", borderTop: "1px solid #1e293b", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontWeight: 600, color: "#f1f5f9", fontSize: 13 }}>{d.clientName}</div>
+                        {d.reference && <div style={{ fontSize: 11, color: "#64748b" }}>{d.reference}</div>}
+                        {d.notes && <div style={{ fontSize: 11, color: "#94a3b8", fontStyle: "italic" }}>{d.notes}</div>}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                        {new Date(d.date).toLocaleDateString("en-ZA")}
+                      </div>
+                      <div style={{ textAlign: "right", fontWeight: 700, color: "#22c55e", fontSize: 14 }}>{fmt(d.amount)}</div>
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 4px 0", borderTop: "2px solid #334155", marginTop: 8 }}>
+                    <span style={{ fontWeight: 700, color: "#f1f5f9" }}>Total</span>
+                    <span style={{ fontWeight: 900, color: "#22c55e", fontSize: 16 }}>{fmt(visibleDeposits.reduce((s, d) => s + d.amount, 0))}</span>
+                  </div>
+                </>
+              )}
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
+                <button style={s.btnSecondary} onClick={() => setDepositDetails(null)}>Close</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── CASHUP NOTES MODAL ── */}
       {notesModalText !== null && (
