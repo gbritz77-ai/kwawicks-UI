@@ -274,6 +274,12 @@ export default function SalesReportPage() {
                 <span style={s.kpiLabel}>Card</span>
                 <span style={s.kpiValue}>{fmt(bySpeciesRows.reduce((s, r) => s + r.card, 0))}</span>
               </div>
+              {bySpeciesRows.some(r => r.total - r.cash - r.eft - r.card - r.credit > 0.005) && (
+                <div style={{ ...s.kpi, background: "#fef2f2", border: "1px solid #fca5a5" }}>
+                  <span style={s.kpiLabel}>Unrecognised</span>
+                  <span style={{ ...s.kpiValue, color: "#dc2626" }}>{fmt(bySpeciesRows.reduce((s, r) => s + r.total - r.cash - r.eft - r.card - r.credit, 0))}</span>
+                </div>
+              )}
               <div style={{ ...s.kpi, ...s.kpiHighlight }}>
                 <span style={s.kpiLabel}>Total Sales</span>
                 <span style={s.kpiValue}>{fmt(bySpeciesRows.reduce((s, r) => s + r.total, 0))}</span>
@@ -301,33 +307,44 @@ export default function SalesReportPage() {
                         {bySpeciesRows.some(r => r.credit > 0) && (
                           <th style={{ ...s.th, ...s.right }}>Credit</th>
                         )}
+                        {bySpeciesRows.some(r => r.total - r.cash - r.eft - r.card - r.credit > 0.005) && (
+                          <th style={{ ...s.th, ...s.right, color: "#dc2626" }}>Unrecognised</th>
+                        )}
                         <th style={{ ...s.th, ...s.right }}>Total</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {bySpeciesRows.map((r, i) => (
-                        <tr key={i} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
-                          <td style={{ ...s.td, whiteSpace: "nowrap" }}>{fmtDate(r.date)}</td>
-                          <td style={{ ...s.td, fontWeight: 600 }}>{r.speciesName}</td>
-                          <td style={{ ...s.td, ...s.right }}>{r.qty.toLocaleString()}</td>
-                          <td style={{ ...s.td, ...s.right }}>{fmt(r.unitPrice)}</td>
-                          <td style={{ ...s.td, ...s.right, color: r.cash > 0 ? "#166534" : "#9ca3af" }}>
-                            {r.cash > 0 ? fmt(r.cash) : "—"}
-                          </td>
-                          <td style={{ ...s.td, ...s.right, color: r.eft > 0 ? "#1e40af" : "#9ca3af" }}>
-                            {r.eft > 0 ? fmt(r.eft) : "—"}
-                          </td>
-                          <td style={{ ...s.td, ...s.right, color: r.card > 0 ? "#7c3aed" : "#9ca3af" }}>
-                            {r.card > 0 ? fmt(r.card) : "—"}
-                          </td>
-                          {bySpeciesRows.some(g => g.credit > 0) && (
-                            <td style={{ ...s.td, ...s.right, color: r.credit > 0 ? "#854d0e" : "#9ca3af" }}>
-                              {r.credit > 0 ? fmt(r.credit) : "—"}
+                      {bySpeciesRows.map((r, i) => {
+                        const unrecog = r.total - r.cash - r.eft - r.card - r.credit;
+                        return (
+                          <tr key={i} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
+                            <td style={{ ...s.td, whiteSpace: "nowrap" }}>{fmtDate(r.date)}</td>
+                            <td style={{ ...s.td, fontWeight: 600 }}>{r.speciesName}</td>
+                            <td style={{ ...s.td, ...s.right }}>{r.qty.toLocaleString()}</td>
+                            <td style={{ ...s.td, ...s.right }}>{fmt(r.unitPrice)}</td>
+                            <td style={{ ...s.td, ...s.right, color: r.cash > 0 ? "#166534" : "#9ca3af" }}>
+                              {r.cash > 0 ? fmt(r.cash) : "—"}
                             </td>
-                          )}
-                          <td style={{ ...s.td, ...s.right, fontWeight: 700 }}>{fmt(r.total)}</td>
-                        </tr>
-                      ))}
+                            <td style={{ ...s.td, ...s.right, color: r.eft > 0 ? "#1e40af" : "#9ca3af" }}>
+                              {r.eft > 0 ? fmt(r.eft) : "—"}
+                            </td>
+                            <td style={{ ...s.td, ...s.right, color: r.card > 0 ? "#7c3aed" : "#9ca3af" }}>
+                              {r.card > 0 ? fmt(r.card) : "—"}
+                            </td>
+                            {bySpeciesRows.some(g => g.credit > 0) && (
+                              <td style={{ ...s.td, ...s.right, color: r.credit > 0 ? "#854d0e" : "#9ca3af" }}>
+                                {r.credit > 0 ? fmt(r.credit) : "—"}
+                              </td>
+                            )}
+                            {bySpeciesRows.some(g => g.total - g.cash - g.eft - g.card - g.credit > 0.005) && (
+                              <td style={{ ...s.td, ...s.right, color: unrecog > 0.005 ? "#dc2626" : "#9ca3af" }}>
+                                {unrecog > 0.005 ? fmt(unrecog) : "—"}
+                              </td>
+                            )}
+                            <td style={{ ...s.td, ...s.right, fontWeight: 700 }}>{fmt(r.total)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                     <tfoot>
                       <tr style={s.footerRow}>
@@ -345,6 +362,11 @@ export default function SalesReportPage() {
                         {bySpeciesRows.some(g => g.credit > 0) && (
                           <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#854d0e" }}>
                             {fmt(bySpeciesRows.reduce((s, r) => s + r.credit, 0))}
+                          </td>
+                        )}
+                        {bySpeciesRows.some(g => g.total - g.cash - g.eft - g.card - g.credit > 0.005) && (
+                          <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#dc2626" }}>
+                            {fmt(bySpeciesRows.reduce((s, r) => s + r.total - r.cash - r.eft - r.card - r.credit, 0))}
                           </td>
                         )}
                         <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#166534" }}>

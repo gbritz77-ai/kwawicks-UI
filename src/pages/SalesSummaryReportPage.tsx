@@ -102,18 +102,13 @@ export default function SalesSummaryReportPage() {
   }, [filtered]);
 
   function exportToExcel() {
-    const headers = ["Species", "QTY", "Unit Price (incl VAT)", "Cash", "EFT", "Card", "Credit", "Total"];
-    const dataRows = summaryRows.map(r => [
-      r.speciesName,
-      r.qty,
-      r.unitPrice,
-      r.cash,
-      r.eft,
-      r.card,
-      r.credit,
-      r.total,
-    ]);
-    const totalsRow = ["Total", totalQty, "", totalCash, totalEft, totalCard, totalCred, grandTotal];
+    const headers = ["Species", "QTY", "Unit Price (incl VAT)", "Cash", "EFT", "Card", "Credit", "Unrecognised", "Total"];
+    const dataRows = summaryRows.map(r => {
+      const unrecog = r.total - r.cash - r.eft - r.card - r.credit;
+      return [r.speciesName, r.qty, r.unitPrice, r.cash, r.eft, r.card, r.credit, unrecog > 0.005 ? unrecog : 0, r.total];
+    });
+    const totalUnrecog = grandTotal - totalCash - totalEft - totalCard - totalCred;
+    const totalsRow = ["Total", totalQty, "", totalCash, totalEft, totalCard, totalCred, totalUnrecog > 0.005 ? totalUnrecog : 0, grandTotal];
 
     const ws = XLSX.utils.aoa_to_sheet([
       [`Sales Summary Report`],
@@ -148,7 +143,8 @@ export default function SalesSummaryReportPage() {
     XLSX.writeFile(wb, fileName);
   }
 
-  const hasCredit = summaryRows.some(r => r.credit > 0);
+  const hasCredit       = summaryRows.some(r => r.credit > 0);
+  const hasUnrecognised = summaryRows.some(r => r.total - r.cash - r.eft - r.card - r.credit > 0.005);
   const totalQty  = summaryRows.reduce((s, r) => s + r.qty,    0);
   const totalCash = summaryRows.reduce((s, r) => s + r.cash,   0);
   const totalEft  = summaryRows.reduce((s, r) => s + r.eft,    0);
@@ -229,6 +225,12 @@ export default function SalesSummaryReportPage() {
                 <span style={{ ...s.kpiValue, color: "#92400e" }}>{fmt(totalCred)}</span>
               </div>
             )}
+            {hasUnrecognised && (
+              <div style={{ ...s.kpi, background: "#fef2f2", border: "1px solid #fca5a5" }}>
+                <span style={s.kpiLabel}>Unrecognised</span>
+                <span style={{ ...s.kpiValue, color: "#dc2626" }}>{fmt(grandTotal - totalCash - totalEft - totalCard - totalCred)}</span>
+              </div>
+            )}
             <div style={{ ...s.kpi, background: "#f0fdf4", border: "2px solid #166534" }}>
               <span style={s.kpiLabel}>Total Sales</span>
               <span style={{ ...s.kpiValue, color: "#166534" }}>{fmt(grandTotal)}</span>
@@ -250,6 +252,7 @@ export default function SalesSummaryReportPage() {
                     <th style={{ ...s.th, ...s.right }}>EFT</th>
                     <th style={{ ...s.th, ...s.right }}>Card</th>
                     {hasCredit && <th style={{ ...s.th, ...s.right }}>Credit</th>}
+                    {hasUnrecognised && <th style={{ ...s.th, ...s.right, color: "#dc2626" }}>Unrecognised</th>}
                     <th style={{ ...s.th, ...s.right }}>Total</th>
                   </tr>
                 </thead>
@@ -273,6 +276,14 @@ export default function SalesSummaryReportPage() {
                           {r.credit > 0 ? fmt(r.credit) : "—"}
                         </td>
                       )}
+                      {hasUnrecognised && (() => {
+                        const unrecog = r.total - r.cash - r.eft - r.card - r.credit;
+                        return (
+                          <td style={{ ...s.td, ...s.right, color: unrecog > 0.005 ? "#dc2626" : "#9ca3af" }}>
+                            {unrecog > 0.005 ? fmt(unrecog) : "—"}
+                          </td>
+                        );
+                      })()}
                       <td style={{ ...s.td, ...s.right, fontWeight: 700 }}>{fmt(r.total)}</td>
                     </tr>
                   ))}
@@ -287,6 +298,9 @@ export default function SalesSummaryReportPage() {
                     <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#7c3aed" }}>{fmt(totalCard)}</td>
                     {hasCredit && (
                       <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#92400e" }}>{fmt(totalCred)}</td>
+                    )}
+                    {hasUnrecognised && (
+                      <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#dc2626" }}>{fmt(grandTotal - totalCash - totalEft - totalCard - totalCred)}</td>
                     )}
                     <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#166534" }}>{fmt(grandTotal)}</td>
                   </tr>
