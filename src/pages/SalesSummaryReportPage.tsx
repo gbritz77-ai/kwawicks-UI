@@ -86,8 +86,8 @@ export default function SalesSummaryReportPage() {
     try {
       await invoicesApi.fixPaymentType(row.invoiceNumber, row.newPt);
       setFixRows(prev => prev!.map((r, i) => i === idx ? { ...r, saving: false, saved: true } : r));
-    } catch {
-      setFixRows(prev => prev!.map((r, i) => i === idx ? { ...r, saving: false, err: "Failed to save" } : r));
+    } catch (e: any) {
+      setFixRows(prev => prev!.map((r, i) => i === idx ? { ...r, saving: false, err: e?.message || "Failed to save" } : r));
     }
   }
 
