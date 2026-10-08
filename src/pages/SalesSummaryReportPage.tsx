@@ -45,7 +45,7 @@ export default function SalesSummaryReportPage() {
   const [error,            setError]            = useState("");
 
   // Fix-payment modal: list of unrecognised invoices for the selected group
-  type FixRow = { invoiceNumber: string; clientName: string; lineTotal: number; date: string; speciesName: string; qty: number; unitPrice: number; currentPt: string; newPt: string; saving: boolean; saved: boolean; err: string };
+  type FixRow = { invoiceId: string; invoiceNumber: string; clientName: string; lineTotal: number; date: string; speciesName: string; qty: number; unitPrice: number; currentPt: string; newPt: string; saving: boolean; saved: boolean; err: string };
   const [fixRows, setFixRows] = useState<FixRow[] | null>(null);
 
   function openFixModal(groupKey?: string) {
@@ -58,6 +58,7 @@ export default function SalesSummaryReportPage() {
       return groupKey === `${r.speciesId}|${priceCents}`;
     });
     setFixRows(unrecognised.map(r => ({
+      invoiceId: r.invoiceId,
       invoiceNumber: r.invoiceNumber,
       clientName: r.clientName,
       lineTotal: r.lineTotal,
@@ -84,7 +85,7 @@ export default function SalesSummaryReportPage() {
     const row = fixRows[idx];
     setFixRows(prev => prev!.map((r, i) => i === idx ? { ...r, saving: true, err: "" } : r));
     try {
-      await invoicesApi.fixPaymentType(row.invoiceNumber, row.newPt);
+      await invoicesApi.fixPaymentType(row.invoiceId, row.newPt);
       setFixRows(prev => prev!.map((r, i) => i === idx ? { ...r, saving: false, saved: true } : r));
     } catch (e: any) {
       setFixRows(prev => prev!.map((r, i) => i === idx ? { ...r, saving: false, err: e?.message || "Failed to save" } : r));
