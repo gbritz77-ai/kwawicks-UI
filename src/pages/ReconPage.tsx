@@ -73,6 +73,7 @@ function BankStatementsTab() {
   const [debitReportTo,      setDebitReportTo]      = useState(todayIso());
   const [debitAllocFilter,   setDebitAllocFilter]   = useState<"all"|"allocated"|"unallocated">("all");
   const [debitCatFilter,     setDebitCatFilter]     = useState("");
+  const [debitSearch,        setDebitSearch]        = useState("");
 
   // Upload
   const fileRef = useRef<HTMLInputElement>(null);
@@ -184,6 +185,7 @@ function BankStatementsTab() {
         to:   debitReportTo   ? debitReportTo + "T23:59:59Z" : undefined,
       });
       setDebitReport(data);
+      setDebitSearch("");
     } catch (e: any) { setError(e?.message ?? "Failed to load debit report."); }
     finally { setDebitReportLoading(false); }
   }
@@ -508,6 +510,18 @@ function BankStatementsTab() {
       if (debitAllocFilter === "allocated"   && !item.isAllocated) return false;
       if (debitAllocFilter === "unallocated" && item.isAllocated)  return false;
       if (debitCatFilter && item.allocatedTo !== debitCatFilter) return false;
+      if (debitSearch) {
+        const q = debitSearch.toLowerCase();
+        const amtStr = item.amount.toLocaleString("en-ZA", { minimumFractionDigits: 2 }).replace(/\s/g, "");
+        if (
+          !item.description.toLowerCase().includes(q) &&
+          !(item.reference || "").toLowerCase().includes(q) &&
+          !(item.allocatedTo || "").toLowerCase().includes(q) &&
+          !(item.fileName || "").toLowerCase().includes(q) &&
+          !String(item.amount).includes(debitSearch.replace(/\s/g, "")) &&
+          !amtStr.includes(debitSearch.replace(/\s/g, ""))
+        ) return false;
+      }
       return true;
     });
     // Specific category labels for the filter (e.g. "Fuel", "Bank Charges", not just "Expense")
@@ -624,6 +638,16 @@ function BankStatementsTab() {
                   </select>
                 </div>
               )}
+              <div style={{ ...s.filterGroup, flex: "1 1 200px" }}>
+                <label style={s.filterLabel}>Search</label>
+                <input
+                  type="text"
+                  style={{ ...s.input, minWidth: 200 }}
+                  placeholder="Description, reference, amount…"
+                  value={debitSearch}
+                  onChange={e => setDebitSearch(e.target.value)}
+                />
+              </div>
               <div style={{ alignSelf:"flex-end", color:"#6b7280", fontSize:13, paddingBottom:8 }}>{visibleItems.length} rows</div>
             </div>
 
