@@ -390,6 +390,35 @@ export default function PettyCashPage() {
             </button>
           </div>
 
+          {/* Cash Book filters */}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 24, padding: "12px 16px", background: "#1e293b", border: "1px solid #334155", borderRadius: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#94a3b8" }}>
+              From
+              <input type="date" style={{ ...s.input, width: 140, padding: "6px 8px" }} value={cbFrom} onChange={e => setCbFrom(e.target.value)} />
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#94a3b8" }}>
+              To
+              <input type="date" style={{ ...s.input, width: 140, padding: "6px 8px" }} value={cbTo} onChange={e => setCbTo(e.target.value)} />
+            </label>
+            <select
+              style={{ ...s.input, width: 120, padding: "6px 8px" }}
+              value={cbType}
+              onChange={e => setCbType(e.target.value as "All" | "In" | "Out")}
+            >
+              <option value="All">All Types</option>
+              <option value="In">In</option>
+              <option value="Out">Out</option>
+            </select>
+            {(cbFrom || cbTo || cbType !== "All") && (
+              <button
+                style={{ ...s.btnSecondary, padding: "6px 12px", fontSize: 12 }}
+                onClick={() => { setCbFrom(""); setCbTo(""); setCbType("All"); }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
           {/* Add Entry Form */}
           {showEntryForm && (
             <div style={s.formCard}>
@@ -480,9 +509,16 @@ export default function PettyCashPage() {
           )}
 
           {/* Open entries list */}
-          {summary && summary.openEntries.length === 0 ? (
-            <p style={{ color: "#94a3b8", marginTop: 16 }}>No open entries — all caught up.</p>
-          ) : (
+          {(() => {
+            const visibleOpen = (summary?.openEntries ?? []).filter(e => {
+              if (cbFrom && e.entryDate < cbFrom) return false;
+              if (cbTo && e.entryDate > cbTo) return false;
+              if (cbType !== "All" && e.type !== cbType) return false;
+              return true;
+            });
+            if (!summary || summary.openEntries.length === 0) return <p style={{ color: "#94a3b8", marginTop: 16 }}>No open entries — all caught up.</p>;
+            if (visibleOpen.length === 0) return <p style={{ color: "#94a3b8", marginTop: 16 }}>No open entries match the selected filters.</p>;
+            return (
             <div style={s.tableWrap}>
               <table style={s.table}>
                 <thead>
@@ -499,7 +535,7 @@ export default function PettyCashPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(summary?.openEntries ?? []).map(e => (
+                  {visibleOpen.map(e => (
                     <tr key={e.entryId} style={s.tr}>
                       <td style={s.td}>{e.entryDate}</td>
                       <td style={s.td}>
@@ -519,40 +555,12 @@ export default function PettyCashPage() {
                 </tbody>
               </table>
             </div>
-          )}
+            );
+          })()}
 
           {/* All entries section */}
           <div style={{ marginTop: 32 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-              <h2 style={{ ...s.subHeading, margin: 0 }}>All Entries</h2>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#94a3b8" }}>
-                  From
-                  <input type="date" style={{ ...s.input, width: 140, padding: "6px 8px" }} value={cbFrom} onChange={e => setCbFrom(e.target.value)} />
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#94a3b8" }}>
-                  To
-                  <input type="date" style={{ ...s.input, width: 140, padding: "6px 8px" }} value={cbTo} onChange={e => setCbTo(e.target.value)} />
-                </label>
-                <select
-                  style={{ ...s.input, width: 100, padding: "6px 8px" }}
-                  value={cbType}
-                  onChange={e => setCbType(e.target.value as "All" | "In" | "Out")}
-                >
-                  <option value="All">All Types</option>
-                  <option value="In">In</option>
-                  <option value="Out">Out</option>
-                </select>
-                {(cbFrom || cbTo || cbType !== "All") && (
-                  <button
-                    style={{ ...s.btnSecondary, padding: "6px 12px", fontSize: 12 }}
-                    onClick={() => { setCbFrom(""); setCbTo(""); setCbType("All"); }}
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </div>
+            <h2 style={s.subHeading}>All Entries</h2>
             {(() => {
               const filtered = entries.filter(e => {
                 if (cbFrom && e.entryDate < cbFrom) return false;

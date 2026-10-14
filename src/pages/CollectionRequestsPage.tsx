@@ -802,7 +802,7 @@ export default function CollectionRequestsPage() {
                     a.paymentType === "Cash"   ? "rgba(22,163,74,0.1)"   :
                     a.paymentType === "EFT"    ? "rgba(37,99,235,0.1)"   :
                     a.paymentType === "Credit" ? "rgba(124,58,237,0.1)"  : "rgba(100,116,139,0.1)";
-                  const canRecord = canAllocate() && a.deliveryStatus !== "Delivered" && a.deliveryStatus !== "MarkedAtHub";
+                  const canRecord = canAllocate() && a.deliveryStatus === "Delivered";
                   return (
                     <th key={a.deliveryOrderId} style={s.thRight}>
                       {a.clientName}
