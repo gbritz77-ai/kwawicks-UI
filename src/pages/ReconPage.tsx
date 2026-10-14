@@ -693,7 +693,7 @@ function BankStatementsTab() {
                                 onChange={e => setEditingPcCategory(e.target.value)}
                                 disabled={editingPcBusy}
                               >
-                                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                {[...new Set([...CATEGORIES, ...expenseCategories])].sort().map(c => <option key={c} value={c}>{c}</option>)}
                               </select>
                               <button
                                 style={{ fontSize:11, background:"#16a34a", color:"#fff", border:"none", borderRadius:4, padding:"2px 8px", cursor:"pointer" }}
@@ -721,7 +721,13 @@ function BankStatementsTab() {
                                 <button
                                   title="Edit category"
                                   style={{ fontSize:11, background:"none", border:"1px solid #d1d5db", borderRadius:4, padding:"1px 6px", cursor:"pointer", color:"#6b7280" }}
-                                  onClick={() => { setEditingPcEntry(item.transactionId); setEditingPcCategory(item.allocatedTo || "Other"); }}
+                                  onClick={() => {
+                                    setEditingPcEntry(item.transactionId);
+                                    setEditingPcCategory(item.allocatedTo || "Other");
+                                    if (!expenseCatsLoaded) {
+                                      bankStatementsApi.getExpenseCategories().then(setExpenseCategories).catch(() => {}).then(() => setExpenseCatsLoaded(true));
+                                    }
+                                  }}
                                 >✎</button>
                               )}
                             </div>

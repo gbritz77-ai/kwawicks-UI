@@ -1766,6 +1766,7 @@ function InvoicesTab({
   onConfirmed: () => void;
 }) {
   const isOwner = hasAnyRole("Owner");
+  const isMaster = hasAnyRole("Master");
   const canOverrideNegativeBalance = hasAnyRole("Owner", "Finance");
   const [staffMembers, setStaffMembers] = useState<StaffMemberDto[]>([]);
   useEffect(() => { staffMembersApi.list().then(setStaffMembers).catch(() => {}); }, []);
@@ -2229,6 +2230,15 @@ function InvoicesTab({
                       <div style={{ display: "flex", flexDirection: "column" as const, gap: 4, alignItems: "flex-start" }}>
                         {inv.paymentStatus === "Pending" && (() => {
                           const hardBlocked = isAccountCredit && creditNegative && !canOverrideNegativeBalance;
+                          const isCreditType = inv.paymentType === "Credit";
+                          const masterBlocked = isCreditType && !isMaster;
+                          if (masterBlocked) {
+                            return (
+                              <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 600 }} title="Only Master can confirm Credit invoices">
+                                ⏳ Awaiting Master
+                              </span>
+                            );
+                          }
                           return (
                             <button
                               disabled={confirming === inv.invoiceId || (isAccountCredit && creditBal === undefined) || hardBlocked}
