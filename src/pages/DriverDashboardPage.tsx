@@ -799,7 +799,7 @@ export default function DriverDashboardPage() {
                       <div style={{ opacity: 0.6, fontSize: 13, marginTop: 4 }}>Or select from gallery</div>
                     </button>
                   )}
-                  <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
+                  <input ref={fileInputRef} type="file" accept="image/*"
                     style={{ display: "none" }} onChange={e => setReceiptFile(e.target.files?.[0] ?? null)} />
                 </div>
                 <div style={s.modalBtns}>
@@ -902,7 +902,6 @@ export default function DriverDashboardPage() {
                     ref={slipInputRef}
                     type="file"
                     accept="image/*"
-                    capture="environment"
                     style={{ display: "none" }}
                     onChange={e => setSlipFile(e.target.files?.[0] ?? null)}
                   />
@@ -986,7 +985,6 @@ export default function DriverDashboardPage() {
                 ref={deliveryNoteInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
                 style={{ display: "none" }}
                 onChange={e => setDeliveryNoteFile(e.target.files?.[0] ?? null)}
               />

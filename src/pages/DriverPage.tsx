@@ -770,7 +770,7 @@ export default function DriverPage() {
                       <div style={{ opacity: 0.6, fontSize: 13, marginTop: 4 }}>Or select from your gallery</div>
                     </button>
                   )}
-                  <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)} />
+                  <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)} />
                 </div>
                 <div style={s.modalBtns}>
                   <button style={s.secondaryBtn} onClick={skipReceiptUpload} disabled={receiptUploading}>Skip for now</button>
