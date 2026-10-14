@@ -14,6 +14,8 @@ import { procurementOrdersApi } from "../api/procurementOrdersApi";
 import type { ProcurementOrderDto } from "../api/procurementOrdersApi";
 import { collectionRequestsApi } from "../api/collectionRequestsApi";
 import type { CollectionRequestDto } from "../api/collectionRequestsApi";
+import { inboundShipmentsApi } from "../api/inboundShipmentsApi";
+import type { InboundShipmentDto } from "../api/inboundShipmentsApi";
 import { stockLossApi } from "../api/stockLossApi";
 import type { StockLossDto } from "../api/stockLossApi";
 import { deliveryOrdersApi } from "../api/deliveryOrdersApi";
@@ -155,6 +157,7 @@ export default function AdminReportsPage() {
   const [stmtTo, setStmtTo] = useState("");
   const [poData, setPoData]   = useState<ProcurementOrderDto[]   | null>(null);
   const [crData, setCrData]   = useState<CollectionRequestDto[]  | null>(null);
+  const [inboundData, setInboundData] = useState<InboundShipmentDto[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -222,9 +225,14 @@ export default function AdminReportsPage() {
       }
       if (tab === "species") setSpeciesRevenue(await reportsApi.getSpeciesRevenue(from || undefined, to || undefined));
       if (tab === "supplier-spend") {
-        const [pos, crs] = await Promise.all([procurementOrdersApi.list(), collectionRequestsApi.list()]);
+        const [pos, crs, inbound] = await Promise.all([
+          procurementOrdersApi.list(),
+          collectionRequestsApi.list(),
+          inboundShipmentsApi.list({ status: "Received" }),
+        ]);
         setPoData(pos);
         setCrData(crs);
+        setInboundData(inbound);
       }
       if (tab === "margin") {
         const [spc, costData, salesData] = await Promise.all([
@@ -647,7 +655,7 @@ if (tab === "client-orders") {
       )}
 
       {/* ── Supplier Spend ── */}
-      {tab === "supplier-spend" && poData && crData && !loading && (() => {
+      {tab === "supplier-spend" && poData && crData && inboundData && !loading && (() => {
         // Build a unit cost lookup: procurementOrderId → speciesId → unitCost
         const costLookup = new Map<string, Map<string, number>>();
         for (const po of poData) {
@@ -686,6 +694,24 @@ if (tab === "client-orders") {
               unitCost,
               loadedQty: line.loadedQty,
               totalValue: line.loadedQty * unitCost,
+            });
+          }
+        }
+
+        // Add received inbound shipments (supplier delivers directly to hub)
+        for (const shipment of inboundData) {
+          const date = (shipment.receivedAt ?? shipment.updatedAt).slice(0, 10);
+          if (from && date < from) continue;
+          if (to   && date > to)   continue;
+          for (const line of shipment.lines) {
+            if ((line.receivedQty ?? 0) <= 0) continue;
+            details.push({
+              date,
+              supplier: shipment.supplierName || shipment.supplierId,
+              speciesName: line.speciesName,
+              unitCost: line.unitCost ?? 0,
+              loadedQty: line.receivedQty,
+              totalValue: line.receivedQty * (line.unitCost ?? 0),
             });
           }
         }
@@ -749,7 +775,7 @@ if (tab === "client-orders") {
               </div>
             )}
             {groups.length === 0 ? (
-              <p style={s.muted}>No loaded collections for the selected period.</p>
+              <p style={s.muted}>No supplier collections or inbound deliveries for the selected period.</p>
             ) : (
               <ScrollTable>
                 <thead>
