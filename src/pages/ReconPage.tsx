@@ -452,16 +452,23 @@ function BankStatementsTab() {
 
   // ── Filtered transactions ─────────────────────────────────────────────────
 
+  function txMatchesSearch(tx: { description: string; reference: string; amount: number }, q: string) {
+    if (!q) return true;
+    const lq = q.toLowerCase().replace(/\s/g, "");
+    return (
+      tx.description.toLowerCase().includes(q.toLowerCase()) ||
+      tx.reference.toLowerCase().includes(q.toLowerCase()) ||
+      String(tx.amount).includes(lq) ||
+      tx.amount.toLocaleString("en-ZA", { minimumFractionDigits: 2 }).replace(/\s/g, "").includes(lq)
+    );
+  }
+
   const visibleTx = (selected?.transactions ?? []).filter(tx => {
     if (txTypeFilter !== "all" && tx.type !== txTypeFilter) return false;
     if (tx.type === "Debit" && tx.isAllocated) return false;   // allocated debits never shown
     if (txAllocFilter === "unallocated" && tx.isAllocated) return false;
     if (txAllocFilter === "allocated"   && !tx.isAllocated) return false;
-    if (txSearch) {
-      const q = txSearch.toLowerCase();
-      return tx.description.toLowerCase().includes(q) || tx.reference.toLowerCase().includes(q);
-    }
-    return true;
+    return txMatchesSearch(tx, txSearch);
   });
 
   const visibleClients = clients.filter(c =>
@@ -862,21 +869,22 @@ function BankStatementsTab() {
               })}
             </div>
 
-            {/* Possible duplicates — filtered to match the active type view */}
+            {/* Possible duplicates — filtered to match the active type view and search */}
             {(() => {
-              const visibleDups = (selected.possibleDuplicates ?? []).filter(tx =>
-                txTypeFilter === "Debit"   ? tx.type === "Debit"  :
-                txTypeFilter === "Credit"  ? tx.type === "Credit" :
-                true
-              );
+              const visibleDups = (selected.possibleDuplicates ?? []).filter(tx => {
+                if (txTypeFilter === "Debit"  && tx.type !== "Debit")  return false;
+                if (txTypeFilter === "Credit" && tx.type !== "Credit") return false;
+                return txMatchesSearch(tx, txSearch);
+              });
+              const dupsSectionOpen = showDuplicates || (txSearch.length > 0 && visibleDups.length > 0);
               if (visibleDups.length === 0) return null;
               return (
               <div style={sp.dupSection}>
                 <div style={sp.dupHeader} onClick={() => setShowDuplicates(v => !v)}>
                   <span>⚠ Possible Duplicates ({visibleDups.length})</span>
-                  <span>{showDuplicates ? "▲" : "▼"}</span>
+                  <span>{dupsSectionOpen ? "▲" : "▼"}</span>
                 </div>
-                {showDuplicates && (
+                {dupsSectionOpen && (
                   <div style={sp.dupList}>
                     <div style={sp.dupNote}>
                       These {txTypeFilter === "Debit" ? "debits" : "credits"} match the date + amount of a transaction already reconciled under a different statement upload —
