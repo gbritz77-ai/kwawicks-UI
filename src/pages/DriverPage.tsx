@@ -72,6 +72,7 @@ export default function DriverPage() {
   const [receiptUploading, setReceiptUploading] = useState(false);
   const [receiptDone, setReceiptDone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileGalleryRef = useRef<HTMLInputElement>(null);
   const [clientHasPhone, setClientHasPhone] = useState(true);
   const [clientPhone, setClientPhone] = useState("");
 
@@ -761,16 +762,25 @@ export default function DriverPage() {
                   {receiptFile ? (
                     <div style={s.receiptPreview}>
                       <img src={URL.createObjectURL(receiptFile)} alt="Receipt" style={{ width: "100%", borderRadius: 10, maxHeight: 280, objectFit: "cover" }} />
-                      <button style={s.changePhotoBtn} onClick={() => fileInputRef.current?.click()}>Change Photo</button>
+                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                        <button style={{ ...s.changePhotoBtn, flex: 1 }} onClick={() => fileInputRef.current?.click()}>📷 Retake</button>
+                        <button style={{ ...s.changePhotoBtn, flex: 1 }} onClick={() => fileGalleryRef.current?.click()}>🖼 Gallery</button>
+                      </div>
                     </div>
                   ) : (
-                    <button style={s.cameraBtn} onClick={() => fileInputRef.current?.click()}>
-                      <div style={{ fontSize: 36 }}>📷</div>
-                      <div style={{ fontWeight: 900, marginTop: 8 }}>Take Photo of Receipt</div>
-                      <div style={{ opacity: 0.6, fontSize: 13, marginTop: 4 }}>Or select from your gallery</div>
-                    </button>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button style={{ ...s.cameraBtn, flex: 1 }} onClick={() => fileInputRef.current?.click()}>
+                        <div style={{ fontSize: 28 }}>📷</div>
+                        <div style={{ fontWeight: 700, marginTop: 6, fontSize: 13 }}>Take Photo</div>
+                      </button>
+                      <button style={{ ...s.cameraBtn, flex: 1 }} onClick={() => fileGalleryRef.current?.click()}>
+                        <div style={{ fontSize: 28 }}>🖼</div>
+                        <div style={{ fontWeight: 700, marginTop: 6, fontSize: 13 }}>Gallery</div>
+                      </button>
+                    </div>
                   )}
-                  <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)} />
+                  <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)} />
+                  <input ref={fileGalleryRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)} />
                 </div>
                 <div style={s.modalBtns}>
                   <button style={s.secondaryBtn} onClick={skipReceiptUpload} disabled={receiptUploading}>Skip for now</button>

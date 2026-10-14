@@ -102,6 +102,7 @@ export default function DriverDashboardPage() {
   const [receiptUploading, setReceiptUploading] = useState(false);
   const [receiptDone, setReceiptDone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileGalleryRef = useRef<HTMLInputElement>(null);
   const [clientHasPhone, setClientHasPhone] = useState(true);
   const [clientPhone, setClientPhone] = useState("");
 
@@ -115,6 +116,7 @@ export default function DriverDashboardPage() {
   const [slipDone, setSlipDone] = useState(false);
   const [slipError, setSlipError] = useState<string | null>(null);
   const slipInputRef = useRef<HTMLInputElement>(null);
+  const slipGalleryRef = useRef<HTMLInputElement>(null);
 
   // ── Collection request state ──────────────────────────────────────────────
 
@@ -128,6 +130,7 @@ export default function DriverDashboardPage() {
   const [crError, setCrError] = useState<string | null>(null);
   const [deliveryNoteFile, setDeliveryNoteFile] = useState<File | null>(null);
   const deliveryNoteInputRef = useRef<HTMLInputElement>(null);
+  const deliveryNoteGalleryRef = useRef<HTMLInputElement>(null);
 
   // ── Data loading ─────────────────────────────────────────────────────────
 
@@ -790,16 +793,26 @@ export default function DriverDashboardPage() {
                   {receiptFile ? (
                     <div style={{ display: "grid", gap: 10 }}>
                       <img src={URL.createObjectURL(receiptFile)} alt="Receipt" style={{ width: "100%", borderRadius: 10, maxHeight: 280, objectFit: "cover" }} />
-                      <button style={s.secondaryBtn} onClick={() => fileInputRef.current?.click()}>Change Photo</button>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button style={{ ...s.secondaryBtn, flex: 1 }} onClick={() => fileInputRef.current?.click()}>📷 Retake</button>
+                        <button style={{ ...s.secondaryBtn, flex: 1 }} onClick={() => fileGalleryRef.current?.click()}>🖼 Gallery</button>
+                      </div>
                     </div>
                   ) : (
-                    <button style={s.cameraBtn} onClick={() => fileInputRef.current?.click()}>
-                      <div style={{ fontSize: 36 }}>📷</div>
-                      <div style={{ fontWeight: 900, marginTop: 8 }}>Take Photo of Receipt</div>
-                      <div style={{ opacity: 0.6, fontSize: 13, marginTop: 4 }}>Or select from gallery</div>
-                    </button>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button style={{ ...s.cameraBtn, flex: 1 }} onClick={() => fileInputRef.current?.click()}>
+                        <div style={{ fontSize: 28 }}>📷</div>
+                        <div style={{ fontWeight: 700, marginTop: 6, fontSize: 13 }}>Take Photo</div>
+                      </button>
+                      <button style={{ ...s.cameraBtn, flex: 1 }} onClick={() => fileGalleryRef.current?.click()}>
+                        <div style={{ fontSize: 28 }}>🖼</div>
+                        <div style={{ fontWeight: 700, marginTop: 6, fontSize: 13 }}>Gallery</div>
+                      </button>
+                    </div>
                   )}
-                  <input ref={fileInputRef} type="file" accept="image/*"
+                  <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
+                    style={{ display: "none" }} onChange={e => setReceiptFile(e.target.files?.[0] ?? null)} />
+                  <input ref={fileGalleryRef} type="file" accept="image/*"
                     style={{ display: "none" }} onChange={e => setReceiptFile(e.target.files?.[0] ?? null)} />
                 </div>
                 <div style={s.modalBtns}>
@@ -889,17 +902,33 @@ export default function DriverDashboardPage() {
                   {slipFile ? (
                     <div style={{ display: "grid", gap: 10 }}>
                       <img src={URL.createObjectURL(slipFile)} alt="Slip" style={{ width: "100%", borderRadius: 10, maxHeight: 280, objectFit: "cover" }} />
-                      <button style={s.secondaryBtn} onClick={() => slipInputRef.current?.click()}>Change Photo</button>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button style={{ ...s.secondaryBtn, flex: 1 }} onClick={() => slipInputRef.current?.click()}>📷 Retake</button>
+                        <button style={{ ...s.secondaryBtn, flex: 1 }} onClick={() => slipGalleryRef.current?.click()}>🖼 Gallery</button>
+                      </div>
                     </div>
                   ) : (
-                    <button style={s.cameraBtn} onClick={() => slipInputRef.current?.click()}>
-                      <div style={{ fontSize: 36 }}>📷</div>
-                      <div style={{ fontWeight: 900, marginTop: 8 }}>Take Photo of Slip</div>
-                      <div style={{ opacity: 0.6, fontSize: 13, marginTop: 4 }}>Petrol / expense receipt</div>
-                    </button>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button style={{ ...s.cameraBtn, flex: 1 }} onClick={() => slipInputRef.current?.click()}>
+                        <div style={{ fontSize: 28 }}>📷</div>
+                        <div style={{ fontWeight: 700, marginTop: 6, fontSize: 13 }}>Take Photo</div>
+                      </button>
+                      <button style={{ ...s.cameraBtn, flex: 1 }} onClick={() => slipGalleryRef.current?.click()}>
+                        <div style={{ fontSize: 28 }}>🖼</div>
+                        <div style={{ fontWeight: 700, marginTop: 6, fontSize: 13 }}>Gallery</div>
+                      </button>
+                    </div>
                   )}
                   <input
                     ref={slipInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    style={{ display: "none" }}
+                    onChange={e => setSlipFile(e.target.files?.[0] ?? null)}
+                  />
+                  <input
+                    ref={slipGalleryRef}
                     type="file"
                     accept="image/*"
                     style={{ display: "none" }}
@@ -969,20 +998,36 @@ export default function DriverDashboardPage() {
                     <button style={{ ...s.secondaryBtn, flex: 1, fontSize: 13 }} onClick={() => deliveryNoteInputRef.current?.click()} disabled={crBusy}>
                       📷 Retake
                     </button>
+                    <button style={{ ...s.secondaryBtn, flex: 1, fontSize: 13 }} onClick={() => deliveryNoteGalleryRef.current?.click()} disabled={crBusy}>
+                      🖼 Gallery
+                    </button>
                     <button style={{ ...s.secondaryBtn, flex: 1, fontSize: 13, color: "#ef4444" }} onClick={() => setDeliveryNoteFile(null)} disabled={crBusy}>
                       ✕ Remove
                     </button>
                   </div>
                 </div>
               ) : (
-                <button style={s.dnCameraBtn} onClick={() => deliveryNoteInputRef.current?.click()} disabled={crBusy}>
-                  <div style={{ fontSize: 28 }}>📷</div>
-                  <div style={{ fontWeight: 700, marginTop: 6, fontSize: 14 }}>Take Photo of Delivery Note</div>
-                  <div style={{ opacity: 0.55, fontSize: 12, marginTop: 3 }}>Or select from gallery</div>
-                </button>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button style={{ ...s.dnCameraBtn, flex: 1 }} onClick={() => deliveryNoteInputRef.current?.click()} disabled={crBusy}>
+                    <div style={{ fontSize: 28 }}>📷</div>
+                    <div style={{ fontWeight: 700, marginTop: 6, fontSize: 13 }}>Take Photo</div>
+                  </button>
+                  <button style={{ ...s.dnCameraBtn, flex: 1 }} onClick={() => deliveryNoteGalleryRef.current?.click()} disabled={crBusy}>
+                    <div style={{ fontSize: 28 }}>🖼</div>
+                    <div style={{ fontWeight: 700, marginTop: 6, fontSize: 13 }}>Gallery</div>
+                  </button>
+                </div>
               )}
               <input
                 ref={deliveryNoteInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: "none" }}
+                onChange={e => setDeliveryNoteFile(e.target.files?.[0] ?? null)}
+              />
+              <input
+                ref={deliveryNoteGalleryRef}
                 type="file"
                 accept="image/*"
                 style={{ display: "none" }}
