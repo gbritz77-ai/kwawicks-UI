@@ -81,6 +81,9 @@ export const pettyCashApi = {
     api.post<PettyCashupDto>("/api/petty-cash/cashups", req),
   // Driver-facing
   getMyEntries: () => api.get<PettyCashEntryDto[]>("/api/petty-cash/my-entries"),
+  updateEntryCategory: (entryId: string, category: string) =>
+    api.patch<PettyCashEntryDto>(`/api/petty-cash/entries/${entryId}/category`, { category }),
+
   getSlipUploadUrl: (entryId: string) =>
     api.get<{ uploadUrl: string; s3Key: string }>(`/api/petty-cash/entries/${entryId}/slip-upload-url`),
   confirmSlipUploaded: (entryId: string, s3Key: string) =>

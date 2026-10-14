@@ -17,6 +17,7 @@ import type { ClientDto } from "../api/clientsApi";
 import { suppliersApi } from "../api/suppliersApi";
 import type { SupplierResponse } from "../api/suppliersApi";
 import { clientCreditApi } from "../api/clientCreditApi";
+import { pettyCashApi, CATEGORIES } from "../api/pettyCashApi";
 import { NumericInput } from "../components/NumericInput";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -74,6 +75,9 @@ function BankStatementsTab() {
   const [debitAllocFilter,   setDebitAllocFilter]   = useState<"all"|"allocated"|"unallocated">("all");
   const [debitCatFilter,     setDebitCatFilter]     = useState("");
   const [debitSearch,        setDebitSearch]        = useState("");
+  const [editingPcEntry,     setEditingPcEntry]     = useState<string | null>(null); // entryId being edited
+  const [editingPcCategory,  setEditingPcCategory]  = useState("");
+  const [editingPcBusy,      setEditingPcBusy]      = useState(false);
 
   // Upload
   const fileRef = useRef<HTMLInputElement>(null);
@@ -681,10 +685,47 @@ function BankStatementsTab() {
                       </td>
                       <td style={s.td}>
                         {item.isAllocated ? (
-                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                            <span style={{...s.badge, ...badgeStyle(item.allocationType), fontSize:11}}>{item.allocationType}</span>
-                            <span style={{ fontSize:13, color:"#374151" }}>{item.allocatedTo}</span>
-                          </div>
+                          item.source === "PettyCash" && editingPcEntry === item.transactionId ? (
+                            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                              <select
+                                style={{ fontSize:13, border:"1px solid #d1d5db", borderRadius:4, padding:"2px 6px", background:"#fff" }}
+                                value={editingPcCategory}
+                                onChange={e => setEditingPcCategory(e.target.value)}
+                                disabled={editingPcBusy}
+                              >
+                                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                              </select>
+                              <button
+                                style={{ fontSize:11, background:"#16a34a", color:"#fff", border:"none", borderRadius:4, padding:"2px 8px", cursor:"pointer" }}
+                                disabled={editingPcBusy}
+                                onClick={async () => {
+                                  setEditingPcBusy(true);
+                                  try {
+                                    await pettyCashApi.updateEntryCategory(item.transactionId, editingPcCategory);
+                                    await loadDebitReport();
+                                  } catch { /* ignore */ }
+                                  finally { setEditingPcBusy(false); setEditingPcEntry(null); }
+                                }}
+                              >{editingPcBusy ? "…" : "✓"}</button>
+                              <button
+                                style={{ fontSize:11, background:"#9ca3af", color:"#fff", border:"none", borderRadius:4, padding:"2px 8px", cursor:"pointer" }}
+                                disabled={editingPcBusy}
+                                onClick={() => setEditingPcEntry(null)}
+                              >✕</button>
+                            </div>
+                          ) : (
+                            <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                              <span style={{...s.badge, ...badgeStyle(item.allocationType), fontSize:11}}>{item.allocationType}</span>
+                              <span style={{ fontSize:13, color:"#374151" }}>{item.allocatedTo}</span>
+                              {item.source === "PettyCash" && (
+                                <button
+                                  title="Edit category"
+                                  style={{ fontSize:11, background:"none", border:"1px solid #d1d5db", borderRadius:4, padding:"1px 6px", cursor:"pointer", color:"#6b7280" }}
+                                  onClick={() => { setEditingPcEntry(item.transactionId); setEditingPcCategory(item.allocatedTo || "Other"); }}
+                                >✎</button>
+                              )}
+                            </div>
+                          )
                         ) : "—"}
                       </td>
                       <td style={s.td}>{item.isAllocated ? fmtDate(item.allocatedAt) : "—"}</td>
