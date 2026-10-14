@@ -57,6 +57,11 @@ export default function PettyCashPage() {
   const [clearError, setClearError] = useState("");
   const [clearDone, setClearDone] = useState(false);
 
+  // Cash Book filters
+  const [cbFrom, setCbFrom] = useState("");
+  const [cbTo, setCbTo] = useState("");
+  const [cbType, setCbType] = useState<"All" | "In" | "Out">("All");
+
   // Deposit details modal
   const [depositDetails, setDepositDetails] = useState<CashDepositDetailDto[] | null>(null);
   const [depositLoading, setDepositLoading] = useState(false);
@@ -518,51 +523,88 @@ export default function PettyCashPage() {
 
           {/* All entries section */}
           <div style={{ marginTop: 32 }}>
-            <h2 style={s.subHeading}>All Entries</h2>
-            {entries.length === 0 ? (
-              <p style={{ color: "#94a3b8" }}>No entries yet.</p>
-            ) : (
-              <div style={s.tableWrap}>
-                <table style={s.table}>
-                  <thead>
-                    <tr>
-                      <th style={s.th}>Date</th>
-                      <th style={s.th}>Type</th>
-                      <th style={s.th}>Category</th>
-                      <th style={s.th}>Description</th>
-                      <th style={s.th}>Recipient</th>
-                      <th style={s.th}>Recorded By</th>
-                      <th style={s.th}>Status</th>
-                      <th style={{ ...s.th, textAlign: "right" }}>Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entries.map(e => (
-                      <tr key={e.entryId} style={s.tr}>
-                        <td style={s.td}>{e.entryDate}</td>
-                        <td style={s.td}>
-                          <span style={e.type === "In" ? s.badgeIn : s.badgeOut}>{e.type}</span>
-                        </td>
-                        <td style={s.td}><span style={s.badgeCat}>{e.category}</span></td>
-                        <td style={s.td}>{e.description}</td>
-                        <td style={s.td}>{e.recipientName || "—"}</td>
-                        <td style={s.td}>{e.recordedBy}</td>
-                        <td style={s.td}>
-                          {e.cashupId ? (
-                            <span style={s.badgeCashedUp}>Cashed Up</span>
-                          ) : (
-                            <span style={s.badgeOpen}>Open</span>
-                          )}
-                        </td>
-                        <td style={{ ...s.td, textAlign: "right", color: e.type === "In" ? "#22c55e" : "#ef4444", fontWeight: 600 }}>
-                          {e.type === "In" ? "+" : "-"}{fmt(e.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+              <h2 style={{ ...s.subHeading, margin: 0 }}>All Entries</h2>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#94a3b8" }}>
+                  From
+                  <input type="date" style={{ ...s.input, width: 140, padding: "6px 8px" }} value={cbFrom} onChange={e => setCbFrom(e.target.value)} />
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#94a3b8" }}>
+                  To
+                  <input type="date" style={{ ...s.input, width: 140, padding: "6px 8px" }} value={cbTo} onChange={e => setCbTo(e.target.value)} />
+                </label>
+                <select
+                  style={{ ...s.input, width: 100, padding: "6px 8px" }}
+                  value={cbType}
+                  onChange={e => setCbType(e.target.value as "All" | "In" | "Out")}
+                >
+                  <option value="All">All Types</option>
+                  <option value="In">In</option>
+                  <option value="Out">Out</option>
+                </select>
+                {(cbFrom || cbTo || cbType !== "All") && (
+                  <button
+                    style={{ ...s.btnSecondary, padding: "6px 12px", fontSize: 12 }}
+                    onClick={() => { setCbFrom(""); setCbTo(""); setCbType("All"); }}
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
-            )}
+            </div>
+            {(() => {
+              const filtered = entries.filter(e => {
+                if (cbFrom && e.entryDate < cbFrom) return false;
+                if (cbTo && e.entryDate > cbTo) return false;
+                if (cbType !== "All" && e.type !== cbType) return false;
+                return true;
+              });
+              if (entries.length === 0) return <p style={{ color: "#94a3b8" }}>No entries yet.</p>;
+              if (filtered.length === 0) return <p style={{ color: "#94a3b8" }}>No entries match the selected filters.</p>;
+              return (
+                <div style={s.tableWrap}>
+                  <table style={s.table}>
+                    <thead>
+                      <tr>
+                        <th style={s.th}>Date</th>
+                        <th style={s.th}>Type</th>
+                        <th style={s.th}>Category</th>
+                        <th style={s.th}>Description</th>
+                        <th style={s.th}>Recipient</th>
+                        <th style={s.th}>Recorded By</th>
+                        <th style={s.th}>Status</th>
+                        <th style={{ ...s.th, textAlign: "right" }}>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map(e => (
+                        <tr key={e.entryId} style={s.tr}>
+                          <td style={s.td}>{e.entryDate}</td>
+                          <td style={s.td}>
+                            <span style={e.type === "In" ? s.badgeIn : s.badgeOut}>{e.type}</span>
+                          </td>
+                          <td style={s.td}><span style={s.badgeCat}>{e.category}</span></td>
+                          <td style={s.td}>{e.description}</td>
+                          <td style={s.td}>{e.recipientName || "—"}</td>
+                          <td style={s.td}>{e.recordedBy}</td>
+                          <td style={s.td}>
+                            {e.cashupId ? (
+                              <span style={s.badgeCashedUp}>Cashed Up</span>
+                            ) : (
+                              <span style={s.badgeOpen}>Open</span>
+                            )}
+                          </td>
+                          <td style={{ ...s.td, textAlign: "right", color: e.type === "In" ? "#22c55e" : "#ef4444", fontWeight: 600 }}>
+                            {e.type === "In" ? "+" : "-"}{fmt(e.amount)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
