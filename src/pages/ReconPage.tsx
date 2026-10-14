@@ -48,7 +48,7 @@ export default function ReconPage() {
 
 // ── Bank Statements tab ────────────────────────────────────────────────────
 
-type RightMode = "matches" | "browse" | "clientcredit" | "splitcredit" | "suppliers" | "nonclient" | "expense";
+type RightMode = "matches" | "browse" | "clientcredit" | "splitcredit" | "suppliers" | "nonclient" | "expense" | "pettycash";
 
 function BankStatementsTab() {
   // Statement list
@@ -439,6 +439,20 @@ function BankStatementsTab() {
     finally { setAllocBusy(null); }
   }
 
+  async function allocatePettyCash() {
+    if (!selected || !activeTx) return;
+    setAllocBusy("pettycash"); setAllocError("");
+    try {
+      const res = await bankStatementsApi.allocatePettyCash(selected.statementId, activeTx.transactionId);
+      setSelected(res.statement);
+      setWarning(res.warning ?? null);
+      if (!res.warning) resetRightPanel();
+      else setActiveTx(null);
+      await loadStatements();
+    } catch (e: any) { setAllocError(e?.message ?? "Failed to allocate."); }
+    finally { setAllocBusy(null); }
+  }
+
   async function deallocate(tx: BankTransactionResponse) {
     if (!selected) return;
     if (!window.confirm(`Remove allocation from this transaction?`)) return;
@@ -507,6 +521,7 @@ function BankStatementsTab() {
       type === "Expense"   ? { background:"#fce7f3", color:"#9d174d" } :
       type === "Supplier"  ? { background:"#fef3c7", color:"#92400e" } :
       type === "NonClient" ? { background:"#f3e8ff", color:"#7c3aed" } :
+      type === "PettyCash" ? { background:"#fffbeb", color:"#92400e" } :
                              { background:"#f1f5f9", color:"#374151" };
 
     function exportDebitExcel() {
@@ -960,6 +975,7 @@ function BankStatementsTab() {
                   <button style={rightMode==="suppliers"   ? sp.modeTabActive : sp.modeTab} onClick={switchToSuppliers}>Browse Suppliers</button>
                   <button style={rightMode==="nonclient"   ? sp.modeTabActive : sp.modeTab} onClick={()=>setRightMode("nonclient")}>Non-Client</button>
                   <button style={rightMode==="expense"     ? sp.modeTabActive : sp.modeTab} onClick={switchToExpense}>Expense</button>
+                  <button style={rightMode==="pettycash"   ? sp.modeTabActive : sp.modeTab} onClick={()=>setRightMode("pettycash")}>Petty Cash</button>
                 </div>
 
                 {/* ─ Smart Matches ─ */}
@@ -1462,6 +1478,23 @@ function BankStatementsTab() {
                       onClick={allocateExpense}
                     >
                       {allocBusy === "expense" ? "Allocating…" : `✔ Allocate to ${pickedExpenseCategory || "…"}`}
+                    </button>
+                  </div>
+                )}
+                {rightMode === "pettycash" && (
+                  <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                    <div style={{ fontSize:13, color:"#374151", lineHeight:1.6 }}>
+                      Mark this transaction as a <strong>Petty Cash</strong> withdrawal — money taken from the bank and put into the petty cash float.
+                    </div>
+                    <div style={{ background:"#fffbeb", border:"1px solid #fcd34d", borderRadius:8, padding:"12px 14px", fontSize:13, color:"#92400e" }}>
+                      ⚠ This does not create a petty cash entry. It simply records that this bank debit was a petty cash top-up so it appears correctly in the debit report.
+                    </div>
+                    <button
+                      style={{ ...sp.allocBtn, padding:"10px 20px", fontSize:14, background:"#d97706", opacity: allocBusy === "pettycash" ? 0.5 : 1 }}
+                      disabled={!!allocBusy}
+                      onClick={allocatePettyCash}
+                    >
+                      {allocBusy === "pettycash" ? "Allocating…" : "✔ Allocate to Petty Cash"}
                     </button>
                   </div>
                 )}

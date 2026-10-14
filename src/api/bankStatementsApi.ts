@@ -234,6 +234,13 @@ export const bankStatementsApi = {
       req
     ),
 
+  /** Allocate a bank debit transaction to petty cash. Returns updated statement. */
+  allocatePettyCash: (statementId: string, transactionId: string) =>
+    api.put<AllocateResponse>(
+      `/api/bank-statements/${statementId}/transactions/${transactionId}/allocate-petty-cash`,
+      {}
+    ),
+
   /** Get all expense categories. */
   getExpenseCategories: () =>
     api.get<string[]>("/api/bank-statements/expense-categories"),
