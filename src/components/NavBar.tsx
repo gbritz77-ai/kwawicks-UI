@@ -163,8 +163,10 @@ export default function NavBar() {
     if (isUserManager) adminItems.push(leaf("Users",           "/app/users"));
     if (isUserManager) adminItems.push(leaf("Price Approvals", "/app/price-approvals"));
     if (isOwner)       adminItems.push(leaf("Settings",        "/app/settings"));
-    if (isMasterRole)  adminItems.push(leaf("Branches",        "/app/branches"));
     if (adminItems.length) entries.push(group("Admin", adminItems));
+
+    // Branches — top-level, Master only
+    if (isMasterRole)  entries.push(leaf("Branches", "/app/branches"));
 
     if (bpVehicleTracking) entries.push(leaf("Vehicle Tracking", "/app/vehicle-tracking"));
 
