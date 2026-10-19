@@ -89,19 +89,19 @@ export const PERMISSION_GROUPS = [
   {
     group: "Reports",
     items: [
-      { key: "reports",       label: "Reports" },
-      { key: "invoices",      label: "Invoices" },
-      { key: "statements",    label: "Statements" },
-      { key: "sales-summary", label: "Sales Summary" },
-      { key: "stock-movement",label: "Stock Movement" },
-      { key: "cost-averages", label: "Cost Averages" },
+      { key: "reports", label: "Reports" },
     ],
   },
   {
     group: "Finance",
     items: [
-      { key: "recon",       label: "Recon" },
-      { key: "petty-cash",  label: "Petty Cash" },
+      { key: "invoices",      label: "Invoices" },
+      { key: "statements",    label: "Statements" },
+      { key: "recon",         label: "Recon" },
+      { key: "sales-summary", label: "Sales Summary" },
+      { key: "stock-movement",label: "Stock Movement" },
+      { key: "cost-averages", label: "Cost Averages" },
+      { key: "petty-cash",    label: "Petty Cash" },
     ],
   },
   {
