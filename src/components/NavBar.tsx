@@ -71,7 +71,7 @@ export default function NavBar() {
   const canManageClients   = branchMode ? bp("clients")         : hasAnyRole("Owner", "Finance", "Admin", "Procurement");
   const canSeeStaff        = branchMode ? bp("staff")           : hasAnyRole("Owner", "Finance", "Admin");
   const isOwner            = branchMode ? false : hasRole("Owner");
-  const isMasterRole       = !branchMode && hasRole("Master");
+  const isMasterRole       = !branchMode && hasAnyRole("Master", "Owner");
 
   // Branch-specific permission aliases
   const bpSlaughter        = bp("slaughter");
