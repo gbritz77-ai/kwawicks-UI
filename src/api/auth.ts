@@ -31,9 +31,58 @@ export function clearAuth() {
   localStorage.removeItem(ID_TOKEN);
   localStorage.removeItem(REFRESH_TOKEN);
   localStorage.removeItem(EXPIRES_AT);
+  clearBranchAuth();
 }
 
+// ── Branch auth ────────────────────────────────────────────────────────────
+
+const BRANCH_TOKEN_KEY   = "kw_branchToken";
+const BRANCH_PROFILE_KEY = "kw_branchProfile";
+
+export type BranchProfile = {
+  username: string;
+  hubId: string;
+  branchName: string;
+  permissions: string[];
+};
+
+export function saveBranchAuth(token: string, profile: BranchProfile, expiresIn: number) {
+  localStorage.setItem(BRANCH_TOKEN_KEY, token);
+  localStorage.setItem(BRANCH_PROFILE_KEY, JSON.stringify(profile));
+  const expiresAt = Date.now() + expiresIn * 1000 - 30_000;
+  localStorage.setItem(EXPIRES_AT, String(expiresAt));
+}
+
+export function clearBranchAuth() {
+  localStorage.removeItem(BRANCH_TOKEN_KEY);
+  localStorage.removeItem(BRANCH_PROFILE_KEY);
+}
+
+export function isBranchUser(): boolean {
+  return !!localStorage.getItem(BRANCH_TOKEN_KEY);
+}
+
+export function getBranchProfile(): BranchProfile | null {
+  const raw = localStorage.getItem(BRANCH_PROFILE_KEY);
+  if (!raw) return null;
+  try { return JSON.parse(raw) as BranchProfile; } catch { return null; }
+}
+
+export function hasBranchPermission(key: string): boolean {
+  const p = getBranchProfile();
+  return p?.permissions.includes(key) ?? false;
+}
+
+// ── Cognito access token (or branch token) ─────────────────────────────────
+
 export function getAccessToken(): string | null {
+  if (isBranchUser()) {
+    const bt = localStorage.getItem(BRANCH_TOKEN_KEY);
+    const exp = Number(localStorage.getItem(EXPIRES_AT) ?? "0");
+    if (bt && Date.now() < exp) return bt;
+    clearBranchAuth();
+    return null;
+  }
   const token = localStorage.getItem(ACCESS_TOKEN);
   if (!token) return null;
 
@@ -54,8 +103,7 @@ export function getAccessToken(): string | null {
 }
 
 export function isLoggedIn(): boolean {
-  // Still considered logged in if we have a refresh token, even if the
-  // access token has expired — the apiClient will silently refresh it.
+  if (isBranchUser()) return !!getAccessToken();
   return !!(getAccessToken() || localStorage.getItem(REFRESH_TOKEN));
 }
 export function getExpiresAt(): number | null {
@@ -112,6 +160,11 @@ export type JwtProfile = {
 };
 
 export function getProfileFromIdToken(): JwtProfile | null {
+  if (isBranchUser()) {
+    const bp = getBranchProfile();
+    if (bp) return { username: bp.username, groups: ["BranchUser"], sub: undefined };
+    return null;
+  }
   const token = localStorage.getItem(ID_TOKEN_KEY);
   if (!token) return null;
 

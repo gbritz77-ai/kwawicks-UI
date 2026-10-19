@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { clearAuth, getProfileFromIdToken, hasRole, hasAnyRole } from "../api/auth";
+import { clearAuth, getProfileFromIdToken, hasRole, hasAnyRole, isBranchUser, hasBranchPermission } from "../api/auth";
 
 declare const __UI_BUILD_DATE__: string;
 
@@ -57,17 +57,39 @@ export default function NavBar() {
   const profile      = getProfileFromIdToken();
   const navRef       = useRef<HTMLDivElement>(null);
 
-  const isOperational  = hasAnyRole("Owner", "Finance", "Admin", "HubStaff", "Procurement");
-  const isFinancial    = hasAnyRole("Owner", "Finance", "Admin");
-  const canSeePettyCash   = hasAnyRole("Owner", "Finance", "Admin");
-  const isUserManager  = hasAnyRole("Owner", "Admin");
-  const isDriverRole   = hasRole("Driver");
-  const isProcurement  = hasAnyRole("Owner", "Admin", "Procurement", "Finance");
-  const canSeeCollections  = hasAnyRole("Owner", "Admin", "HubStaff", "Procurement", "Finance");
-  const canSeeHubSales     = hasAnyRole("Owner", "Finance", "Admin", "HubStaff");
-  const canManageClients   = hasAnyRole("Owner", "Finance", "Admin", "Procurement");
-  const canSeeStaff        = hasAnyRole("Owner", "Finance", "Admin");
-  const isOwner            = hasRole("Owner");
+  const branchMode = isBranchUser();
+  const bp = (key: string) => branchMode && hasBranchPermission(key);
+
+  const isOperational      = branchMode ? false : hasAnyRole("Owner", "Finance", "Admin", "HubStaff", "Procurement");
+  const isFinancial        = branchMode ? false : hasAnyRole("Owner", "Finance", "Admin");
+  const canSeePettyCash    = branchMode ? bp("petty-cash") : hasAnyRole("Owner", "Finance", "Admin");
+  const isUserManager      = branchMode ? false : hasAnyRole("Owner", "Admin");
+  const isDriverRole       = !branchMode && hasRole("Driver");
+  const isProcurement      = branchMode ? false : hasAnyRole("Owner", "Admin", "Procurement", "Finance");
+  const canSeeCollections  = branchMode ? bp("collections")     : hasAnyRole("Owner", "Admin", "HubStaff", "Procurement", "Finance");
+  const canSeeHubSales     = branchMode ? bp("hub-sales")       : hasAnyRole("Owner", "Finance", "Admin", "HubStaff");
+  const canManageClients   = branchMode ? bp("clients")         : hasAnyRole("Owner", "Finance", "Admin", "Procurement");
+  const canSeeStaff        = branchMode ? bp("staff")           : hasAnyRole("Owner", "Finance", "Admin");
+  const isOwner            = branchMode ? false : hasRole("Owner");
+  const isMasterRole       = !branchMode && hasRole("Master");
+
+  // Branch-specific permission aliases
+  const bpSlaughter        = bp("slaughter");
+  const bpDeadStock        = bp("dead-stock");
+  const bpSpecies          = bp("species");
+  const bpReports          = branchMode ? bp("reports")         : isOperational;
+  const bpInvoices         = branchMode ? bp("invoices")        : isFinancial;
+  const bpStatements       = branchMode ? bp("statements")      : isFinancial;
+  const bpRecon            = branchMode ? bp("recon")           : isFinancial;
+  const bpSalesSummary     = branchMode ? bp("sales-summary")   : isFinancial;
+  const bpStockMovement    = branchMode ? bp("stock-movement")  : isFinancial;
+  const bpCostAverages     = branchMode ? bp("cost-averages")   : isFinancial;
+  const bpProcurement      = branchMode ? bp("procurement-orders") : isProcurement;
+  const bpInbound          = branchMode ? bp("inbound-shipments")  : isProcurement;
+  const bpSuppliers        = branchMode ? bp("suppliers")       : hasAnyRole("Owner", "Admin", "Procurement");
+  const bpVehicleTracking  = branchMode ? bp("vehicle-tracking"): isFinancial;
+  const bpFleet            = branchMode ? bp("fleet")           : isUserManager;
+  const bpFuel             = branchMode ? bp("fuel")            : isUserManager;
 
   const [menuOpen,     setMenuOpen]     = useState(false);
   const [openGroup,    setOpenGroup]    = useState<string | null>(null);
@@ -96,67 +118,67 @@ export default function NavBar() {
 
     // Sales group
     const salesItems: Leaf[] = [];
-    if (canSeeHubSales)    salesItems.push(leaf("Hub Sales",           "/app/hub-sales"));
-    if (canSeeHubSales)    salesItems.push(leaf("Client Accounts",    "/app/client-accounts"));
-    if (canSeeCollections) salesItems.push(leaf("Collections",        "/app/collection-requests"));
-    if (isOperational)     salesItems.push(leaf("Slaughter",          "/app/slaughter"));
-    if (isUserManager)     salesItems.push(leaf("Dead Stock",          "/app/stock-losses"));
+    if (canSeeHubSales)                         salesItems.push(leaf("Hub Sales",       "/app/hub-sales"));
+    if (canSeeHubSales || bp("client-accounts")) salesItems.push(leaf("Client Accounts", "/app/client-accounts"));
+    if (canSeeCollections)                      salesItems.push(leaf("Collections",     "/app/collection-requests"));
+    if (isOperational || bpSlaughter)           salesItems.push(leaf("Slaughter",       "/app/slaughter"));
+    if (isUserManager  || bpDeadStock)          salesItems.push(leaf("Dead Stock",       "/app/stock-losses"));
     if (salesItems.length) entries.push(group("Sales", salesItems));
 
-    // Stock — Species as a top-level leaf (no longer a group)
-    if (isOperational)    entries.push(leaf("Species", "/app/hub-tasks", "species"));
+    // Stock — Species as a top-level leaf
+    if (isOperational || bpSpecies) entries.push(leaf("Species", "/app/hub-tasks", "species"));
 
     // Clients as a top-level leaf
     if (canManageClients) entries.push(leaf("Clients", "/app/hub-tasks", "clients"));
 
     // Reports group
     const reportItems: Leaf[] = [];
-    if (isOperational) reportItems.push(leaf("Reports", "/app/reports"));
-    if (isFinancial)   reportItems.push(leaf("Ask Mooks", "/app/ai-reports"));
+    if (bpReports)  reportItems.push(leaf("Reports",   "/app/reports"));
+    if (isFinancial) reportItems.push(leaf("Ask Mooks", "/app/ai-reports"));
     if (reportItems.length === 1) entries.push(reportItems[0]);
     else if (reportItems.length > 1) entries.push(group("Reports", reportItems));
 
     // Finance group
     const financeItems: Leaf[] = [];
-    if (isFinancial) {
-      financeItems.push(leaf("Invoices",        "/app/reports",         "invoices"));
-      financeItems.push(leaf("Statements",      "/app/reports",         "statement"));
-      financeItems.push(leaf("Recon",           "/app/recon"));
-      financeItems.push(leaf("Sales Summary",      "/app/sales-summary"));
-      financeItems.push(leaf("Stock Movement",     "/app/stock-movement"));
-      financeItems.push(leaf("Client Accounts", "/app/client-accounts"));
-      financeItems.push(leaf("Cost Averages",   "/app/cost-averages"));
-    }
-    if (canSeePettyCash) {
-      financeItems.push(leaf("Petty Cash", "/app/petty-cash"));
-    }
+    if (bpInvoices)      financeItems.push(leaf("Invoices",      "/app/reports",       "invoices"));
+    if (bpStatements)    financeItems.push(leaf("Statements",    "/app/reports",       "statement"));
+    if (bpRecon)         financeItems.push(leaf("Recon",         "/app/recon"));
+    if (bpSalesSummary)  financeItems.push(leaf("Sales Summary", "/app/sales-summary"));
+    if (bpStockMovement) financeItems.push(leaf("Stock Movement","/app/stock-movement"));
+    if (isFinancial)     financeItems.push(leaf("Client Accounts","/app/client-accounts"));
+    if (bpCostAverages)  financeItems.push(leaf("Cost Averages", "/app/cost-averages"));
+    if (canSeePettyCash) financeItems.push(leaf("Petty Cash",    "/app/petty-cash"));
     if (financeItems.length) entries.push(group("Finance", financeItems));
 
     // Procurement group
     const procItems: Leaf[] = [];
-    if (isProcurement)                            procItems.push(leaf("Orders",    "/app/procurement-orders"));
-    if (isProcurement)                            procItems.push(leaf("Inbound",   "/app/inbound-shipments"));
-    if (hasAnyRole("Owner", "Admin", "Procurement")) procItems.push(leaf("Suppliers", "/app/suppliers"));
+    if (bpProcurement) procItems.push(leaf("Orders",    "/app/procurement-orders"));
+    if (bpInbound)     procItems.push(leaf("Inbound",   "/app/inbound-shipments"));
+    if (bpSuppliers)   procItems.push(leaf("Suppliers", "/app/suppliers"));
     if (procItems.length) entries.push(group("Procurement", procItems));
 
     // Admin group
     const adminItems: Leaf[] = [];
-    if (canSeeStaff)   adminItems.push(leaf("Staff",            "/app/staff-members"));
-    if (isUserManager) adminItems.push(leaf("Users",            "/app/users"));
-    if (isUserManager) adminItems.push(leaf("Price Approvals",  "/app/price-approvals"));
-    if (isOwner)       adminItems.push(leaf("Settings",         "/app/settings"));
+    if (canSeeStaff)   adminItems.push(leaf("Staff",           "/app/staff-members"));
+    if (isUserManager) adminItems.push(leaf("Users",           "/app/users"));
+    if (isUserManager) adminItems.push(leaf("Price Approvals", "/app/price-approvals"));
+    if (isOwner)       adminItems.push(leaf("Settings",        "/app/settings"));
+    if (isMasterRole)  adminItems.push(leaf("Branches",        "/app/branches"));
     if (adminItems.length) entries.push(group("Admin", adminItems));
 
-    if (isFinancial) entries.push(leaf("Vehicle Tracking", "/app/vehicle-tracking"));
+    if (bpVehicleTracking) entries.push(leaf("Vehicle Tracking", "/app/vehicle-tracking"));
 
-    if (isUserManager) {
-      entries.push(group("Fleet", [
-        leaf("Vehicles",  "/app/fleet"),
-        leaf("Sites",     "/app/sites"),
-        leaf("Dip Tanks", "/app/dip-tanks"),
-        leaf("Fuel",        "/app/fuel"),
-        leaf("Fuel Report", "/app/fuel-report"),
-      ]));
+    if (isUserManager || bpFleet) {
+      const fleetItems: Leaf[] = [leaf("Vehicles", "/app/fleet")];
+      if (isUserManager) {
+        fleetItems.push(leaf("Sites", "/app/sites"));
+        fleetItems.push(leaf("Dip Tanks", "/app/dip-tanks"));
+      }
+      if (bpFuel || isUserManager) {
+        fleetItems.push(leaf("Fuel", "/app/fuel"));
+        fleetItems.push(leaf("Fuel Report", "/app/fuel-report"));
+      }
+      entries.push(group("Fleet", fleetItems));
     }
 
     entries.push(leaf("Help", "/app/help"));

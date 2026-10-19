@@ -1,50 +1,77 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { hasRole, isLoggedIn, login, saveAuthTokens } from "../api/auth";
+import { hasRole, isLoggedIn, login, saveAuthTokens, saveBranchAuth } from "../api/auth";
+import { branchLogin } from "../api/branchesApi";
 import PinInput from "../components/PinInput";
 
 export default function LoginPage() {
   const nav = useNavigate();
 
+  const [tab, setTab] = useState<"staff" | "branch">("staff");
+
+  // Staff login
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
   const [pin, setPin] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Branch login
+  const [branchUsername, setBranchUsername] = useState("");
+  const [branchPin, setBranchPin]           = useState("");
+  const [branchLoading, setBranchLoading]   = useState(false);
+  const [branchError, setBranchError]       = useState<string | null>(null);
 
   // If already logged in, skip this screen
   useEffect(() => {
     if (isLoggedIn()) nav(hasRole("Driver") ? "/driver" : "/app", { replace: true });
   }, [nav]);
 
-  const canSubmit = useMemo(() => {
-    return usernameOrEmail.trim().length > 0 && pin.length === 6 && !loading;
-  }, [usernameOrEmail, pin, loading]);
+  const canSubmit = useMemo(
+    () => usernameOrEmail.trim().length > 0 && pin.length === 6 && !loading,
+    [usernameOrEmail, pin, loading]
+  );
+
+  const canBranchSubmit = useMemo(
+    () => branchUsername.trim().length > 0 && branchPin.length >= 4 && !branchLoading,
+    [branchUsername, branchPin, branchLoading]
+  );
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-
     if (!canSubmit) return;
-
     try {
       setLoading(true);
-
-      // backend expects { usernameOrEmail, password }
       const resp = await login(usernameOrEmail.trim(), pin);
-
       saveAuthTokens(resp);
       nav(hasRole("Driver") ? "/driver" : "/app", { replace: true });
     } catch (err: any) {
       const msg = String(err?.message ?? "");
-      if (msg.toLowerCase().includes("incorrect") || msg.toLowerCase().includes("unauthorized")) {
-        setError("Incorrect username or PIN. Please try again.");
-      } else {
-        setError(msg || "Login failed. Please try again.");
-      }
-    } finally {
-      setLoading(false);
-    }
+      setError(
+        msg.toLowerCase().includes("incorrect") || msg.toLowerCase().includes("unauthorized")
+          ? "Incorrect username or PIN. Please try again."
+          : msg || "Login failed. Please try again."
+      );
+    } finally { setLoading(false); }
+  }
+
+  async function onBranchSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setBranchError(null);
+    if (!canBranchSubmit) return;
+    try {
+      setBranchLoading(true);
+      const resp = await branchLogin(branchUsername.trim(), branchPin);
+      saveBranchAuth(resp.token, {
+        username:   resp.username,
+        hubId:      resp.branchId,
+        branchName: resp.branchName,
+        permissions: resp.permissions,
+      }, resp.expiresIn);
+      nav("/app", { replace: true });
+    } catch (err: any) {
+      setBranchError(err?.message || "Branch login failed. Please try again.");
+    } finally { setBranchLoading(false); }
   }
 
   return (
@@ -52,41 +79,47 @@ export default function LoginPage() {
       <div style={s.card}>
         <div style={s.header}>
           <img src="/logo.jpeg" alt="KwaWicks logo" style={s.logoImg} />
-
         </div>
 
-        <form onSubmit={onSubmit} style={s.form} aria-label="Login form">
-          <label style={s.label}>
-            Username / Email
-            <input
-              style={s.input}
-              value={usernameOrEmail}
-              onChange={(e) => setUsernameOrEmail(e.target.value)}
-              placeholder="Enter your username"
-              autoComplete="username"
-              disabled={loading}
-            />
-          </label>
+        {/* Login type tabs */}
+        <div style={s.tabs}>
+          <button style={{ ...s.tabBtn, ...(tab === "staff"  ? s.tabActive : {}) }} onClick={() => setTab("staff")}>Staff Login</button>
+          <button style={{ ...s.tabBtn, ...(tab === "branch" ? s.tabActive : {}) }} onClick={() => setTab("branch")}>Branch Login</button>
+        </div>
 
-          <label style={s.label}>
-            PIN (6 digits)
-            <div style={s.pwRow}>
-              <PinInput value={pin} onChange={setPin} disabled={loading} />
-            </div>
-          </label>
-
-          {error && (
-            <div style={s.error} role="alert">
-              {error}
-            </div>
-          )}
-
-          <button type="submit" style={{ ...s.btn, opacity: canSubmit ? 1 : 0.6 }} disabled={!canSubmit}>
-            {loading ? "Signing in..." : "Sign in"}
-          </button>
-
-          <div style={s.help}>Need help? Contact your admin.</div>
-        </form>
+        {tab === "staff" ? (
+          <form onSubmit={onSubmit} style={s.form} aria-label="Staff login form">
+            <label style={s.label}>
+              Username / Email
+              <input style={s.input} value={usernameOrEmail} onChange={e => setUsernameOrEmail(e.target.value)} placeholder="Enter your username" autoComplete="username" disabled={loading} />
+            </label>
+            <label style={s.label}>
+              PIN (6 digits)
+              <div style={s.pwRow}><PinInput value={pin} onChange={setPin} disabled={loading} /></div>
+            </label>
+            {error && <div style={s.error} role="alert">{error}</div>}
+            <button type="submit" style={{ ...s.btn, opacity: canSubmit ? 1 : 0.6 }} disabled={!canSubmit}>
+              {loading ? "Signing in..." : "Sign in"}
+            </button>
+            <div style={s.help}>Need help? Contact your admin.</div>
+          </form>
+        ) : (
+          <form onSubmit={onBranchSubmit} style={s.form} aria-label="Branch login form">
+            <label style={s.label}>
+              Branch Username
+              <input style={s.input} value={branchUsername} onChange={e => setBranchUsername(e.target.value)} placeholder="Enter branch username" autoComplete="username" disabled={branchLoading} />
+            </label>
+            <label style={s.label}>
+              PIN
+              <div style={s.pwRow}><PinInput value={branchPin} onChange={setBranchPin} disabled={branchLoading} /></div>
+            </label>
+            {branchError && <div style={s.error} role="alert">{branchError}</div>}
+            <button type="submit" style={{ ...s.btn, opacity: canBranchSubmit ? 1 : 0.6 }} disabled={!canBranchSubmit}>
+              {branchLoading ? "Signing in..." : "Sign in"}
+            </button>
+            <div style={s.help}>Use the credentials set up by your Master user.</div>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -103,6 +136,28 @@ const s: Record<string, React.CSSProperties> = {
     background: "#f1f2f5",
     color: "#111827",
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+  },
+
+  tabs: {
+    display: "flex",
+    borderBottom: "2px solid #e5e7eb",
+    marginBottom: 20,
+  },
+  tabBtn: {
+    flex: 1,
+    background: "none",
+    border: "none",
+    padding: "10px 0",
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: "pointer",
+    color: "#6b7280",
+    borderBottom: "2px solid transparent",
+    marginBottom: -2,
+  },
+  tabActive: {
+    color: "#16a34a",
+    borderBottom: "2px solid #16a34a",
   },
 
   card: {
