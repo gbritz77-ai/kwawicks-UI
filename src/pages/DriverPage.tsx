@@ -198,6 +198,7 @@ export default function DriverPage() {
     // Check if client has a WhatsApp number saved
     try {
       const client = await clientsApi.getById(order.customerId);
+      console.log("[DriverPage] openCompletion customerId=", order.customerId, "clientType=", client.clientType);
       setCompletingClientType(client.clientType ?? 0);
       if (client.clientType === 2) setPaymentType("Credit");
       const hasPhone = !!client.clientPhone?.trim() || !!client.clientContactDetails?.trim();
