@@ -3,7 +3,7 @@ import { fuelIssuesApi } from "../api/fuelIssuesApi";
 import { fleetApi } from "../api/fleetApi";
 import { dipTanksApi } from "../api/dipTanksApi";
 import { sitesApi } from "../api/sitesApi";
-import type { FuelIssueDto, CreateFuelIssueRequest, VehicleFuelReportDto, MonthlyFuelDto } from "../api/fuelIssuesApi";
+import type { FuelIssueDto, CreateFuelIssueRequest, UpdateFuelIssueRequest, VehicleFuelReportDto, MonthlyFuelDto } from "../api/fuelIssuesApi";
 import type { VehicleDto } from "../api/fleetApi";
 import type { DipTankDto } from "../api/dipTanksApi";
 import type { SiteDto } from "../api/sitesApi";
@@ -190,6 +190,15 @@ export default function FuelPage() {
   const [odoReading, setOdoReading] = useState<{ status: "idle" | "reading" | "ok" | "fail"; msg: string }>({ status: "idle", msg: "" });
   const [litresReading, setLitresReading] = useState<{ status: "idle" | "reading" | "ok" | "fail"; msg: string }>({ status: "idle", msg: "" });
 
+  // Filter
+  const [filterText, setFilterText] = useState("");
+
+  // Edit
+  const [editIssue, setEditIssue] = useState<FuelIssueDto | null>(null);
+  const [editForm, setEditForm] = useState<UpdateFuelIssueRequest>({});
+  const [editError, setEditError] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
+
   // Report filters
   const [report, setReport] = useState<VehicleFuelReportDto[] | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -286,6 +295,49 @@ export default function FuelPage() {
     } catch (e: any) { setFormError(e?.message ?? "Save failed."); }
     finally { setBusy(false); setUploadProgress(""); }
   }
+
+  function openEdit(issue: FuelIssueDto) {
+    setEditIssue(issue);
+    setEditForm({
+      vehicleId: issue.vehicleId,
+      fuelSource: issue.fuelSource,
+      tankId: issue.tankId,
+      tankIssuedBy: issue.tankIssuedBy,
+      supplierStation: issue.supplierStation,
+      siteId: issue.siteId,
+      litres: issue.litres,
+      odometerKm: issue.odometerKm,
+      costPerLitre: issue.costPerLitre,
+      reference: issue.reference,
+    });
+    setEditError("");
+  }
+
+  async function handleEditSave() {
+    if (!editIssue) return;
+    if (!editForm.litres || editForm.litres <= 0) { setEditError("Litres must be > 0."); return; }
+    setEditBusy(true); setEditError("");
+    try {
+      const updated = await fuelIssuesApi.update(editIssue.issueId, editForm);
+      setIssues(is => is.map(i => i.issueId === updated.issueId ? updated : i));
+      setEditIssue(null);
+    } catch (e: any) { setEditError(e?.message ?? "Save failed."); }
+    finally { setEditBusy(false); }
+  }
+
+  const filteredIssues = filterText.trim()
+    ? issues.filter(r => {
+        const q = filterText.toLowerCase();
+        return [
+          r.fleetNumber, r.fuelSource, r.tankName, r.supplierStation,
+          r.tankIssuedBy, r.issuedByName, r.siteName, r.reference,
+          String(r.litres), r.odometerKm != null ? String(r.odometerKm) : "",
+          r.costPerLitre != null ? String(r.costPerLitre) : "",
+          r.totalCost != null ? String(r.totalCost) : "",
+          new Date(r.issuedAt).toLocaleDateString("en-ZA"),
+        ].some(v => v.toLowerCase().includes(q));
+      })
+    : issues;
 
   const totalLitres = issues.reduce((sum, i) => sum + i.litres, 0);
   const totalCost = issues.reduce((sum, i) => sum + (i.totalCost ?? 0), 0);
@@ -442,45 +494,123 @@ export default function FuelPage() {
         </div>
       )}
 
+      {/* ── EDIT MODAL ── */}
+      {editIssue && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 24, width: "min(560px,95vw)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Edit Fuel Record</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+              <div style={{ gridColumn: "span 2" }}>
+                <label style={s.label}>Vehicle *</label>
+                <select style={s.input} value={editForm.vehicleId ?? ""} onChange={e => setEditForm(f => ({ ...f, vehicleId: e.target.value }))}>
+                  <option value="">Select vehicle…</option>
+                  {vehicles.map(v => <option key={v.vehicleId} value={v.vehicleId}>{v.fleetNumber}{v.registration ? ` (${v.registration})` : ""}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={s.label}>Litres *</label>
+                <input style={s.input} type="number" step="0.01" value={editForm.litres ?? ""} onChange={e => setEditForm(f => ({ ...f, litres: Number(e.target.value) }))} />
+              </div>
+              <div>
+                <label style={s.label}>Odometer (km)</label>
+                <input style={s.input} type="number" value={editForm.odometerKm ?? ""} onChange={e => setEditForm(f => ({ ...f, odometerKm: e.target.value ? Number(e.target.value) : null }))} />
+              </div>
+              <div>
+                <label style={s.label}>Cost per Litre (R)</label>
+                <input style={s.input} type="number" step="0.0001" value={editForm.costPerLitre ?? ""} onChange={e => setEditForm(f => ({ ...f, costPerLitre: e.target.value ? Number(e.target.value) : null }))} />
+              </div>
+              <div>
+                <label style={s.label}>Reference</label>
+                <input style={s.input} value={editForm.reference ?? ""} onChange={e => setEditForm(f => ({ ...f, reference: e.target.value }))} />
+              </div>
+              {editForm.fuelSource === "tank" && (
+                <>
+                  <div>
+                    <label style={s.label}>Tank Issued By</label>
+                    <input style={s.input} value={editForm.tankIssuedBy ?? ""} onChange={e => setEditForm(f => ({ ...f, tankIssuedBy: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={s.label}>Tank</label>
+                    <select style={s.input} value={editForm.tankId ?? ""} onChange={e => setEditForm(f => ({ ...f, tankId: e.target.value }))}>
+                      <option value="">Select tank…</option>
+                      {tanks.map(t => <option key={t.tankId} value={t.tankId}>{t.name}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
+              {editForm.fuelSource === "offsite" && (
+                <div style={{ gridColumn: "span 2" }}>
+                  <label style={s.label}>Supplier / Station</label>
+                  <input style={s.input} value={editForm.supplierStation ?? ""} onChange={e => setEditForm(f => ({ ...f, supplierStation: e.target.value }))} />
+                </div>
+              )}
+            </div>
+            {editError && <div style={s.formError}>{editError}</div>}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+              <button style={s.btnSecondary} onClick={() => setEditIssue(null)} disabled={editBusy}>Cancel</button>
+              <button style={s.btnPrimary} onClick={handleEditSave} disabled={editBusy}>{editBusy ? "Saving…" : "Save"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── ISSUES TABLE ── */}
       {tab === "issues" && (
         loading ? <div style={s.loadingText}>Loading…</div> :
         issues.length === 0 ? <div style={s.emptyText}>No fuel records yet.</div> : (
-          <div style={s.tableWrap}>
-            <table style={s.table}>
-              <thead>
-                <tr>
-                  {["Date", "Vehicle", "Source", "Tank / Station", "Issued By", "Litres", "Odometer", "Cost/L", "Total", "Slip"].map(h => (
-                    <th key={h} style={s.th}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {issues.map(r => (
-                  <tr key={r.issueId} style={s.tr}>
-                    <td style={s.td}>{fmtDate(r.issuedAt)}</td>
-                    <td style={{ ...s.td, fontWeight: 700, color: "#166534" }}>{r.fleetNumber || r.vehicleId}</td>
-                    <td style={s.td}>
-                      <span style={{ ...s.badge, background: r.fuelSource === "tank" ? "#dcfce7" : "#e0f2fe", color: r.fuelSource === "tank" ? "#166534" : "#0369a1" }}>
-                        {r.fuelSource === "tank" ? "🛢 Tank" : "⛽ Off Site"}
-                      </span>
-                    </td>
-                    <td style={s.td}>{r.fuelSource === "tank" ? (r.tankName || "—") : (r.supplierStation || "—")}</td>
-                    <td style={s.td}>{r.fuelSource === "tank" ? (r.tankIssuedBy || "—") : (r.issuedByName || "—")}</td>
-                    <td style={s.td}>{r.litres}L</td>
-                    <td style={s.td}>{r.odometerKm != null ? `${r.odometerKm.toLocaleString("en-ZA")} km` : "—"}</td>
-                    <td style={s.td}>{r.costPerLitre != null ? `R${r.costPerLitre}` : "—"}</td>
-                    <td style={s.td}>{r.totalCost != null ? `R${r.totalCost.toFixed(2)}` : "—"}</td>
-                    <td style={s.td}>
-                      {r.slipUrl
-                        ? <a href={r.slipUrl} target="_blank" rel="noreferrer" style={{ color: "#0284c7", fontSize: 12 }}>View</a>
-                        : <span style={{ color: "#cbd5e1", fontSize: 12 }}>—</span>}
-                    </td>
+          <>
+            <div style={{ marginBottom: 12 }}>
+              <input
+                style={{ ...s.input, maxWidth: 360 }}
+                placeholder="Filter by vehicle, driver, tank, date…"
+                value={filterText}
+                onChange={e => setFilterText(e.target.value)}
+              />
+              {filterText && (
+                <span style={{ marginLeft: 8, fontSize: 12, color: "#64748b" }}>
+                  {filteredIssues.length} of {issues.length} records
+                </span>
+              )}
+            </div>
+            <div style={s.tableWrap}>
+              <table style={s.table}>
+                <thead>
+                  <tr>
+                    {["Date", "Vehicle", "Source", "Tank / Station", "Issued By", "Litres", "Odometer", "Cost/L", "Total", "Slip", ""].map(h => (
+                      <th key={h} style={s.th}>{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filteredIssues.map(r => (
+                    <tr key={r.issueId} style={s.tr}>
+                      <td style={s.td}>{fmtDate(r.issuedAt)}</td>
+                      <td style={{ ...s.td, fontWeight: 700, color: "#166534" }}>{r.fleetNumber || r.vehicleId}</td>
+                      <td style={s.td}>
+                        <span style={{ ...s.badge, background: r.fuelSource === "tank" ? "#dcfce7" : "#e0f2fe", color: r.fuelSource === "tank" ? "#166534" : "#0369a1" }}>
+                          {r.fuelSource === "tank" ? "🛢 Tank" : "⛽ Off Site"}
+                        </span>
+                      </td>
+                      <td style={s.td}>{r.fuelSource === "tank" ? (r.tankName || "—") : (r.supplierStation || "—")}</td>
+                      <td style={s.td}>{r.fuelSource === "tank" ? (r.tankIssuedBy || "—") : (r.issuedByName || "—")}</td>
+                      <td style={s.td}>{r.litres}L</td>
+                      <td style={s.td}>{r.odometerKm != null ? `${r.odometerKm.toLocaleString("en-ZA")} km` : "—"}</td>
+                      <td style={s.td}>{r.costPerLitre != null ? `R${r.costPerLitre}` : "—"}</td>
+                      <td style={s.td}>{r.totalCost != null ? `R${r.totalCost.toFixed(2)}` : "—"}</td>
+                      <td style={s.td}>
+                        {r.slipUrl
+                          ? <a href={r.slipUrl} target="_blank" rel="noreferrer" style={{ color: "#0284c7", fontSize: 12 }}>View</a>
+                          : <span style={{ color: "#cbd5e1", fontSize: 12 }}>—</span>}
+                      </td>
+                      <td style={s.td}>
+                        <button style={s.editBtn} onClick={() => openEdit(r)}>Edit</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )
       )}
 
@@ -580,4 +710,5 @@ const s: Record<string, React.CSSProperties> = {
   chartSection: { background: "#f8fafc", borderRadius: 8, padding: "10px 12px" },
   chartLabel: { fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.05em" },
   expandBtn: { background: "none", border: "none", cursor: "pointer", color: "#64748b", fontSize: 12, padding: "4px 8px" },
+  editBtn: { background: "#f8fafc", color: "#374151", border: "1px solid #d1d5db", borderRadius: 5, padding: "4px 10px", fontSize: 12, cursor: "pointer", fontWeight: 500 },
 };

@@ -22,6 +22,19 @@ export type FuelIssueDto = {
   slipUrl: string | null;
 };
 
+export type UpdateFuelIssueRequest = {
+  vehicleId?: string;
+  fuelSource?: "tank" | "offsite";
+  tankId?: string;
+  tankIssuedBy?: string;
+  supplierStation?: string;
+  siteId?: string;
+  litres?: number;
+  odometerKm?: number | null;
+  costPerLitre?: number | null;
+  reference?: string;
+};
+
 export type CreateFuelIssueRequest = {
   vehicleId: string;
   fuelSource: "tank" | "offsite";
@@ -71,6 +84,8 @@ export const fuelIssuesApi = {
     if (to) q.set("to", to);
     return api.get<VehicleFuelReportDto[]>(`/api/fuel/report${q.toString() ? "?" + q : ""}`);
   },
+  update: (id: string, req: UpdateFuelIssueRequest) =>
+    api.patch<FuelIssueDto>(`/api/fuel/${id}`, req),
   readImage: (imageBase64: string, mediaType: string, field: "odometer" | "litres") =>
     api.post<{ value: number | null; message: string | null }>("/api/fuel/read-image", { imageBase64, mediaType, field }),
 };
