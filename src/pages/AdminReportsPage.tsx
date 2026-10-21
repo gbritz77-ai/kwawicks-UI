@@ -2229,31 +2229,22 @@ function InvoicesTab({
                     <Td>
                       <div style={{ display: "flex", flexDirection: "column" as const, gap: 4, alignItems: "flex-start" }}>
                         {inv.paymentStatus === "Pending" && (() => {
-                          const hardBlocked = isAccountCredit && creditNegative && !canOverrideNegativeBalance;
-                          const isCreditType = inv.paymentType === "Credit";
-                          if (isCreditType) {
+                          const needsMasterConfirm = ["EFT", "CardMachine", "Split"].includes(inv.paymentType);
+                          if (!needsMasterConfirm) return null;
+                          if (!isMaster) {
                             return (
-                              <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 600 }} title="Credit invoices are confirmed via Bank Reconciliation">
-                                Via Bank Recon
+                              <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 600 }} title="Only Master can confirm this payment">
+                                ⏳ Awaiting Master
                               </span>
                             );
                           }
                           return (
                             <button
-                              disabled={confirming === inv.invoiceId || (isAccountCredit && creditBal === undefined) || hardBlocked}
+                              disabled={confirming === inv.invoiceId}
                               onClick={() => handleConfirm(inv.invoiceId, inv.customerId, inv.paymentType)}
-                              style={{
-                                ...s.confirmBtn,
-                                ...(hardBlocked ? { background: "#94a3b8", cursor: "not-allowed" }
-                                  : isAccountCredit && creditNegative ? { background: "#f59e0b" } : {}),
-                              }}
-                              title={
-                                hardBlocked ? "Credit balance is negative — client must top up first"
-                                  : isAccountCredit && creditNegative ? "Balance is negative — click to confirm with an override"
-                                  : undefined
-                              }
+                              style={s.confirmBtn}
                             >
-                              {confirming === inv.invoiceId ? "…" : isAccountCredit && creditNegative ? "⚠ Confirm" : "Confirm"}
+                              {confirming === inv.invoiceId ? "…" : "Confirm"}
                             </button>
                           );
                         })()}
