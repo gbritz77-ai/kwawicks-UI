@@ -103,7 +103,6 @@ export default function StockMovementReportPage() {
   type DriverRow = { driver: string; deadQty: number; overQty: number; shortQty: number; species: DriverSpeciesLine[] };
   const driverRows = useMemo((): DriverRow[] => {
     if (!loaded) return [];
-    // driver → speciesId → line
     const map = new Map<string, Map<string, DriverSpeciesLine>>();
     for (const cr of crs) {
       if ((cr.supplierName || "").toLowerCase() === "hub") continue;
@@ -136,6 +135,27 @@ export default function StockMovementReportPage() {
       .sort((a, b) => a.driver.localeCompare(b.driver));
   }, [loaded, crs, appliedFrom, appliedTo]);
 
+  // Hub adjustment breakdown (Dead / Over / Short from Hub collection requests)
+  const hubSpeciesRows = useMemo((): DriverSpeciesLine[] => {
+    if (!loaded) return [];
+    const specMap = new Map<string, DriverSpeciesLine>();
+    for (const cr of crs) {
+      if ((cr.supplierName || "").toLowerCase() !== "hub") continue;
+      const date = (cr.collectionDate ?? cr.createdAt).slice(0, 10);
+      if (appliedFrom && date < appliedFrom) continue;
+      if (appliedTo   && date > appliedTo)   continue;
+      for (const line of cr.lines) {
+        if (!line.deadQty && !line.overQty && !line.shortQty) continue;
+        if (!specMap.has(line.speciesId)) specMap.set(line.speciesId, { speciesName: line.speciesName, deadQty: 0, overQty: 0, shortQty: 0 });
+        const g = specMap.get(line.speciesId)!;
+        g.deadQty  += line.deadQty  ?? 0;
+        g.overQty  += line.overQty  ?? 0;
+        g.shortQty += line.shortQty ?? 0;
+      }
+    }
+    return Array.from(specMap.values()).sort((a, b) => a.speciesName.localeCompare(b.speciesName));
+  }, [loaded, crs, appliedFrom, appliedTo]);
+
   const reportRows = useMemo((): ReportRow[] => {
     if (!loaded) return [];
 
@@ -148,25 +168,26 @@ export default function StockMovementReportPage() {
     const adjustBySpecies:     Record<string, AdjustmentLine[]>  = {};
 
     for (const cr of crs) {
-      if ((cr.supplierName || "").toLowerCase() === "hub") continue;
+      const isHub = (cr.supplierName || "").toLowerCase() === "hub";
       const date = (cr.collectionDate ?? cr.createdAt).slice(0, 10);
       if (appliedFrom && date < appliedFrom) continue;
       if (appliedTo   && date > appliedTo)   continue;
-      const driver = cr.assignedDriverName || cr.supplierName || "—";
+      const source = isHub ? "Hub" : (cr.assignedDriverName || cr.supplierName || "—");
       for (const line of cr.lines) {
-        if (line.loadedQty > 0)
+        // Loaded qty only applies to driver runs, not Hub
+        if (!isHub && line.loadedQty > 0)
           loaded_qty[line.speciesId] = (loaded_qty[line.speciesId] ?? 0) + line.loadedQty;
         if (line.deadQty > 0) {
           deaths_qty[line.speciesId] = (deaths_qty[line.speciesId] ?? 0) + line.deadQty;
-          (adjustBySpecies[line.speciesId] ??= []).push({ date, type: "under", notes: driver, qty: line.deadQty });
+          (adjustBySpecies[line.speciesId] ??= []).push({ date, type: "under", notes: source, qty: line.deadQty });
         }
         if (line.shortQty > 0) {
           short_qty[line.speciesId] = (short_qty[line.speciesId] ?? 0) + line.shortQty;
-          (adjustBySpecies[line.speciesId] ??= []).push({ date, type: "short", notes: driver, qty: line.shortQty });
+          (adjustBySpecies[line.speciesId] ??= []).push({ date, type: "short", notes: source, qty: line.shortQty });
         }
         if (line.overQty > 0) {
           surplus_qty[line.speciesId] = (surplus_qty[line.speciesId] ?? 0) + line.overQty;
-          (adjustBySpecies[line.speciesId] ??= []).push({ date, type: "over", notes: driver, qty: line.overQty });
+          (adjustBySpecies[line.speciesId] ??= []).push({ date, type: "over", notes: source, qty: line.overQty });
         }
       }
     }
@@ -414,6 +435,60 @@ export default function StockMovementReportPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Hub adjustment breakdown */}
+          {hubSpeciesRows.length > 0 && (
+            <div style={{ marginTop: 32 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#374151", marginBottom: 10 }}>
+                Hub Adjustment Summary
+              </h3>
+              <div style={s.scrollWrap}>
+                <table style={s.table}>
+                  <thead>
+                    <tr>
+                      <th style={s.th}>Species</th>
+                      <th style={{ ...s.th, ...s.right, color: "#dc2626" }}>Dead QTY</th>
+                      <th style={{ ...s.th, ...s.right, color: "#16a34a" }}>Over QTY</th>
+                      <th style={{ ...s.th, ...s.right, color: "#d97706" }}>Short QTY</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hubSpeciesRows.map((sp, i) => (
+                      <tr key={sp.speciesName} style={i % 2 === 0 ? s.rowEven : s.rowOdd}>
+                        <td style={{ ...s.td, fontWeight: 600 }}>{sp.speciesName}</td>
+                        <td style={{ ...s.td, ...s.right, color: sp.deadQty  > 0 ? "#dc2626" : "#9ca3af" }}>
+                          {sp.deadQty  > 0 ? `−${sp.deadQty.toLocaleString()}`  : "—"}
+                        </td>
+                        <td style={{ ...s.td, ...s.right, color: sp.overQty  > 0 ? "#16a34a" : "#9ca3af" }}>
+                          {sp.overQty  > 0 ? `+${sp.overQty.toLocaleString()}`  : "—"}
+                        </td>
+                        <td style={{ ...s.td, ...s.right, color: sp.shortQty > 0 ? "#d97706" : "#9ca3af" }}>
+                          {sp.shortQty > 0 ? `−${sp.shortQty.toLocaleString()}` : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: "#f0fdf4", borderTop: "2px solid #bbf7d0" }}>
+                      <td style={{ ...s.td, fontWeight: 700 }}>Total</td>
+                      <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#dc2626" }}>
+                        {hubSpeciesRows.reduce((s, r) => s + r.deadQty,  0) > 0
+                          ? `−${hubSpeciesRows.reduce((s, r) => s + r.deadQty,  0).toLocaleString()}` : "—"}
+                      </td>
+                      <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#16a34a" }}>
+                        {hubSpeciesRows.reduce((s, r) => s + r.overQty,  0) > 0
+                          ? `+${hubSpeciesRows.reduce((s, r) => s + r.overQty,  0).toLocaleString()}` : "—"}
+                      </td>
+                      <td style={{ ...s.td, ...s.right, fontWeight: 700, color: "#d97706" }}>
+                        {hubSpeciesRows.reduce((s, r) => s + r.shortQty, 0) > 0
+                          ? `−${hubSpeciesRows.reduce((s, r) => s + r.shortQty, 0).toLocaleString()}` : "—"}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
           )}
 
