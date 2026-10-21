@@ -61,6 +61,7 @@ export default function DriverPage() {
 
   // Delivery completion flow
   const [completing, setCompleting] = useState<DeliveryOrderResponse | null>(null);
+  const [completingClientType, setCompletingClientType] = useState<number | null>(null);
   const [step, setStep] = useState<CompletionStep>("returns");
   const [returnLines, setReturnLines] = useState<ReturnLine[]>([]);
   const [paymentType, setPaymentType] = useState<PaymentType>("Credit");
@@ -182,7 +183,8 @@ export default function DriverPage() {
     setCreatedInvoiceId(null);
     setReceiptFile(null);
     setReceiptDone(false);
-    setPaymentType("Credit");
+    setPaymentType("Cash");
+    setCompletingClientType(null);
     setSplitLines([{ method: "Cash", amount: "" }, { method: "CardMachine", amount: "" }]);
     setClientPhone("");
     setReturnLines(
@@ -196,6 +198,8 @@ export default function DriverPage() {
     // Check if client has a WhatsApp number saved
     try {
       const client = await clientsApi.getById(order.customerId);
+      setCompletingClientType(client.clientType ?? 0);
+      if (client.clientType === 2) setPaymentType("Credit");
       const hasPhone = !!client.clientPhone?.trim() || !!client.clientContactDetails?.trim();
       setClientHasPhone(hasPhone);
       if (hasPhone) setClientPhone(client.clientPhone?.trim() || client.clientContactDetails?.trim() || "");
@@ -646,7 +650,9 @@ export default function DriverPage() {
                 <div style={s.paymentSection}>
                   <div style={s.paymentHeading}>Payment Method</div>
                   <div style={s.paymentOptions}>
-                    {(["Cash", "EFT", "CardMachine", "Credit", "Split"] as PaymentType[]).map((pt) => (
+                    {(["Cash", "EFT", "CardMachine", "Credit", "Split"] as PaymentType[])
+                      .filter(pt => pt !== "Credit" || completingClientType === 2)
+                      .map((pt) => (
                       <button key={pt} style={{ ...s.paymentOption, ...(paymentType === pt ? s.paymentOptionActive : {}) }} onClick={() => setPaymentType(pt)} disabled={completionBusy}>
                         {pt === "Cash" && "💵 "}
                         {pt === "EFT" && "📱 "}
