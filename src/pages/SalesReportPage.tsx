@@ -12,8 +12,9 @@ function iso(d: Date) {
 }
 
 function defaultRange() {
-  const to   = new Date();
-  const from = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const now   = new Date();
+  const from  = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const to    = new Date(now.getFullYear(), now.getMonth(), 0);
   return { from: iso(from), to: iso(to) };
 }
 
