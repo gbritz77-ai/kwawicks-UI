@@ -27,6 +27,7 @@ export type BankTransactionResponse = {
   duplicateOfStatementFileName: string;
   duplicateOfAllocationSummary: string;
   duplicateOfAllocatedAt: string | null;
+  isSkipped: boolean;
 };
 
 export type BankStatementResponse = {
@@ -42,6 +43,7 @@ export type BankStatementResponse = {
   uploadedAt: string;
   transactions: BankTransactionResponse[];
   possibleDuplicates: BankTransactionResponse[];
+  skipped: BankTransactionResponse[];
 };
 
 export type BankStatementSummaryResponse = {
@@ -260,6 +262,26 @@ export const bankStatementsApi = {
     api.put<AllocateResponse>(
       `/api/bank-statements/${statementId}/transactions/${transactionId}/split-client-credit`,
       req
+    ),
+
+  /** Mark a possible-duplicate transaction as skipped. Returns updated statement. */
+  skip: (statementId: string, transactionId: string) =>
+    api.post<BankStatementResponse>(
+      `/api/bank-statements/${statementId}/transactions/${transactionId}/skip`,
+      {}
+    ),
+
+  /** Unskip a previously-skipped transaction. Returns updated statement. */
+  unskip: (statementId: string, transactionId: string) =>
+    api.del<BankStatementResponse>(
+      `/api/bank-statements/${statementId}/transactions/${transactionId}/skip`
+    ),
+
+  /** Skip all possible-duplicate transactions on a statement at once. Returns updated statement. */
+  skipAllDuplicates: (statementId: string) =>
+    api.post<BankStatementResponse>(
+      `/api/bank-statements/${statementId}/skip-all-duplicates`,
+      {}
     ),
 
   /** Delete a bank statement CSV (only if no transactions are allocated). */

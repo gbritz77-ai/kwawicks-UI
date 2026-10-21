@@ -100,6 +100,7 @@ function BankStatementsTab() {
   const [txAllocFilter, setTxAllocFilter] = useState<"all"|"unallocated"|"allocated">("unallocated");
   const [txSearch,      setTxSearch]      = useState("");
   const [showDuplicates, setShowDuplicates] = useState(false);
+  const [showSkipped,    setShowSkipped]    = useState(false);
 
   // Selected transaction
   const [activeTx, setActiveTx] = useState<BankTransactionResponse | null>(null);
@@ -479,6 +480,33 @@ function BankStatementsTab() {
       if (activeTx?.transactionId === tx.transactionId) resetRightPanel();
       await loadStatements();
     } catch (e: any) { setError(e?.message ?? "Failed to deallocate."); }
+  }
+
+  async function skipTx(tx: BankTransactionResponse) {
+    if (!selected) return;
+    try {
+      const updated = await bankStatementsApi.skip(selected.statementId, tx.transactionId);
+      setSelected(updated);
+      await loadStatements();
+    } catch (e: any) { setError(e?.message ?? "Failed to skip transaction."); }
+  }
+
+  async function unskipTx(tx: BankTransactionResponse) {
+    if (!selected) return;
+    try {
+      const updated = await bankStatementsApi.unskip(selected.statementId, tx.transactionId);
+      setSelected(updated);
+      await loadStatements();
+    } catch (e: any) { setError(e?.message ?? "Failed to unskip transaction."); }
+  }
+
+  async function skipAllDups() {
+    if (!selected) return;
+    try {
+      const updated = await bankStatementsApi.skipAllDuplicates(selected.statementId);
+      setSelected(updated);
+      await loadStatements();
+    } catch (e: any) { setError(e?.message ?? "Failed to skip duplicates."); }
   }
 
   // ── Filtered transactions ─────────────────────────────────────────────────
@@ -1129,9 +1157,17 @@ function BankStatementsTab() {
                 </div>
                 {dupsSectionOpen && (
                   <div style={sp.dupList}>
-                    <div style={sp.dupNote}>
-                      These {txTypeFilter === "Debit" ? "debits" : "credits"} match the date + amount of a transaction already reconciled under a different statement upload —
-                      likely from overlapping date ranges between exports. Verify before allocating.
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, flexWrap: "wrap" as const }}>
+                      <div style={sp.dupNote}>
+                        These {txTypeFilter === "Debit" ? "debits" : "credits"} match the date + amount of a transaction already reconciled under a different statement upload —
+                        likely from overlapping date ranges between exports. Verify before allocating.
+                      </div>
+                      <button
+                        style={{ flexShrink: 0, padding: "4px 10px", fontSize: 12, fontWeight: 600, background: "#fef3c7", color: "#92400e", border: "1px solid #fcd34d", borderRadius: 6, cursor: "pointer" }}
+                        onClick={e => { e.stopPropagation(); skipAllDups(); }}
+                      >
+                        Skip All Duplicates
+                      </button>
                     </div>
                     {visibleDups.map(tx => {
                       const isActive = activeTx?.transactionId === tx.transactionId;
@@ -1151,13 +1187,60 @@ function BankStatementsTab() {
                             ⚠ Already reconciled in <strong>{tx.duplicateOfStatementFileName}</strong> as {tx.duplicateOfAllocationSummary || "an allocation"}
                             {tx.duplicateOfAllocatedAt && <> on {fmtDate(tx.duplicateOfAllocatedAt)}</>}
                           </div>
-                          <div style={sp.txSelectHint}>{isActive ? "↗ Select an invoice or entry →" : "Click to allocate anyway"}</div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                            <div style={sp.txSelectHint}>{isActive ? "↗ Select an invoice or entry →" : "Click to allocate anyway"}</div>
+                            <button
+                              style={{ padding: "2px 8px", fontSize: 11, fontWeight: 600, background: "#f3f4f6", color: "#374151", border: "1px solid #d1d5db", borderRadius: 4, cursor: "pointer" }}
+                              onClick={e => { e.stopPropagation(); skipTx(tx); }}
+                            >
+                              Skip
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
                   </div>
                 )}
               </div>
+              );
+            })()}
+
+            {/* Skipped transactions */}
+            {(() => {
+              const skipped = selected?.skipped ?? [];
+              if (skipped.length === 0) return null;
+              return (
+                <div style={{ ...sp.dupSection, borderColor: "#d1d5db", background: "#f9fafb" }}>
+                  <div style={{ ...sp.dupHeader, background: "#f3f4f6", color: "#6b7280" }} onClick={() => setShowSkipped(v => !v)}>
+                    <span>↷ Skipped ({skipped.length})</span>
+                    <span>{showSkipped ? "▲" : "▼"}</span>
+                  </div>
+                  {showSkipped && (
+                    <div style={sp.dupList}>
+                      <div style={{ ...sp.dupNote, color: "#6b7280" }}>
+                        These transactions were dismissed as overlapping duplicates. They are not counted as unallocated.
+                      </div>
+                      {skipped.map(tx => (
+                        <div key={tx.transactionId} style={{ ...sp.txRow, opacity: 0.7 }}>
+                          <div style={sp.txTop}>
+                            <span style={sp.txDate}>{fmtDate(tx.date)}</span>
+                            <span style={sp.txAmount}>{fmt(tx.amount)}</span>
+                          </div>
+                          <div style={sp.txDesc}>{tx.description}</div>
+                          {tx.reference && <div style={sp.txRef}>{tx.reference}</div>}
+                          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+                            <button
+                              style={{ padding: "2px 8px", fontSize: 11, fontWeight: 600, background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 4, cursor: "pointer" }}
+                              onClick={() => unskipTx(tx)}
+                            >
+                              Unskip
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               );
             })()}
           </div>
