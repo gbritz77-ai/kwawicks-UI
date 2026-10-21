@@ -64,7 +64,7 @@ export default function DriverPage() {
   const [completingClientType, setCompletingClientType] = useState<number | null>(null);
   const [step, setStep] = useState<CompletionStep>("returns");
   const [returnLines, setReturnLines] = useState<ReturnLine[]>([]);
-  const [paymentType, setPaymentType] = useState<PaymentType>("Credit");
+  const [paymentType, setPaymentType] = useState<PaymentType>("Cash");
   const [splitLines, setSplitLines] = useState<SplitLine[]>([{ method: "Cash", amount: "" }, { method: "CardMachine", amount: "" }]);
   const [completionBusy, setCompletionBusy] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
@@ -654,9 +654,10 @@ export default function DriverPage() {
                 <div style={s.paymentSection}>
                   <div style={s.paymentHeading}>Payment Method</div>
                   <div style={s.paymentOptions}>
-                    {(["Cash", "EFT", "CardMachine", "Credit", "Split"] as PaymentType[])
-                      .filter(pt => pt !== "Credit" || completingClientType === 2)
-                      .map((pt) => (
+                    {(completingClientType === 2
+                      ? (["Cash", "EFT", "CardMachine", "Credit", "Split"] as PaymentType[])
+                      : (["Cash", "EFT", "CardMachine", "Split"] as PaymentType[])
+                    ).map((pt) => (
                       <button key={pt} style={{ ...s.paymentOption, ...(paymentType === pt ? s.paymentOptionActive : {}) }} onClick={() => setPaymentType(pt)} disabled={completionBusy}>
                         {pt === "Cash" && "💵 "}
                         {pt === "EFT" && "📱 "}
