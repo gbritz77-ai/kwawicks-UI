@@ -652,7 +652,7 @@ export default function DriverPage() {
                   );
                 })}
                 <div style={s.paymentSection}>
-                  <div style={s.paymentHeading}>Payment Method</div>
+                  <div style={s.paymentHeading}>Payment Method <span style={{fontSize:10,color:"red"}}>[ct:{completingClientType}]</span></div>
                   <div style={s.paymentOptions}>
                     {(["Cash", "EFT", "CardMachine", "Credit", "Split"] as PaymentType[])
                       .filter(pt => pt !== "Credit" || completingClientType === 2)
