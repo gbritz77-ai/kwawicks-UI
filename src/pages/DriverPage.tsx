@@ -774,12 +774,12 @@ export default function DriverPage() {
                     </div>
                   ) : (
                     <div style={{ border: "2px dashed #94a3b8", borderRadius: 8, background: "#f8fafc", touchAction: "none" }}>
-                      <div style={{ fontSize: 11, color: "#64748b", padding: "4px 8px" }}>Sign below:</div>
+                      <div style={{ fontSize: 11, color: "#64748b", padding: "4px 8px" }}>Sign or write name below:</div>
                       <canvas
                         ref={signatureCanvasRef}
                         width={500}
-                        height={160}
-                        style={{ display: "block", width: "100%", height: 160, cursor: "crosshair", touchAction: "none" }}
+                        height={240}
+                        style={{ display: "block", width: "100%", height: 240, cursor: "crosshair", touchAction: "none" }}
                         onPointerDown={e => {
                           const canvas = signatureCanvasRef.current; if (!canvas) return;
                           canvas.setPointerCapture(e.pointerId);
