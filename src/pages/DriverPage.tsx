@@ -817,7 +817,7 @@ export default function DriverPage() {
                         <button
                           disabled={!sigHasStrokes}
                           style={{ background: sigHasStrokes ? "#16a34a" : "#d1d5db", color: "#fff", border: "none", borderRadius: 6, padding: "4px 18px", fontSize: 12, cursor: sigHasStrokes ? "pointer" : "default", fontWeight: 600 }}
-                          onClick={() => { const c = signatureCanvasRef.current; if (c) setSignatureData(c.toDataURL("image/png")); }}
+                          onClick={() => { const c = signatureCanvasRef.current; if (c) setSignatureData(c.toDataURL("image/jpeg", 0.6)); }}
                         >Done</button>
                       </div>
                     </div>
