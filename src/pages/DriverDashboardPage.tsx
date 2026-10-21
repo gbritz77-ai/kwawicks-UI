@@ -299,7 +299,7 @@ export default function DriverDashboardPage() {
           vatRate: sp?.vat ?? 0,
         };
       });
-      const result = await invoicesApi.createFromDelivery(completing.deliveryOrderId, { createdByDriverId: driverId, lines, clientPhone: clientPhone.trim() || undefined });
+      const result = await invoicesApi.createFromDelivery(completing.deliveryOrderId, { createdByDriverId: driverId, lines, clientPhone: clientPhone.trim() || undefined, clientSignatureBase64: signatureData ?? undefined });
       setCreatedInvoiceId(result.invoiceId);
       setWhatsAppError((result as any).whatsAppError ?? null);
       const splitPayments = paymentType === "Split"

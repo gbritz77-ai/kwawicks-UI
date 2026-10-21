@@ -288,6 +288,7 @@ export default function DriverPage() {
         createdByDriverId: driverId,
         lines,
         clientPhone: clientPhone.trim() || undefined,
+        clientSignatureBase64: signatureData ?? undefined,
       });
       const invoiceId = result.invoiceId;
       setCreatedInvoiceId(invoiceId);

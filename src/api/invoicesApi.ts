@@ -34,6 +34,7 @@ export type CreateInvoiceFromDeliveryRequest = {
   createdByDriverId: string;
   lines: CreateInvoiceFromDeliveryLine[];
   clientPhone?: string;
+  clientSignatureBase64?: string;
 };
 
 // ── Response types ─────────────────────────────────────────────────────────
