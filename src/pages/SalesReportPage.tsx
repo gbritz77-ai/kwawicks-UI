@@ -22,8 +22,9 @@ function fmt(n: number) {
 }
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-ZA", {
+  return new Date(iso).toLocaleString("en-ZA", {
     day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
   });
 }
 
