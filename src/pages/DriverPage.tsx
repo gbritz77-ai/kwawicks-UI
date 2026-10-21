@@ -177,16 +177,31 @@ export default function DriverPage() {
 
   async function openCompletion(order: DeliveryOrderResponse) {
     await loadSpecies();
+
+    // Fetch client BEFORE opening modal so creditAllowed is known at first render
+    let creditAllowed = false;
+    let hasPhone = false;
+    let phone = "";
+    try {
+      const client = await clientsApi.getById(order.customerId);
+      creditAllowed = client.clientType === 2;
+      hasPhone = !!client.clientPhone?.trim() || !!client.clientContactDetails?.trim();
+      if (hasPhone) phone = client.clientPhone?.trim() || client.clientContactDetails?.trim() || "";
+    } catch {
+      hasPhone = true;
+    }
+
+    setCompletingClientType(creditAllowed ? 2 : 0);
+    setPaymentType(creditAllowed ? "Credit" : "Cash");
+    setClientHasPhone(hasPhone);
+    setClientPhone(phone);
     setCompleting(order);
     setStep("returns");
     setCompletionError(null);
     setCreatedInvoiceId(null);
     setReceiptFile(null);
     setReceiptDone(false);
-    setPaymentType("Cash");
-    setCompletingClientType(null);
     setSplitLines([{ method: "Cash", amount: "" }, { method: "CardMachine", amount: "" }]);
-    setClientPhone("");
     setReturnLines(
       order.lines.map((l) => ({
         speciesId: l.speciesId,
@@ -195,18 +210,6 @@ export default function DriverPage() {
         totalReturnedQty: "0",
       }))
     );
-    // Check if client has a WhatsApp number saved
-    try {
-      const client = await clientsApi.getById(order.customerId);
-      console.log("[DriverPage] openCompletion customerId=", order.customerId, "clientType=", client.clientType);
-      setCompletingClientType(client.clientType ?? 0);
-      if (client.clientType === 2) setPaymentType("Credit");
-      const hasPhone = !!client.clientPhone?.trim() || !!client.clientContactDetails?.trim();
-      setClientHasPhone(hasPhone);
-      if (hasPhone) setClientPhone(client.clientPhone?.trim() || client.clientContactDetails?.trim() || "");
-    } catch {
-      setClientHasPhone(true); // non-fatal, don't block completion
-    }
   }
 
   function closeCompletion() {
@@ -652,7 +655,7 @@ export default function DriverPage() {
                   <div style={s.paymentHeading}>Payment Method</div>
                   <div style={s.paymentOptions}>
                     {(["Cash", "EFT", "CardMachine", "Credit", "Split"] as PaymentType[])
-                      .filter(pt => { if (pt === "Credit") console.log("[filter] completingClientType=", completingClientType); return pt !== "Credit" || completingClientType === 2; })
+                      .filter(pt => pt !== "Credit" || completingClientType === 2)
                       .map((pt) => (
                       <button key={pt} style={{ ...s.paymentOption, ...(paymentType === pt ? s.paymentOptionActive : {}) }} onClick={() => setPaymentType(pt)} disabled={completionBusy}>
                         {pt === "Cash" && "💵 "}
