@@ -2231,11 +2231,10 @@ function InvoicesTab({
                         {inv.paymentStatus === "Pending" && (() => {
                           const hardBlocked = isAccountCredit && creditNegative && !canOverrideNegativeBalance;
                           const isCreditType = inv.paymentType === "Credit";
-                          const masterBlocked = isCreditType && !isMaster;
-                          if (masterBlocked) {
+                          if (isCreditType) {
                             return (
-                              <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 600 }} title="Only Master can confirm Credit invoices">
-                                ⏳ Awaiting Master
+                              <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 600 }} title="Credit invoices are confirmed via Bank Reconciliation">
+                                Via Bank Recon
                               </span>
                             );
                           }
