@@ -241,6 +241,85 @@ export default function ClientAccountsPage() {
     `R ${Math.abs(n).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const fmtSigned = (n: number) => (n < 0 ? "−" : "+") + fmt(n);
 
+  function handlePrint() {
+    if (!ledger) return;
+    const printRows = rows;
+    const tableRows = printRows.map(row => {
+      const isDeposit = row.amount > 0;
+      const isBankRecon = row.createdByUserId === "BankRecon";
+      const dateStr = new Date(row.createdAt).toLocaleDateString("en-ZA");
+      const timeStr = new Date(row.createdAt).toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" });
+      const typeLabel = isDeposit ? "Deposit" : "Charge";
+      const method = row.paymentMethod || (row.entryType === "InvoiceCharge" ? "Invoice" : "—");
+      let refNotes = "";
+      if (row.entryType === "InvoiceCharge" && row.reference) {
+        const inv = invoiceMap[row.reference];
+        refNotes = inv ? inv.invoiceNumber : row.reference.slice(0, 16);
+        if (inv && inv.lines.length > 0) {
+          refNotes += " — " + inv.lines.map(l => `${speciesNameMap[l.speciesId] || l.speciesId} × ${l.quantity}`).join(", ");
+        }
+      } else if (row.reference) {
+        refNotes = row.reference.slice(0, 40);
+      }
+      if (row.notes) refNotes += (refNotes ? "\n" : "") + row.notes;
+      const amtColor = isDeposit ? "#15803d" : "#dc2626";
+      const balColor = row.runningBalance >= 0 ? "#111827" : "#dc2626";
+      return `<tr>
+        <td>${dateStr}<br/><span style="color:#94a3b8;font-size:11px">${timeStr}</span></td>
+        <td><span style="color:${amtColor};font-weight:600">${typeLabel}</span>${isBankRecon ? ' <span style="background:#dbeafe;color:#1d4ed8;font-size:10px;padding:1px 5px;border-radius:3px">Bank Recon</span>' : ""}</td>
+        <td>${method}</td>
+        <td style="white-space:pre-wrap;max-width:260px">${refNotes.replace(/&/g,"&amp;").replace(/</g,"&lt;")}</td>
+        <td style="text-align:right;font-weight:700;color:${amtColor}">${fmtSigned(row.amount)}</td>
+        <td style="text-align:right;font-weight:700;color:${balColor}">${row.runningBalance < 0 ? "−" : ""}${fmt(row.runningBalance)}</td>
+      </tr>`;
+    }).join("");
+
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"/>
+<title>Account Statement — ${ledger.clientName}</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 13px; color: #111; margin: 0; padding: 24px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #6b7280; font-size: 13px; margin-bottom: 20px; }
+  .kpis { display: flex; gap: 24px; margin-bottom: 20px; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px 20px; background: #f9fafb; }
+  .kpi { display: flex; flex-direction: column; gap: 2px; }
+  .kpi-val { font-size: 16px; font-weight: 800; }
+  .kpi-lbl { font-size: 11px; color: #6b7280; text-transform: uppercase; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; padding: 8px 10px; border-bottom: 2px solid #e5e7eb; background: #f9fafb; }
+  td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  tr:nth-child(even) td { background: #fafafa; }
+  .footer { margin-top: 24px; font-size: 11px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+  @media print {
+    body { padding: 12px; }
+    button { display: none; }
+  }
+</style>
+</head><body>
+<h1>${ledger.clientName} — Account Statement</h1>
+<div class="sub">Period: ${fromDate || "all"} → ${toDate || "all"} &nbsp;|&nbsp; Printed: ${new Date().toLocaleDateString("en-ZA")}</div>
+<div class="kpis">
+  <div class="kpi"><div class="kpi-val" style="color:#15803d">${fmt(periodDeposits)}</div><div class="kpi-lbl">Total Deposits</div></div>
+  <div class="kpi"><div class="kpi-val" style="color:#dc2626">${fmt(periodCharges)}</div><div class="kpi-lbl">Charges</div></div>
+  <div class="kpi"><div class="kpi-val" style="color:${balance >= 0 ? "#15803d" : "#dc2626"}">${balance < 0 ? "−" : ""}${fmt(balance)}</div><div class="kpi-lbl">${balance >= 0 ? "Credit Balance" : "Outstanding"}</div></div>
+</div>
+<div style="font-weight:700;font-size:13px;margin-bottom:6px">Transaction History — ${rows.length} entries</div>
+<table>
+  <thead><tr>
+    <th>Date</th><th>Type</th><th>Method</th><th>Reference / Notes</th>
+    <th style="text-align:right">Amount</th><th style="text-align:right">Running Balance</th>
+  </tr></thead>
+  <tbody>${tableRows}</tbody>
+</table>
+<div class="footer">KwaWicks — printed ${new Date().toLocaleString("en-ZA")}</div>
+<script>window.onload=function(){window.print();}<\/script>
+</body></html>`);
+    win.document.close();
+  }
+
   // ── Date-range filtering ────────────────────────────────────────────────────
   const allEntries: ClientCreditEntryDto[] = ledger?.entries ?? [];
 
@@ -442,6 +521,9 @@ export default function ClientAccountsPage() {
                   </button>
                   <button style={{ ...s.addCreditBtn, background: "#7c3aed" }} onClick={() => { setShowManualCharge(true); setManualChargeError(""); }}>
                     ➕ Manual Charge
+                  </button>
+                  <button style={{ ...s.addCreditBtn, background: "#374151" }} onClick={handlePrint}>
+                    🖨 Print
                   </button>
                 </div>
               </div>
