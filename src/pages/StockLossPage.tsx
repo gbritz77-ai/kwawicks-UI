@@ -209,7 +209,7 @@ export default function StockLossPage() {
             {modalError && <div style={s.formError}>{modalError}</div>}
 
             <label style={s.label}>Adjustment Type
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button type="button"
                   style={{ ...s.typeToggle, ...(modalType === "Under" ? s.typeToggleActive : {}) }}
                   onClick={() => setModalType("Under")} disabled={modalBusy}>
@@ -343,7 +343,7 @@ const s: Record<string, React.CSSProperties> = {
   qtyBadgeOver:    { background: "rgba(22,163,74,0.08)", border: "1px solid rgba(22,163,74,0.3)", color: "#15803d", borderRadius: 8, padding: "2px 8px", fontWeight: 700, fontSize: 13 },
   typeBadgeLoss:   { background: "rgba(220,38,38,0.07)", color: "#dc2626", borderRadius: 6, padding: "2px 7px", fontSize: 12, fontWeight: 600 },
   typeBadgeOver:   { background: "rgba(22,163,74,0.07)", color: "#15803d", borderRadius: 6, padding: "2px 7px", fontSize: 12, fontWeight: 600 },
-  typeToggle:      { flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid #d1d5db", background: "#f9fafb", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  typeToggle:      { flex: 1, minWidth: 120, padding: "8px 12px", borderRadius: 8, border: "1px solid #d1d5db", background: "#f9fafb", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer" },
   typeToggleActive:      { background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.4)", color: "#dc2626" },
   typeToggleActiveShort: { background: "rgba(217,119,6,0.08)",  border: "1px solid rgba(217,119,6,0.4)",  color: "#d97706" },
   typeToggleActiveOver:  { background: "rgba(22,163,74,0.08)",  border: "1px solid rgba(22,163,74,0.4)",  color: "#15803d" },
