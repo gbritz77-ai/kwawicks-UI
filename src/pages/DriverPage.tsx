@@ -191,9 +191,8 @@ export default function DriverPage() {
       hasPhone = true;
     }
 
-    alert(`DEBUG: creditAllowed=${creditAllowed} clientType=${creditAllowed ? 2 : 0}`);
     setCompletingClientType(creditAllowed ? 2 : 0);
-    setPaymentType(creditAllowed ? "Credit" : "Cash");
+    setPaymentType("Cash");
     setClientHasPhone(hasPhone);
     setClientPhone(phone);
     setCompleting(order);
@@ -655,10 +654,7 @@ export default function DriverPage() {
                 <div style={s.paymentSection}>
                   <div style={s.paymentHeading}>Payment Method</div>
                   <div style={s.paymentOptions}>
-                    {(completingClientType === 2
-                      ? (["Cash", "EFT", "CardMachine", "Credit", "Split"] as PaymentType[])
-                      : (["Cash", "EFT", "CardMachine", "Split"] as PaymentType[])
-                    ).map((pt) => (
+                    {(["Cash", "EFT", "CardMachine", "Split"] as PaymentType[]).map((pt) => (
                       <button key={pt} style={{ ...s.paymentOption, ...(paymentType === pt ? s.paymentOptionActive : {}) }} onClick={() => setPaymentType(pt)} disabled={completionBusy}>
                         {pt === "Cash" && "💵 "}
                         {pt === "EFT" && "📱 "}

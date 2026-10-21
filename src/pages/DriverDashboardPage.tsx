@@ -702,12 +702,12 @@ export default function DriverDashboardPage() {
                 <div style={s.paySection}>
                   <div style={s.payHead}>Payment Method</div>
                   <div style={s.payGrid}>
-                    {(["Cash", "EFT", "CardMachine", "Credit", "Split"] as PaymentType[]).map(pt => (
+                    {(["Cash", "EFT", "CardMachine", "Split"] as PaymentType[]).map(pt => (
                       <button key={pt}
                         style={{ ...s.payBtn, ...(paymentType === pt ? s.payBtnActive : {}) }}
                         onClick={() => setPaymentType(pt)} disabled={completionBusy}
                       >
-                        {pt === "Cash" ? "💵 Cash" : pt === "EFT" ? "📱 EFT" : pt === "CardMachine" ? "💳 Card Machine" : pt === "Credit" ? "📋 Credit" : "➗ Split"}
+                        {pt === "Cash" ? "💵 Cash" : pt === "EFT" ? "📱 EFT" : pt === "CardMachine" ? "💳 Card Machine" : "➗ Split"}
                       </button>
                     ))}
                   </div>
