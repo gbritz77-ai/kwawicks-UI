@@ -77,6 +77,7 @@ export default function DriverPage() {
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [sigDrawing, setSigDrawing] = useState(false);
+  const [sigHasStrokes, setSigHasStrokes] = useState(false);
   const [clientHasPhone, setClientHasPhone] = useState(true);
   const [clientPhone, setClientPhone] = useState("");
 
@@ -205,6 +206,7 @@ export default function DriverPage() {
     setReceiptFile(null);
     setReceiptDone(false);
     setSignatureData(null);
+    setSigHasStrokes(false);
     setSplitLines([{ method: "Cash", amount: "" }, { method: "CardMachine", amount: "" }]);
     setReturnLines(
       order.lines.map((l) => ({
@@ -768,13 +770,13 @@ export default function DriverPage() {
                       <img src={signatureData} alt="Signature" style={{ border: "1px solid #d1d5db", borderRadius: 8, maxWidth: "100%", background: "#fff" }} />
                       <button
                         style={{ background: "none", border: "1px solid #f87171", color: "#dc2626", borderRadius: 6, padding: "4px 14px", fontSize: 12, cursor: "pointer" }}
-                        onClick={() => { setSignatureData(null); }}
+                        onClick={() => { setSignatureData(null); setSigHasStrokes(false); const c = signatureCanvasRef.current; if (c) c.getContext("2d")!.clearRect(0, 0, c.width, c.height); }}
                         disabled={completionBusy}
                       >Clear &amp; Re-sign</button>
                     </div>
                   ) : (
                     <div style={{ border: "2px dashed #94a3b8", borderRadius: 8, background: "#f8fafc", touchAction: "none" }}>
-                      <div style={{ fontSize: 11, color: "#64748b", padding: "4px 8px" }}>Sign or write name below:</div>
+                      <div style={{ fontSize: 11, color: "#64748b", padding: "4px 8px" }}>Sign or write name below — lift finger between letters freely:</div>
                       <canvas
                         ref={signatureCanvasRef}
                         width={500}
@@ -804,10 +806,20 @@ export default function DriverPage() {
                         }}
                         onPointerUp={() => {
                           setSigDrawing(false);
-                          const canvas = signatureCanvasRef.current; if (!canvas) return;
-                          setSignatureData(canvas.toDataURL("image/png"));
+                          setSigHasStrokes(true);
                         }}
                       />
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "6px 8px" }}>
+                        <button
+                          style={{ background: "none", border: "1px solid #94a3b8", color: "#64748b", borderRadius: 6, padding: "4px 14px", fontSize: 12, cursor: "pointer" }}
+                          onClick={() => { setSigHasStrokes(false); const c = signatureCanvasRef.current; if (c) c.getContext("2d")!.clearRect(0, 0, c.width, c.height); }}
+                        >Clear</button>
+                        <button
+                          disabled={!sigHasStrokes}
+                          style={{ background: sigHasStrokes ? "#16a34a" : "#d1d5db", color: "#fff", border: "none", borderRadius: 6, padding: "4px 18px", fontSize: 12, cursor: sigHasStrokes ? "pointer" : "default", fontWeight: 600 }}
+                          onClick={() => { const c = signatureCanvasRef.current; if (c) setSignatureData(c.toDataURL("image/png")); }}
+                        >Done</button>
+                      </div>
                     </div>
                   )}
                 </div>
