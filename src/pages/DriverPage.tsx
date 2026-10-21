@@ -654,7 +654,7 @@ export default function DriverPage() {
                 <div style={s.paymentSection}>
                   <div style={s.paymentHeading}>Payment Method</div>
                   <div style={s.paymentOptions}>
-                    {(["Cash", "EFT", "CardMachine", "Split"] as PaymentType[]).map((pt) => (
+                    {(["Cash", "EFT", "CardMachine", ...(completingClientType === 2 ? ["Credit" as PaymentType] : []), "Split"] as PaymentType[]).map((pt) => (
                       <button key={pt} style={{ ...s.paymentOption, ...(paymentType === pt ? s.paymentOptionActive : {}) }} onClick={() => setPaymentType(pt)} disabled={completionBusy}>
                         {pt === "Cash" && "💵 "}
                         {pt === "EFT" && "📱 "}

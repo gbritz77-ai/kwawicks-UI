@@ -105,6 +105,7 @@ export default function DriverDashboardPage() {
   const fileGalleryRef = useRef<HTMLInputElement>(null);
   const [clientHasPhone, setClientHasPhone] = useState(true);
   const [clientPhone, setClientPhone] = useState("");
+  const [completingClientType, setCompletingClientType] = useState<number | null>(null);
 
   // ── Petty cash state ─────────────────────────────────────────────────────
 
@@ -206,6 +207,21 @@ export default function DriverDashboardPage() {
 
   async function openCompletion(order: DeliveryOrderResponse) {
     await loadSpecies();
+    // Fetch client before opening modal
+    let creditAllowed = false;
+    let hasPhone = false;
+    let phone = "";
+    try {
+      const client = await clientsApi.getById(order.customerId);
+      creditAllowed = client.clientType === 2;
+      hasPhone = !!client.clientPhone?.trim() || !!client.clientContactDetails?.trim();
+      if (hasPhone) phone = client.clientPhone?.trim() || client.clientContactDetails?.trim() || "";
+    } catch {
+      hasPhone = true;
+    }
+    setCompletingClientType(creditAllowed ? 2 : 0);
+    setClientHasPhone(hasPhone);
+    setClientPhone(phone);
     setCompleting(order);
     setStep("returns");
     setCompletionError(null);
@@ -214,20 +230,10 @@ export default function DriverDashboardPage() {
     setReceiptDone(false);
     setPaymentType("Cash");
     setSplitLines([{ method: "Cash", amount: "" }, { method: "Card", amount: "" }]);
-    setClientPhone("");
     setReturnLines(order.lines.map(l => ({
       speciesId: l.speciesId, orderedQty: l.quantity,
       deliveredQty: String(l.quantity), totalReturnedQty: "0",
     })));
-    // Check if client has a WhatsApp number saved
-    try {
-      const client = await clientsApi.getById(order.customerId);
-      const hasPhone = !!client.clientPhone?.trim() || !!client.clientContactDetails?.trim();
-      setClientHasPhone(hasPhone);
-      if (hasPhone) setClientPhone(client.clientPhone?.trim() || client.clientContactDetails?.trim() || "");
-    } catch {
-      setClientHasPhone(true); // non-fatal, don't block completion
-    }
   }
 
   function closeCompletion() {
@@ -702,12 +708,12 @@ export default function DriverDashboardPage() {
                 <div style={s.paySection}>
                   <div style={s.payHead}>Payment Method</div>
                   <div style={s.payGrid}>
-                    {(["Cash", "EFT", "CardMachine", "Split"] as PaymentType[]).map(pt => (
+                    {(["Cash", "EFT", "CardMachine", ...(completingClientType === 2 ? ["Credit" as PaymentType] : []), "Split"] as PaymentType[]).map(pt => (
                       <button key={pt}
                         style={{ ...s.payBtn, ...(paymentType === pt ? s.payBtnActive : {}) }}
                         onClick={() => setPaymentType(pt)} disabled={completionBusy}
                       >
-                        {pt === "Cash" ? "💵 Cash" : pt === "EFT" ? "📱 EFT" : pt === "CardMachine" ? "💳 Card Machine" : "➗ Split"}
+                        {pt === "Cash" ? "💵 Cash" : pt === "EFT" ? "📱 EFT" : pt === "CardMachine" ? "💳 Card Machine" : pt === "Credit" ? "📋 Credit" : "➗ Split"}
                       </button>
                     ))}
                   </div>
