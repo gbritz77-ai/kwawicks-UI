@@ -191,6 +191,7 @@ export default function DriverPage() {
       hasPhone = true;
     }
 
+    alert(`DEBUG: creditAllowed=${creditAllowed} clientType=${creditAllowed ? 2 : 0}`);
     setCompletingClientType(creditAllowed ? 2 : 0);
     setPaymentType(creditAllowed ? "Credit" : "Cash");
     setClientHasPhone(hasPhone);
