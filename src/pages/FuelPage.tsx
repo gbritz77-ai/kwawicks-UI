@@ -327,15 +327,36 @@ export default function FuelPage() {
 
   const filteredIssues = filterText.trim()
     ? issues.filter(r => {
-        const q = filterText.toLowerCase();
-        return [
-          r.fleetNumber, r.fuelSource, r.tankName, r.supplierStation,
-          r.tankIssuedBy, r.issuedByName, r.siteName, r.reference,
-          String(r.litres), r.odometerKm != null ? String(r.odometerKm) : "",
+        const q = filterText.toLowerCase().replace(/\s/g, "");
+        const candidates = [
+          r.fleetNumber,
+          r.fuelSource,
+          r.tankName,
+          r.supplierStation,
+          r.tankIssuedBy,
+          r.issuedByName,
+          r.siteName,
+          r.reference,
+          // litres — with and without "L" suffix
+          String(r.litres),
+          `${r.litres}L`,
+          `${r.litres}l`,
+          // odometer
+          r.odometerKm != null ? String(r.odometerKm) : "",
+          r.odometerKm != null ? `${r.odometerKm}km` : "",
+          r.odometerKm != null ? r.odometerKm.toLocaleString("en-ZA") : "",
+          // cost per litre — with and without "R" prefix
           r.costPerLitre != null ? String(r.costPerLitre) : "",
+          r.costPerLitre != null ? `R${r.costPerLitre}` : "",
+          // total cost
           r.totalCost != null ? String(r.totalCost) : "",
+          r.totalCost != null ? `R${r.totalCost.toFixed(2)}` : "",
+          r.totalCost != null ? r.totalCost.toFixed(2) : "",
+          // date
+          fmtDate(r.issuedAt),
           new Date(r.issuedAt).toLocaleDateString("en-ZA"),
-        ].some(v => v.toLowerCase().includes(q));
+        ];
+        return candidates.some(v => v.toLowerCase().replace(/\s/g, "").includes(q));
       })
     : issues;
 
