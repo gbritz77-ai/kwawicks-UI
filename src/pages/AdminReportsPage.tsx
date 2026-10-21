@@ -137,8 +137,9 @@ export default function AdminReportsPage() {
   function setTab(t: Tab) {
     setSearchParams(t === defaultTab ? {} : { tab: t }, { replace: true });
   }
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const _now = new Date();
+  const [from, setFrom] = useState(new Date(_now.getFullYear(), _now.getMonth() - 1, 1).toISOString().slice(0, 10));
+  const [to,   setTo]   = useState(new Date(_now.getFullYear(), _now.getMonth(), 0).toISOString().slice(0, 10));
 
   const [revenue, setRevenue] = useState<RevenueSummaryResponse | null>(null);
   const [outstanding, setOutstanding] = useState<OutstandingPaymentsResponse | null>(null);
@@ -2212,8 +2213,8 @@ function InvoicesTab({
                     <Td>{fmt(inv.subTotal)}</Td>
                     <Td>{fmt(inv.vatTotal)}</Td>
                     <Td><strong>{fmt(inv.grandTotal)}</strong></Td>
-                    <Td style={{ color: "#64748b", fontSize: 13 }}>
-                      {new Date(inv.createdAt).toLocaleDateString("en-ZA")}
+                    <Td style={{ color: "#64748b", fontSize: 13, whiteSpace: "nowrap" as const }}>
+                      {new Date(inv.createdAt).toLocaleString("en-ZA", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                     </Td>
                     <Td>
                       {hasReceipt ? (
