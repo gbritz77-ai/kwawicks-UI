@@ -79,6 +79,17 @@ function BankStatementsTab() {
   const [editingPcCategory,  setEditingPcCategory]  = useState("");
   const [editingPcBusy,      setEditingPcBusy]      = useState(false);
 
+  // Debit report inline allocation
+  const [debitAllocRow,      setDebitAllocRow]      = useState<string | null>(null); // transactionId
+  const [debitAllocMode,     setDebitAllocMode]     = useState<"supplier"|"expense"|"nonclient">("expense");
+  const [debitAllocSupplierId,  setDebitAllocSupplierId]  = useState("");
+  const [debitAllocSupplierSearch, setDebitAllocSupplierSearch] = useState("");
+  const [debitAllocSupplierNotes, setDebitAllocSupplierNotes] = useState("");
+  const [debitAllocExpCat,   setDebitAllocExpCat]   = useState("");
+  const [debitAllocNcDesc,   setDebitAllocNcDesc]   = useState("");
+  const [debitAllocBusy,     setDebitAllocBusy]     = useState(false);
+  const [debitAllocError,    setDebitAllocError]    = useState("");
+
   // Upload
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading,      setUploading]      = useState(false);
@@ -507,6 +518,44 @@ function BankStatementsTab() {
   const totalUnalloc  = statements.reduce((sum, s) => sum + s.unallocatedCount, 0);
   const totalUnallocAmt = statements.reduce((sum, s) => sum + s.unallocatedAmount, 0);
 
+  // ── Debit report inline allocation ───────────────────────────────────────
+
+  async function doDebitAlloc(item: { statementId: string; transactionId: string }) {
+    setDebitAllocBusy(true); setDebitAllocError("");
+    try {
+      if (debitAllocMode === "supplier") {
+        if (!debitAllocSupplierId) { setDebitAllocError("Pick a supplier."); setDebitAllocBusy(false); return; }
+        await bankStatementsApi.allocateSupplier(item.statementId, item.transactionId, {
+          supplierId: debitAllocSupplierId,
+          notes: debitAllocSupplierNotes.trim() || undefined,
+        });
+      } else if (debitAllocMode === "expense") {
+        if (!debitAllocExpCat) { setDebitAllocError("Pick a category."); setDebitAllocBusy(false); return; }
+        await bankStatementsApi.allocateExpense(item.statementId, item.transactionId, { category: debitAllocExpCat });
+      } else {
+        if (!debitAllocNcDesc.trim()) { setDebitAllocError("Enter a description."); setDebitAllocBusy(false); return; }
+        await bankStatementsApi.allocateNonClient(item.statementId, item.transactionId, {
+          description: debitAllocNcDesc.trim(), amount: 0,
+        });
+      }
+      setDebitAllocRow(null);
+      await loadDebitReport();
+    } catch (e: any) { setDebitAllocError(e?.message ?? "Allocation failed."); }
+    finally { setDebitAllocBusy(false); }
+  }
+
+  function openDebitAllocRow(transactionId: string) {
+    setDebitAllocRow(transactionId);
+    setDebitAllocMode("expense");
+    setDebitAllocSupplierId(""); setDebitAllocSupplierSearch(""); setDebitAllocSupplierNotes("");
+    setDebitAllocExpCat(expenseCategories[0] ?? "");
+    setDebitAllocNcDesc(""); setDebitAllocError("");
+    ensureSuppliers();
+    if (!expenseCatsLoaded) {
+      bankStatementsApi.getExpenseCategories().then(c => { setExpenseCategories(c); setExpenseCatsLoaded(true); });
+    }
+  }
+
   // ── Debit report view ─────────────────────────────────────────────────────
 
   if (showDebitReport) {
@@ -672,8 +721,15 @@ function BankStatementsTab() {
                   <th style={s.th}>Statement</th>
                 </tr></thead>
                 <tbody>
-                  {visibleItems.map(item => (
-                    <tr key={item.transactionId} style={{ background: item.source === "PettyCash" ? "#fffbeb" : item.isAllocated ? "#f0fdf4" : "#fff" }}>
+                  {visibleItems.map(item => {
+                    const isAllocRowOpen = debitAllocRow === item.transactionId;
+                    const visibleDebitSuppliers = suppliers.filter(sup =>
+                      !debitAllocSupplierSearch || sup.name.toLowerCase().includes(debitAllocSupplierSearch.toLowerCase())
+                    );
+                    const allExpCats = [...new Set([...CATEGORIES, ...expenseCategories])].sort();
+                    return (
+                    <React.Fragment key={item.transactionId}>
+                    <tr style={{ background: item.source === "PettyCash" ? "#fffbeb" : item.isAllocated ? "#f0fdf4" : isAllocRowOpen ? "#eff6ff" : "#fff" }}>
                       <td style={s.td}>{fmtDate(item.date)}</td>
                       <td style={{...s.td, maxWidth:260, overflow:"hidden", textOverflow:"ellipsis"}}>{item.description}</td>
                       <td style={{...s.td,...s.mono, fontSize:12}}>{item.reference||"—"}</td>
@@ -732,7 +788,16 @@ function BankStatementsTab() {
                               )}
                             </div>
                           )
-                        ) : "—"}
+                        ) : (
+                          !isAllocRowOpen ? (
+                            <button
+                              style={{ fontSize:12, background:"#166534", color:"#fff", border:"none", borderRadius:5, padding:"3px 12px", cursor:"pointer", fontWeight:600 }}
+                              onClick={() => openDebitAllocRow(item.transactionId)}
+                            >Allocate</button>
+                          ) : (
+                            <span style={{ fontSize:12, color:"#2563eb", fontWeight:600 }}>Allocating…</span>
+                          )
+                        )}
                       </td>
                       <td style={s.td}>{item.isAllocated ? fmtDate(item.allocatedAt) : "—"}</td>
                       <td style={s.td}>
@@ -742,7 +807,99 @@ function BankStatementsTab() {
                       </td>
                       <td style={{...s.td, fontSize:12, color:"#9ca3af", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis"}}>{item.source === "PettyCash" ? "—" : item.fileName}</td>
                     </tr>
-                  ))}
+                    {isAllocRowOpen && (
+                      <tr style={{ background:"#eff6ff" }}>
+                        <td colSpan={9} style={{ padding:"12px 16px", borderBottom:"2px solid #bfdbfe" }}>
+                          <div style={{ display:"flex", flexWrap:"wrap", gap:10, alignItems:"flex-start" }}>
+                            {/* Mode selector */}
+                            <div style={{ display:"flex", gap:4, flexShrink:0 }}>
+                              {(["expense","supplier","nonclient"] as const).map(mode => (
+                                <button
+                                  key={mode}
+                                  style={{ fontSize:12, fontWeight:600, padding:"5px 12px", border:"1px solid #d1d5db", borderRadius:5, cursor:"pointer",
+                                    background: debitAllocMode === mode ? "#1e40af" : "#fff",
+                                    color: debitAllocMode === mode ? "#fff" : "#374151" }}
+                                  onClick={() => setDebitAllocMode(mode)}
+                                >
+                                  {mode === "expense" ? "Expense" : mode === "supplier" ? "Supplier" : "Non-Client"}
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Expense */}
+                            {debitAllocMode === "expense" && (
+                              <select
+                                style={{ fontSize:13, border:"1px solid #d1d5db", borderRadius:5, padding:"5px 8px", background:"#fff", minWidth:180 }}
+                                value={debitAllocExpCat}
+                                onChange={e => setDebitAllocExpCat(e.target.value)}
+                              >
+                                <option value="">Select category…</option>
+                                {allExpCats.map(c => <option key={c} value={c}>{c}</option>)}
+                              </select>
+                            )}
+
+                            {/* Supplier */}
+                            {debitAllocMode === "supplier" && (
+                              <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                                <input
+                                  style={{ fontSize:13, border:"1px solid #d1d5db", borderRadius:5, padding:"5px 8px", minWidth:160 }}
+                                  placeholder="Search supplier…"
+                                  value={debitAllocSupplierSearch}
+                                  onChange={e => { setDebitAllocSupplierSearch(e.target.value); setDebitAllocSupplierId(""); }}
+                                />
+                                {debitAllocSupplierSearch && visibleDebitSuppliers.length > 0 && !debitAllocSupplierId && (
+                                  <div style={{ position:"relative" }}>
+                                    <div style={{ position:"absolute", top:0, left:0, zIndex:50, background:"#fff", border:"1px solid #d1d5db", borderRadius:6, boxShadow:"0 4px 12px rgba(0,0,0,0.1)", minWidth:220, maxHeight:180, overflowY:"auto" }}>
+                                      {visibleDebitSuppliers.slice(0,10).map(sup => (
+                                        <div key={sup.supplierId}
+                                          style={{ padding:"7px 12px", cursor:"pointer", fontSize:13, borderBottom:"1px solid #f1f5f9" }}
+                                          onMouseDown={() => { setDebitAllocSupplierId(sup.supplierId); setDebitAllocSupplierSearch(sup.name); }}
+                                        >{sup.name}</div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {debitAllocSupplierId && (
+                                  <input
+                                    style={{ fontSize:13, border:"1px solid #d1d5db", borderRadius:5, padding:"5px 8px", minWidth:160 }}
+                                    placeholder="Notes (optional)"
+                                    value={debitAllocSupplierNotes}
+                                    onChange={e => setDebitAllocSupplierNotes(e.target.value)}
+                                  />
+                                )}
+                              </div>
+                            )}
+
+                            {/* Non-Client */}
+                            {debitAllocMode === "nonclient" && (
+                              <input
+                                style={{ fontSize:13, border:"1px solid #d1d5db", borderRadius:5, padding:"5px 8px", minWidth:220 }}
+                                placeholder="Description (required)"
+                                value={debitAllocNcDesc}
+                                onChange={e => setDebitAllocNcDesc(e.target.value)}
+                              />
+                            )}
+
+                            <div style={{ display:"flex", gap:6, alignItems:"center", marginLeft:"auto" }}>
+                              {debitAllocError && <span style={{ fontSize:12, color:"#dc2626" }}>{debitAllocError}</span>}
+                              <button
+                                style={{ fontSize:12, background:"#166534", color:"#fff", border:"none", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontWeight:600, opacity: debitAllocBusy ? 0.6 : 1 }}
+                                disabled={debitAllocBusy}
+                                onClick={() => doDebitAlloc(item)}
+                              >{debitAllocBusy ? "Saving…" : "Save"}</button>
+                              <button
+                                style={{ fontSize:12, background:"#fff", color:"#6b7280", border:"1px solid #d1d5db", borderRadius:5, padding:"5px 14px", cursor:"pointer" }}
+                                disabled={debitAllocBusy}
+                                onClick={() => setDebitAllocRow(null)}
+                              >Cancel</button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table></div>
             )}
