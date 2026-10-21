@@ -708,7 +708,8 @@ export default function HubSalesPage() {
                       onClick={() => setPaymentType(pt)}
                     >{pt}</button>
                   ))}
-                  {mode === "existing" && selectedClientId && (
+                  {mode === "existing" && selectedClientId &&
+                   clients.find(c => c.clientId === selectedClientId)?.clientType === 2 && (
                     <button
                       style={paymentType === "AccountCredit" ? { ...s.modeBtn, ...s.modeBtnActive } : s.modeBtn}
                       onClick={() => setPaymentType("AccountCredit")}
