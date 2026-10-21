@@ -103,6 +103,9 @@ export default function DriverDashboardPage() {
   const [receiptDone, setReceiptDone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileGalleryRef = useRef<HTMLInputElement>(null);
+  const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [sigDrawing, setSigDrawing] = useState(false);
   const [clientHasPhone, setClientHasPhone] = useState(true);
   const [clientPhone, setClientPhone] = useState("");
   const [completingClientType, setCompletingClientType] = useState<number | null>(null);
@@ -228,6 +231,7 @@ export default function DriverDashboardPage() {
     setCreatedInvoiceId(null);
     setReceiptFile(null);
     setReceiptDone(false);
+    setSignatureData(null);
     setPaymentType("Cash");
     setSplitLines([{ method: "Cash", amount: "" }, { method: "Card", amount: "" }]);
     setReturnLines(order.lines.map(l => ({
@@ -278,6 +282,7 @@ export default function DriverDashboardPage() {
 
   async function submitCompletion() {
     if (!completing) return;
+    if (!signatureData) { setCompletionError("Client signature is required before confirming delivery."); return; }
     const err = validateReturns();
     if (err) { setCompletionError(err); return; }
     setCompletionError(null);
@@ -781,9 +786,60 @@ export default function DriverDashboardPage() {
                     </>
                   )}
                 </div>
+                {/* Client signature */}
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: "#1e293b", marginBottom: 6 }}>✍️ Client Signature</div>
+                  {signatureData ? (
+                    <div style={{ display: "flex", flexDirection: "column" as const, alignItems: "center", gap: 8 }}>
+                      <img src={signatureData} alt="Signature" style={{ border: "1px solid #d1d5db", borderRadius: 8, maxWidth: "100%", background: "#fff" }} />
+                      <button
+                        style={{ background: "none", border: "1px solid #f87171", color: "#dc2626", borderRadius: 6, padding: "4px 14px", fontSize: 12, cursor: "pointer" }}
+                        onClick={() => setSignatureData(null)}
+                        disabled={completionBusy}
+                      >Clear &amp; Re-sign</button>
+                    </div>
+                  ) : (
+                    <div style={{ border: "2px dashed #94a3b8", borderRadius: 8, background: "#f8fafc", touchAction: "none" }}>
+                      <div style={{ fontSize: 11, color: "#64748b", padding: "4px 8px" }}>Sign below:</div>
+                      <canvas
+                        ref={signatureCanvasRef}
+                        width={500}
+                        height={160}
+                        style={{ display: "block", width: "100%", height: 160, cursor: "crosshair", touchAction: "none" }}
+                        onPointerDown={e => {
+                          const canvas = signatureCanvasRef.current; if (!canvas) return;
+                          canvas.setPointerCapture(e.pointerId);
+                          setSigDrawing(true);
+                          const r = canvas.getBoundingClientRect();
+                          const scaleX = canvas.width / r.width;
+                          const scaleY = canvas.height / r.height;
+                          const ctx = canvas.getContext("2d")!;
+                          ctx.strokeStyle = "#1e293b"; ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
+                          ctx.beginPath();
+                          ctx.moveTo((e.clientX - r.left) * scaleX, (e.clientY - r.top) * scaleY);
+                        }}
+                        onPointerMove={e => {
+                          if (!sigDrawing) return;
+                          const canvas = signatureCanvasRef.current; if (!canvas) return;
+                          const r = canvas.getBoundingClientRect();
+                          const scaleX = canvas.width / r.width;
+                          const scaleY = canvas.height / r.height;
+                          const ctx = canvas.getContext("2d")!;
+                          ctx.lineTo((e.clientX - r.left) * scaleX, (e.clientY - r.top) * scaleY);
+                          ctx.stroke();
+                        }}
+                        onPointerUp={() => {
+                          setSigDrawing(false);
+                          const canvas = signatureCanvasRef.current; if (!canvas) return;
+                          setSignatureData(canvas.toDataURL("image/png"));
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
                 <div style={s.modalBtns}>
                   <button style={s.secondaryBtn} onClick={closeCompletion} disabled={completionBusy}>Cancel</button>
-                  <button style={s.completeBtn} onClick={submitCompletion} disabled={completionBusy}>
+                  <button style={s.completeBtn} onClick={submitCompletion} disabled={completionBusy || !signatureData}>
                     {completionBusy ? "Processing…" : "Confirm Delivery"}
                   </button>
                 </div>
