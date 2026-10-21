@@ -137,9 +137,8 @@ export default function AdminReportsPage() {
   function setTab(t: Tab) {
     setSearchParams(t === defaultTab ? {} : { tab: t }, { replace: true });
   }
-  const _now = new Date();
-  const [from, setFrom] = useState(new Date(_now.getFullYear(), _now.getMonth() - 1, 1).toISOString().slice(0, 10));
-  const [to,   setTo]   = useState(new Date(_now.getFullYear(), _now.getMonth(), 0).toISOString().slice(0, 10));
+  const [from, setFrom] = useState(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+  const [to,   setTo]   = useState(new Date().toISOString().slice(0, 10));
 
   const [revenue, setRevenue] = useState<RevenueSummaryResponse | null>(null);
   const [outstanding, setOutstanding] = useState<OutstandingPaymentsResponse | null>(null);
