@@ -33,6 +33,11 @@ export type BankTransactionResponse = {
 export type BankStatementResponse = {
   statementId: string;
   fileName: string;
+  isMaster?: boolean;
+  importCount?: number;
+  lastImportedAt?: string;
+  newTransactionsAdded?: number;
+  duplicatesSkipped?: number;
   s3Key: string;
   transactionCount: number;
   creditCount: number;
@@ -49,6 +54,9 @@ export type BankStatementResponse = {
 export type BankStatementSummaryResponse = {
   statementId: string;
   fileName: string;
+  isMaster?: boolean;
+  importCount?: number;
+  lastImportedAt?: string;
   transactionCount: number;
   creditCount: number;
   totalCredits: number;

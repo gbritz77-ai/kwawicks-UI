@@ -220,6 +220,12 @@ function BankStatementsTab() {
       const result = await bankStatementsApi.process({ s3Key, fileName: file.name });
       await loadStatements();
       openStatement(result.statementId);
+      if ((result.newTransactionsAdded ?? 0) > 0 || (result.duplicatesSkipped ?? 0) > 0) {
+        const added = result.newTransactionsAdded ?? 0;
+        const skipped = result.duplicatesSkipped ?? 0;
+        setError(""); // clear any old error
+        alert(`Import complete: ${added} new transaction${added !== 1 ? "s" : ""} added${skipped > 0 ? `, ${skipped} duplicate${skipped !== 1 ? "s" : ""} skipped` : ""}.`);
+      }
     } catch (e: any) { setError(e?.message ?? "Upload failed."); }
     finally { setUploading(false); setUploadProgress(""); }
   }
@@ -1028,7 +1034,10 @@ function BankStatementsTab() {
           <button style={s.backBtn} onClick={() => { setSelected(null); resetRightPanel(); }}>← Back</button>
           <div style={{ flex: 1 }}>
             <span style={{ fontWeight: 700, fontSize: 15 }}>{selected.fileName}</span>
-            <span style={{ color: "#6b7280", fontSize: 13, marginLeft: 10 }}>Uploaded {fmtDate(selected.uploadedAt)}</span>
+            <span style={{ color: "#6b7280", fontSize: 13, marginLeft: 10 }}>
+              {selected.importCount ? `${selected.importCount} import${selected.importCount !== 1 ? "s" : ""} · Last: ` : "Uploaded "}
+              {fmtDate(selected.lastImportedAt ?? selected.uploadedAt)}
+            </span>
           </div>
           <div style={s.detailKpis}>
             <span style={s.kpiBadge}>{selected.transactionCount} transactions</span>
@@ -1856,8 +1865,8 @@ function BankStatementsTab() {
        statements.length === 0 ? <div style={s.empty}>No bank statements uploaded yet.</div> : (
         <div style={s.tableWrap}><table style={s.table}>
           <thead><tr>
-            <th style={s.th}>File Name</th>
-            <th style={s.th}>Uploaded</th>
+            <th style={s.th}>Statement</th>
+            <th style={s.th}>Last Import</th>
             <th style={{...s.th,textAlign:"right"}}>Transactions</th>
             <th style={{...s.th,textAlign:"right"}}>Credits</th>
             <th style={{...s.th,textAlign:"right"}}>Total Credits</th>
@@ -1871,8 +1880,11 @@ function BankStatementsTab() {
               const pct = stmt.creditCount > 0 ? Math.round((stmt.allocatedCount/stmt.creditCount)*100) : 0;
               return (
                 <tr key={stmt.statementId} style={s.rowPending}>
-                  <td style={s.td}>{stmt.fileName}</td>
-                  <td style={s.td}>{fmtDate(stmt.uploadedAt)}</td>
+                  <td style={s.td}>
+                    <div>{stmt.fileName}</div>
+                    {(stmt.importCount ?? 0) > 0 && <div style={{ fontSize: 11, color: "#6b7280" }}>{stmt.importCount} import{stmt.importCount !== 1 ? "s" : ""}</div>}
+                  </td>
+                  <td style={s.td}>{fmtDate(stmt.lastImportedAt ?? stmt.uploadedAt)}</td>
                   <td style={{...s.td,textAlign:"right"}}>{stmt.transactionCount}</td>
                   <td style={{...s.td,textAlign:"right"}}>{stmt.creditCount}</td>
                   <td style={{...s.td,textAlign:"right"}}>{fmt(stmt.totalCredits)}</td>
