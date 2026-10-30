@@ -2228,17 +2228,8 @@ function InvoicesTab({
                     </Td>
                     <Td>
                       <div style={{ display: "flex", flexDirection: "column" as const, gap: 4, alignItems: "flex-start" }}>
-                        {inv.paymentStatus === "Pending" && (() => {
-                          const needsMasterConfirm = ["EFT", "CardMachine", "Split"].includes(inv.paymentType);
-                          if (!needsMasterConfirm) return null;
-                          if (!isMaster) {
-                            return (
-                              <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 600 }} title="Only Master can confirm this payment">
-                                ⏳ Awaiting Master
-                              </span>
-                            );
-                          }
-                          return (
+                        {inv.paymentStatus === "Pending" && (
+                          isMaster ? (
                             <button
                               disabled={confirming === inv.invoiceId}
                               onClick={() => handleConfirm(inv.invoiceId, inv.customerId, inv.paymentType)}
@@ -2246,8 +2237,12 @@ function InvoicesTab({
                             >
                               {confirming === inv.invoiceId ? "…" : "Confirm"}
                             </button>
-                          );
-                        })()}
+                          ) : (
+                            <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 600 }} title="Only Master can confirm this payment">
+                              ⏳ Awaiting Master
+                            </span>
+                          )
+                        )}
                         {inv.status !== "Cancelled" && (
                           inv.amountPaid > 0 ? (
                             <span style={{ fontSize: 10, color: "#94a3b8" }} title="Bank-reconciled — remove the allocation on the Reconciliation page first">
