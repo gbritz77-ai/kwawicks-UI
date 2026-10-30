@@ -195,16 +195,18 @@ export function clearAuthTokens() {
 export function hasRole(role: string): boolean {
   const p = getProfileFromIdToken();
   if (!p) return false;
+  const lowerGroups = p.groups.map(g => g.toLowerCase());
   // Master has all roles
-  if (p.groups.includes("Master")) return true;
-  return p.groups.includes(role);
+  if (lowerGroups.includes("master")) return true;
+  return lowerGroups.includes(role.toLowerCase());
 }
 export function hasAnyRole(...roles: string[]): boolean {
   const p = getProfileFromIdToken();
   if (!p) return false;
+  const lowerGroups = p.groups.map(g => g.toLowerCase());
   // Master has all roles
-  if (p.groups.includes("Master")) return true;
-  return p.groups.some(g => roles.includes(g));
+  if (lowerGroups.includes("master")) return true;
+  return roles.some(r => lowerGroups.includes(r.toLowerCase()));
 }
 export async function refreshTokens(): Promise<{ accessToken: string; idToken: string; expiresIn: number; tokenType: string }> {
   const refreshToken = localStorage.getItem("kw_refreshToken");
