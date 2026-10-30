@@ -2228,7 +2228,7 @@ function InvoicesTab({
                     </Td>
                     <Td>
                       <div style={{ display: "flex", flexDirection: "column" as const, gap: 4, alignItems: "flex-start" }}>
-                        {inv.paymentStatus === "Pending" && (
+                        {inv.status !== "Cancelled" && (
                           isMaster ? (
                             <button
                               disabled={confirming === inv.invoiceId}
@@ -2237,11 +2237,11 @@ function InvoicesTab({
                             >
                               {confirming === inv.invoiceId ? "…" : "Confirm"}
                             </button>
-                          ) : (
+                          ) : inv.paymentStatus === "Pending" ? (
                             <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 600 }} title="Only Master can confirm this payment">
                               ⏳ Awaiting Master
                             </span>
-                          )
+                          ) : null
                         )}
                         {inv.status !== "Cancelled" && (
                           inv.amountPaid > 0 ? (
