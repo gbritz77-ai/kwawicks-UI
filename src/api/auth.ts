@@ -204,7 +204,6 @@ export function hasAnyRole(...roles: string[]): boolean {
   const p = getProfileFromIdToken();
   if (!p) return false;
   const lowerGroups = p.groups.map(g => g.toLowerCase());
-  console.debug("[auth] groups:", p.groups, "checking:", roles);
   // Master has all roles
   if (lowerGroups.includes("master")) return true;
   return roles.some(r => lowerGroups.includes(r.toLowerCase()));

@@ -2229,7 +2229,7 @@ function InvoicesTab({
                     <Td>
                       <div style={{ display: "flex", flexDirection: "column" as const, gap: 4, alignItems: "flex-start" }}>
                         {inv.status !== "Cancelled" && (
-                          isMaster ? (
+                          (isMaster || isOwner) ? (
                             <button
                               disabled={confirming === inv.invoiceId}
                               onClick={() => handleConfirm(inv.invoiceId, inv.customerId, inv.paymentType)}
