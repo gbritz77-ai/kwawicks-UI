@@ -2228,7 +2228,7 @@ function InvoicesTab({
                     </Td>
                     <Td>
                       <div style={{ display: "flex", flexDirection: "column" as const, gap: 4, alignItems: "flex-start" }}>
-                        {inv.status !== "Cancelled" && ["EFT", "Split"].includes(inv.paymentType) && (
+                        {inv.status !== "Cancelled" && inv.paymentStatus === "Pending" && ["EFT", "Split"].includes(inv.paymentType) && (
                           (isMaster || isOwner) ? (
                             <button
                               disabled={confirming === inv.invoiceId}
