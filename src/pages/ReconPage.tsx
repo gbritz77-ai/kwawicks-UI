@@ -496,15 +496,6 @@ function BankStatementsTab() {
     } catch (e: any) { setError(e?.message ?? "Failed to skip transaction."); }
   }
 
-  async function unskipTx(tx: BankTransactionResponse) {
-    if (!selected) return;
-    try {
-      const updated = await bankStatementsApi.unskip(selected.statementId, tx.transactionId);
-      setSelected(updated);
-      await loadStatements();
-    } catch (e: any) { setError(e?.message ?? "Failed to unskip transaction."); }
-  }
-
   async function skipAllDups() {
     if (!selected) return;
     try {
