@@ -542,7 +542,7 @@ export default function PettyCashPage() {
                         <span style={e.type === "In" ? s.badgeIn : s.badgeOut}>{e.type}</span>
                       </td>
                       <td style={s.td}><span style={s.badgeCat}>{e.category}</span></td>
-                      <td style={s.td}>{e.description}</td>
+                      <td style={s.td}>{e.description.replace(/\\/g, "")}</td>
                       <td style={s.td}>{e.recipientName || "—"}</td>
                       <td style={s.td}>{e.assignedDriverId || "—"}</td>
                       <td style={s.td}>{e.recordedBy}</td>
@@ -593,7 +593,7 @@ export default function PettyCashPage() {
                             <span style={e.type === "In" ? s.badgeIn : s.badgeOut}>{e.type}</span>
                           </td>
                           <td style={s.td}><span style={s.badgeCat}>{e.category}</span></td>
-                          <td style={s.td}>{e.description}</td>
+                          <td style={s.td}>{e.description.replace(/\\/g, "")}</td>
                           <td style={s.td}>{e.recipientName || "—"}</td>
                           <td style={s.td}>{e.recordedBy}</td>
                           <td style={s.td}>
