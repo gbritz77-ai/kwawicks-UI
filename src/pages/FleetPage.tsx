@@ -472,7 +472,8 @@ function VehicleCard({
   historyOpen: boolean;
   onToggleHistory: () => void;
 }) {
-  const odo = vehicle.odometerKm != null ? `${vehicle.odometerKm.toLocaleString()} ${vehicle.odoType}` : null;
+  const currentOdo = vehicle.latestOdometerKm ?? vehicle.odometerKm;
+  const odo = currentOdo != null ? `${currentOdo.toLocaleString()} ${vehicle.odoType}` : null;
 
   const licenceWarning = (() => {
     if (!vehicle.licenceExpiry) return null;
@@ -484,9 +485,9 @@ function VehicleCard({
   })();
 
   const serviceWarning = (() => {
-    if (vehicle.odometerKm == null || vehicle.lastServiceOdo == null || vehicle.serviceInterval == null) return null;
+    if (currentOdo == null || vehicle.lastServiceOdo == null || vehicle.serviceInterval == null) return null;
     const nextService = vehicle.lastServiceOdo + vehicle.serviceInterval;
-    const remaining = nextService - vehicle.odometerKm;
+    const remaining = nextService - currentOdo;
     const notify = vehicle.serviceNotifyBefore ?? vehicle.serviceInterval * 0.1;
     if (remaining <= 0) return { text: "SERVICE OVERDUE", color: "#dc2626" };
     if (remaining <= notify) return { text: `Service due in ${remaining.toFixed(0)} ${vehicle.odoType}`, color: "#d97706" };

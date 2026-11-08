@@ -18,6 +18,7 @@ export type VehicleDto = {
   fuelType: string;
   odoType: string;
   odometerKm: number | null;
+  latestOdometerKm: number | null;
   expectedConsumption: number | null;
   licenceExpiry: string | null;
   licenceRemindDays: number | null;
