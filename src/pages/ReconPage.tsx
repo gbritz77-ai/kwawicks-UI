@@ -97,7 +97,6 @@ function BankStatementsTab() {
 
   // Left-panel filters
   const [txTypeFilter,  setTxTypeFilter]  = useState<"all"|"Credit"|"Debit">("Credit");
-  const [txAllocFilter, setTxAllocFilter] = useState<"all"|"unallocated"|"allocated">("unallocated");
   const [txSearch,      setTxSearch]      = useState("");
   const [showDuplicates, setShowDuplicates] = useState(false);
 
@@ -173,7 +172,7 @@ function BankStatementsTab() {
   async function openStatement(statementId: string) {
     setDetailLoading(true);
     resetRightPanel();
-    setTxSearch(""); setTxTypeFilter("Credit"); setTxAllocFilter("unallocated"); setShowDuplicates(false);
+    setTxSearch(""); setTxTypeFilter("Credit"); setShowDuplicates(false);
     try { setSelected(await bankStatementsApi.get(statementId)); }
     catch (e: any) { setError(e?.message ?? "Failed to load statement."); }
     finally { setDetailLoading(false); }
@@ -520,9 +519,7 @@ function BankStatementsTab() {
 
   const visibleTx = (selected?.transactions ?? []).filter(tx => {
     if (txTypeFilter !== "all" && tx.type !== txTypeFilter) return false;
-    if (tx.type === "Debit" && tx.isAllocated) return false;   // allocated debits never shown
-    if (txAllocFilter === "unallocated" && tx.isAllocated) return false;
-    if (txAllocFilter === "allocated"   && !tx.isAllocated) return false;
+    if (tx.isAllocated) return false;   // allocated transactions always hidden from main list
     return txMatchesSearch(tx, txSearch);
   });
 
@@ -1052,13 +1049,6 @@ function BankStatementsTab() {
               <option value="all">All</option><option value="Credit">Credits</option><option value="Debit">Debits</option>
             </select>
           </div>
-          {txTypeFilter !== "Debit" && (
-            <div style={s.filterGroup}><label style={s.filterLabel}>Allocation</label>
-              <select style={s.select} value={txAllocFilter} onChange={e=>setTxAllocFilter(e.target.value as any)}>
-                <option value="all">All</option><option value="unallocated">Unallocated</option><option value="allocated">Allocated</option>
-              </select>
-            </div>
-          )}
           <div style={s.filterGroup}><label style={s.filterLabel}>Search</label>
             <input style={{ ...s.input, minWidth: 180 }} placeholder="Description or ref…" value={txSearch} onChange={e=>setTxSearch(e.target.value)} />
           </div>
@@ -1139,23 +1129,47 @@ function BankStatementsTab() {
               })}
             </div>
 
-            {/* Possible duplicates — filtered to match the active type view and search */}
+            {/* Allocated + Possible duplicates section */}
             {(() => {
+              const allocatedTx = (selected.transactions ?? []).filter(tx => {
+                if (!tx.isAllocated) return false;
+                if (txTypeFilter === "Debit"  && tx.type !== "Debit")  return false;
+                if (txTypeFilter === "Credit" && tx.type !== "Credit") return false;
+                return txMatchesSearch(tx, txSearch);
+              });
               const visibleDups = (selected.possibleDuplicates ?? []).filter(tx => {
                 if (txTypeFilter === "Debit"  && tx.type !== "Debit")  return false;
                 if (txTypeFilter === "Credit" && tx.type !== "Credit") return false;
                 return txMatchesSearch(tx, txSearch);
               });
-              const dupsSectionOpen = showDuplicates || (txSearch.length > 0 && visibleDups.length > 0);
-              if (visibleDups.length === 0) return null;
+              const totalCount = allocatedTx.length + visibleDups.length;
+              const dupsSectionOpen = showDuplicates || (txSearch.length > 0 && totalCount > 0);
+              if (totalCount === 0) return null;
               return (
               <div style={sp.dupSection}>
                 <div style={sp.dupHeader} onClick={() => setShowDuplicates(v => !v)}>
-                  <span>⚠ Possible Duplicates ({visibleDups.length})</span>
+                  <span>⚠ Allocated / Duplicates ({totalCount})</span>
                   <span>{dupsSectionOpen ? "▲" : "▼"}</span>
                 </div>
                 {dupsSectionOpen && (
                   <div style={sp.dupList}>
+                    {allocatedTx.map(tx => {
+                      const isActive = activeTx?.transactionId === tx.transactionId;
+                      return (
+                        <div key={tx.transactionId} style={{ ...sp.txRow, ...sp.dupRow, ...(isActive ? sp.txRowActive : {}), cursor: "default" }}>
+                          <div style={sp.txTop}>
+                            <span style={sp.txDate}>{fmtDate(tx.date)}</span>
+                            <span style={{ ...sp.txAmount, color: "#15803d" }}>{fmt(tx.amount)}</span>
+                          </div>
+                          <div style={sp.txDesc}>{tx.description}</div>
+                          {tx.reference && <div style={sp.txRef}>{tx.reference}</div>}
+                          <div style={{ marginTop: 4, fontSize: 11, color: "#15803d", fontWeight: 600 }}>
+                            ✓ Allocated — {tx.allocationType}{tx.allocatedInvoiceNumber ? ` · ${tx.allocatedInvoiceNumber}` : ""}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {visibleDups.length > 0 && (
                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, flexWrap: "wrap" as const }}>
                       <div style={sp.dupNote}>
                         These {txTypeFilter === "Debit" ? "debits" : "credits"} match the date + amount of a transaction already reconciled under a different statement upload —
@@ -1168,6 +1182,7 @@ function BankStatementsTab() {
                         Skip All Duplicates
                       </button>
                     </div>
+                    )}
                     {visibleDups.map(tx => {
                       const isActive = activeTx?.transactionId === tx.transactionId;
                       return (
