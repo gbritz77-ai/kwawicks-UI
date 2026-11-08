@@ -29,6 +29,12 @@ function fmtDate(iso: string | null | undefined) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" });
 }
+function fmtDateTime(iso: string | null | undefined) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" })
+    + " " + d.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit" });
+}
 function todayIso() { return new Date().toISOString().slice(0, 10); }
 function thirtyDaysAgoIso() {
   const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10);
@@ -1851,7 +1857,7 @@ function BankStatementsTab() {
                     <div>{stmt.fileName}</div>
                     {(stmt.importCount ?? 0) > 0 && <div style={{ fontSize: 11, color: "#6b7280" }}>{stmt.importCount} import{stmt.importCount !== 1 ? "s" : ""}</div>}
                   </td>
-                  <td style={s.td}>{fmtDate(stmt.lastImportedAt ?? stmt.uploadedAt)}</td>
+                  <td style={s.td}>{fmtDateTime(stmt.lastImportedAt ?? stmt.uploadedAt)}</td>
                   <td style={{...s.td,textAlign:"right"}}>{stmt.transactionCount}</td>
                   <td style={{...s.td,textAlign:"right"}}>{stmt.creditCount}</td>
                   <td style={{...s.td,textAlign:"right"}}>{fmt(stmt.totalCredits)}</td>
