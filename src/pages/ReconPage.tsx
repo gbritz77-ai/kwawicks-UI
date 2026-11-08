@@ -1875,7 +1875,7 @@ function BankStatementsTab() {
 const sp: Record<string, React.CSSProperties> = {
   splitWrap: { display:"flex", gap:0, border:"1px solid #e5e7eb", borderRadius:12, overflow:"hidden", background:"#fff", height:"calc(100vh - 380px)", minHeight:480 },
   leftPanel: { width:"44%", borderRight:"1px solid #e5e7eb", display:"flex", flexDirection:"column", overflow:"hidden" },
-  rightPanel: { flex:1, display:"flex", flexDirection:"column", padding:"14px 16px", overflow:"hidden" },
+  rightPanel: { flex:1, display:"flex", flexDirection:"column", padding:"14px 16px", overflowY:"auto" },
   panelTitle: { fontSize:11, fontWeight:700, textTransform:"uppercase" as const, letterSpacing:"0.06em", color:"#6b7280", padding:"12px 14px 6px", borderBottom:"1px solid #f1f5f9" },
   txList: { flex:1, overflowY:"auto" as const },
   dupSection: { borderTop:"2px solid #fcd34d", background:"#fffbeb" },
