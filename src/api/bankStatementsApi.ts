@@ -175,6 +175,117 @@ export type DebitReportResponse = {
   items: DebitReportItem[];
 };
 
+// ── Flat transaction API types ─────────────────────────────────────────────
+
+export type ImportTransactionResult = {
+  newTransactionsAdded: number;
+  duplicatesSkipped: number;
+  totalTransactions: number;
+  pendingCount: number;
+  reconnedCount: number;
+  lastImportedAt: string;
+  importCount: number;
+};
+
+export type FlatTransactionListResponse = {
+  pending: BankTransactionResponse[];
+  reconned: BankTransactionResponse[];
+  pendingCount: number;
+  reconnedCount: number;
+  pendingAmount: number;
+  lastImportedAt: string | null;
+  importCount: number;
+};
+
+export type AllocateTransactionResponse = {
+  transaction: BankTransactionResponse;
+  warning?: AllocationWarning;
+};
+
+export type MigrateResult = {
+  migrated: number;
+  skipped: number;
+};
+
+// ── Flat transaction API ───────────────────────────────────────────────────
+
+export const bankTransactionsApi = {
+  getUploadUrl: (fileName: string) =>
+    api.get<{ uploadUrl: string; s3Key: string }>(
+      `/api/bank-transactions/upload-url?fileName=${encodeURIComponent(fileName)}`
+    ),
+
+  import: (req: ProcessBankStatementRequest) =>
+    api.post<ImportTransactionResult>("/api/bank-transactions/import", req),
+
+  list: (params?: { type?: string; status?: string; search?: string; from?: string; to?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.type)   qs.set("type",   params.type);
+    if (params?.status) qs.set("status", params.status);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.from)   qs.set("from",   params.from);
+    if (params?.to)     qs.set("to",     params.to);
+    const q = qs.toString();
+    return api.get<FlatTransactionListResponse>(`/api/bank-transactions${q ? `?${q}` : ""}`);
+  },
+
+  getMatches: (txId: string, search?: string) => {
+    const qs = search ? `?search=${encodeURIComponent(search)}` : "";
+    return api.get<import("./invoicesApi").ReconInvoiceItem[]>(
+      `/api/bank-transactions/${txId}/matches${qs}`
+    );
+  },
+
+  allocate: (txId: string, req: AllocateBankTransactionRequest) =>
+    api.put<AllocateTransactionResponse>(`/api/bank-transactions/${txId}/allocate`, req),
+
+  allocateNonClient: (txId: string, req: AllocateNonClientRequest) =>
+    api.put<AllocateTransactionResponse>(`/api/bank-transactions/${txId}/allocate-non-client`, req),
+
+  allocateSupplier: (txId: string, req: AllocateSupplierRequest) =>
+    api.put<AllocateTransactionResponse>(`/api/bank-transactions/${txId}/allocate-supplier`, req),
+
+  allocateClientCredit: (txId: string, req: AllocateClientCreditRequest) =>
+    api.put<AllocateTransactionResponse>(`/api/bank-transactions/${txId}/allocate-client-credit`, req),
+
+  splitClientCredit: (txId: string, req: SplitClientCreditRequest) =>
+    api.put<AllocateTransactionResponse>(`/api/bank-transactions/${txId}/split-client-credit`, req),
+
+  allocateExpense: (txId: string, req: AllocateExpenseRequest) =>
+    api.put<AllocateTransactionResponse>(`/api/bank-transactions/${txId}/allocate-expense`, req),
+
+  allocatePettyCash: (txId: string) =>
+    api.put<AllocateTransactionResponse>(`/api/bank-transactions/${txId}/allocate-petty-cash`, {}),
+
+  deallocate: (txId: string) =>
+    api.del<BankTransactionResponse>(`/api/bank-transactions/${txId}/allocate`),
+
+  getExpenseCategories: () =>
+    api.get<string[]>("/api/bank-transactions/expense-categories"),
+
+  addExpenseCategory: (category: string) =>
+    api.post<string[]>("/api/bank-transactions/expense-categories", { category }),
+
+  migrate: () =>
+    api.post<MigrateResult>("/api/bank-transactions/migrate", {}),
+
+  getDebitReport: (params?: { from?: string; to?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to)   qs.set("to",   params.to);
+    const q = qs.toString();
+    return api.get<DebitReportResponse>(`/api/bank-transactions/debit-report${q ? `?${q}` : ""}`);
+  },
+
+  getAllocationReport: (params?: { from?: string; to?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to)   qs.set("to",   params.to);
+    const q = qs.toString();
+    return api.get<BankReconAllocationReportItem[]>(`/api/bank-transactions/allocation-report${q ? `?${q}` : ""}`);
+  },
+};
+
 // ── API ────────────────────────────────────────────────────────────────────
 
 export const bankStatementsApi = {

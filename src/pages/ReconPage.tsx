@@ -2,15 +2,14 @@
 import * as XLSX from "xlsx";
 import { invoicesApi } from "../api/invoicesApi";
 import type { ReconInvoiceItem, InvoiceResponse } from "../api/invoicesApi";
-import { bankStatementsApi } from "../api/bankStatementsApi";
+import { bankTransactionsApi } from "../api/bankStatementsApi";
 import type {
-  BankStatementSummaryResponse,
-  BankStatementResponse,
   BankTransactionResponse,
   AllocationWarning,
   BankReconAllocationReportItem,
   DebitReportResponse,
   SplitAllocationLine,
+  FlatTransactionListResponse,
 } from "../api/bankStatementsApi";
 import { clientsApi } from "../api/clientsApi";
 import type { ClientDto } from "../api/clientsApi";
@@ -58,12 +57,11 @@ export default function ReconPage() {
 type RightMode = "matches" | "browse" | "clientcredit" | "splitcredit" | "suppliers" | "nonclient" | "expense" | "pettycash";
 
 function BankStatementsTab() {
-  // Statement list
-  const [statements,    setStatements]    = useState<BankStatementSummaryResponse[]>([]);
+  // Flat transaction list
+  const [transactions,  setTransactions]  = useState<FlatTransactionListResponse | null>(null);
   const [loading,       setLoading]       = useState(false);
   const [error,         setError]         = useState("");
-  const [selected,      setSelected]      = useState<BankStatementResponse | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [showReconned,  setShowReconned]  = useState(false);
 
   // Allocation report view
   const [showReport,    setShowReport]    = useState(false);
@@ -81,12 +79,12 @@ function BankStatementsTab() {
   const [debitAllocFilter,   setDebitAllocFilter]   = useState<"all"|"allocated"|"unallocated">("all");
   const [debitCatFilter,     setDebitCatFilter]     = useState("");
   const [debitSearch,        setDebitSearch]        = useState("");
-  const [editingPcEntry,     setEditingPcEntry]     = useState<string | null>(null); // entryId being edited
+  const [editingPcEntry,     setEditingPcEntry]     = useState<string | null>(null);
   const [editingPcCategory,  setEditingPcCategory]  = useState("");
   const [editingPcBusy,      setEditingPcBusy]      = useState(false);
 
   // Debit report inline allocation
-  const [debitAllocRow,      setDebitAllocRow]      = useState<string | null>(null); // transactionId
+  const [debitAllocRow,      setDebitAllocRow]      = useState<string | null>(null);
   const [debitAllocMode,     setDebitAllocMode]     = useState<"supplier"|"expense"|"nonclient">("expense");
   const [debitAllocSupplierId,  setDebitAllocSupplierId]  = useState("");
   const [debitAllocSupplierSearch, setDebitAllocSupplierSearch] = useState("");
@@ -104,7 +102,6 @@ function BankStatementsTab() {
   // Left-panel filters
   const [txTypeFilter,  setTxTypeFilter]  = useState<"all"|"Credit"|"Debit">("Credit");
   const [txSearch,      setTxSearch]      = useState("");
-  const [showDuplicates, setShowDuplicates] = useState(false);
 
   // Selected transaction
   const [activeTx, setActiveTx] = useState<BankTransactionResponse | null>(null);
@@ -159,15 +156,18 @@ function BankStatementsTab() {
   const [newExpenseCategory,     setNewExpenseCategory]     = useState("");
   const [addingCategory,         setAddingCategory]         = useState(false);
 
+  // Migrate
+  const [migrateLoading, setMigrateLoading] = useState(false);
+
   // ── Loaders ──────────────────────────────────────────────────────────────
 
-  async function loadStatements() {
+  async function loadTransactions() {
     setLoading(true); setError("");
-    try { setStatements(await bankStatementsApi.list()); }
-    catch (e: any) { setError(e?.message ?? "Failed to load statements."); }
+    try { setTransactions(await bankTransactionsApi.list()); }
+    catch (e: any) { setError(e?.message ?? "Failed to load transactions."); }
     finally { setLoading(false); }
   }
-  useEffect(() => { loadStatements(); }, []);
+  useEffect(() => { loadTransactions(); }, []);
 
   async function ensureClients() {
     if (clientsLoaded) return;
@@ -175,19 +175,10 @@ function BankStatementsTab() {
     catch { /* ignore */ }
   }
 
-  async function openStatement(statementId: string) {
-    setDetailLoading(true);
-    resetRightPanel();
-    setTxSearch(""); setTxTypeFilter("Credit"); setShowDuplicates(false);
-    try { setSelected(await bankStatementsApi.get(statementId)); }
-    catch (e: any) { setError(e?.message ?? "Failed to load statement."); }
-    finally { setDetailLoading(false); }
-  }
-
   async function loadReport() {
     setReportLoading(true);
     try {
-      const data = await bankStatementsApi.getAllocationReport({
+      const data = await bankTransactionsApi.getAllocationReport({
         from: reportFrom || undefined,
         to:   reportTo   ? reportTo + "T23:59:59Z" : undefined,
       });
@@ -200,7 +191,7 @@ function BankStatementsTab() {
   async function loadDebitReport() {
     setDebitReportLoading(true);
     try {
-      const data = await bankStatementsApi.getDebitReport({
+      const data = await bankTransactionsApi.getDebitReport({
         from: debitReportFrom || undefined,
         to:   debitReportTo   ? debitReportTo + "T23:59:59Z" : undefined,
       });
@@ -216,22 +207,33 @@ function BankStatementsTab() {
   async function handleUpload(file: File) {
     setUploading(true); setUploadProgress("Getting upload URL…"); setError("");
     try {
-      const { uploadUrl, s3Key } = await bankStatementsApi.getUploadUrl(file.name);
+      const { uploadUrl, s3Key } = await bankTransactionsApi.getUploadUrl(file.name);
       setUploadProgress("Uploading CSV…");
       const put = await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": "text/csv" } });
       if (!put.ok) throw new Error("Upload to S3 failed.");
       setUploadProgress("Parsing statement…");
-      const result = await bankStatementsApi.process({ s3Key, fileName: file.name });
-      await loadStatements();
-      openStatement(result.statementId);
-      if ((result.newTransactionsAdded ?? 0) > 0 || (result.duplicatesSkipped ?? 0) > 0) {
-        const added = result.newTransactionsAdded ?? 0;
-        const skipped = result.duplicatesSkipped ?? 0;
-        setError(""); // clear any old error
+      const result = await bankTransactionsApi.import({ s3Key, fileName: file.name });
+      await loadTransactions();
+      const added = result.newTransactionsAdded;
+      const skipped = result.duplicatesSkipped;
+      if (added > 0 || skipped > 0) {
         alert(`Import complete: ${added} new transaction${added !== 1 ? "s" : ""} added${skipped > 0 ? `, ${skipped} duplicate${skipped !== 1 ? "s" : ""} skipped` : ""}.`);
       }
     } catch (e: any) { setError(e?.message ?? "Upload failed."); }
     finally { setUploading(false); setUploadProgress(""); }
+  }
+
+  // ── Migrate historical data ───────────────────────────────────────────────
+
+  async function runMigration() {
+    if (!window.confirm("Migrate all historical bank statement transactions into the flat transaction table? Duplicates will be skipped.")) return;
+    setMigrateLoading(true); setError("");
+    try {
+      const result = await bankTransactionsApi.migrate();
+      await loadTransactions();
+      alert(`Migration complete: ${result.migrated} migrated, ${result.skipped} skipped.`);
+    } catch (e: any) { setError(e?.message ?? "Migration failed."); }
+    finally { setMigrateLoading(false); }
   }
 
   // ── Select transaction + fetch smart matches ───────────────────────────
@@ -256,18 +258,17 @@ function BankStatementsTab() {
     setPickedCreditClient(null); setCreditClientSearch(""); setCreditBalance(null); setCreditNotes("");
     setPickedExpenseCategory(""); setNewExpenseCategory("");
 
-    // Load smart matches
     setMatchesLoading(true);
-    try { setMatches(await bankStatementsApi.getMatches(selected!.statementId, tx.transactionId)); }
-    catch { /* silent — show empty state */ }
+    try { setMatches(await bankTransactionsApi.getMatches(tx.transactionId)); }
+    catch { /* silent */ }
     finally { setMatchesLoading(false); }
   }
 
   async function searchMatches(q: string) {
-    if (!selected || !activeTx) return;
+    if (!activeTx) return;
     setMatchSearch(q);
     setMatchesLoading(true);
-    try { setMatches(await bankStatementsApi.getMatches(selected.statementId, activeTx.transactionId, q)); }
+    try { setMatches(await bankTransactionsApi.getMatches(activeTx.transactionId, q)); }
     catch { /* silent */ }
     finally { setMatchesLoading(false); }
   }
@@ -319,16 +320,16 @@ function BankStatementsTab() {
   }
 
   async function allocateClientCredit() {
-    if (!selected || !activeTx || !pickedCreditClient) return;
+    if (!activeTx || !pickedCreditClient) return;
     setAllocBusy(pickedCreditClient.clientId); setAllocError("");
     try {
-      const res = await bankStatementsApi.allocateClientCredit(
-        selected.statementId, activeTx.transactionId,
+      const res = await bankTransactionsApi.allocateClientCredit(
+        activeTx.transactionId,
         { clientId: pickedCreditClient.clientId, notes: creditNotes.trim() || undefined, statementDate: activeTx.date }
       );
-      setSelected(res.statement);
+      setWarning(res.warning ?? null);
       resetRightPanel();
-      await loadStatements();
+      await loadTransactions();
     } catch (e: any) { setAllocError(e?.message ?? "Failed to allocate."); }
     finally { setAllocBusy(null); }
   }
@@ -336,7 +337,7 @@ function BankStatementsTab() {
   // ── Split credit allocation ───────────────────────────────────────────────
 
   async function doSplitClientCredit() {
-    if (!selected || !activeTx) return;
+    if (!activeTx) return;
     const validLines = splitLines.filter(l => l.clientId && l.amount > 0);
     if (validLines.length < 2) { setSplitError("Add at least 2 lines with a client and amount."); return; }
     const total = validLines.reduce((s, l) => s + l.amount, 0);
@@ -346,26 +347,15 @@ function BankStatementsTab() {
     }
     setSplitBusy(true); setSplitError("");
     try {
-      const res = await bankStatementsApi.splitClientCredit(
-        selected.statementId, activeTx.transactionId,
+      const res = await bankTransactionsApi.splitClientCredit(
+        activeTx.transactionId,
         { lines: validLines, statementDate: activeTx.date }
       );
-      setSelected(res.statement);
+      setWarning(res.warning ?? null);
       resetRightPanel();
-      await loadStatements();
+      await loadTransactions();
     } catch (e: any) { setSplitError(e?.message ?? "Failed to split."); }
     finally { setSplitBusy(false); }
-  }
-
-  // ── Delete statement ──────────────────────────────────────────────────────
-
-  async function deleteStatement(statementId: string, fileName: string) {
-    if (!window.confirm(`Delete "${fileName}"? This cannot be undone.`)) return;
-    try {
-      await bankStatementsApi.deleteStatement(statementId);
-      await loadStatements();
-      if (selected?.statementId === statementId) { setSelected(null); resetRightPanel(); }
-    } catch (e: any) { setError(e?.message ?? "Failed to delete statement."); }
   }
 
   // ── Browse suppliers ──────────────────────────────────────────────────────
@@ -386,21 +376,19 @@ function BankStatementsTab() {
   async function switchToExpense() {
     setRightMode("expense"); setPickedExpenseCategory(""); setNewExpenseCategory("");
     if (!expenseCatsLoaded) {
-      try { setExpenseCategories(await bankStatementsApi.getExpenseCategories()); setExpenseCatsLoaded(true); }
+      try { setExpenseCategories(await bankTransactionsApi.getExpenseCategories()); setExpenseCatsLoaded(true); }
       catch { /* ignore */ }
     }
   }
 
   async function allocateExpense() {
-    if (!selected || !activeTx || !pickedExpenseCategory) return;
+    if (!activeTx || !pickedExpenseCategory) return;
     setAllocBusy("expense"); setAllocError("");
     try {
-      const res = await bankStatementsApi.allocateExpense(
-        selected.statementId, activeTx.transactionId, { category: pickedExpenseCategory }
-      );
-      setSelected(res.statement);
+      const res = await bankTransactionsApi.allocateExpense(activeTx.transactionId, { category: pickedExpenseCategory });
+      setWarning(res.warning ?? null);
       resetRightPanel();
-      await loadStatements();
+      await loadTransactions();
     } catch (e: any) { setAllocError(e?.message ?? "Failed to allocate."); }
     finally { setAllocBusy(null); }
   }
@@ -409,7 +397,7 @@ function BankStatementsTab() {
     if (!newExpenseCategory.trim()) return;
     setAddingCategory(true);
     try {
-      const updated = await bankStatementsApi.addExpenseCategory(newExpenseCategory.trim());
+      const updated = await bankTransactionsApi.addExpenseCategory(newExpenseCategory.trim());
       setExpenseCategories(updated);
       setPickedExpenseCategory(newExpenseCategory.trim());
       setNewExpenseCategory("");
@@ -420,94 +408,71 @@ function BankStatementsTab() {
   // ── Allocate ──────────────────────────────────────────────────────────────
 
   async function allocateToInvoice(invoiceId: string) {
-    if (!selected || !activeTx) return;
+    if (!activeTx) return;
     setAllocBusy(invoiceId); setAllocError("");
     try {
-      const res = await bankStatementsApi.allocate(selected.statementId, activeTx.transactionId, { invoiceId });
-      setSelected(res.statement);
+      const res = await bankTransactionsApi.allocate(activeTx.transactionId, { invoiceId });
       setWarning(res.warning ?? null);
       if (!res.warning) resetRightPanel();
-      else setActiveTx(null); // keep warning visible but deselect tx
-      await loadStatements();
+      else setActiveTx(null);
+      await loadTransactions();
     } catch (e: any) { setAllocError(e?.message ?? "Failed to allocate."); }
     finally { setAllocBusy(null); }
   }
 
   async function allocateToSupplier() {
-    if (!selected || !activeTx || !pickedSupplier) return;
+    if (!activeTx || !pickedSupplier) return;
     setAllocBusy(pickedSupplier.supplierId); setAllocError("");
     try {
-      const res = await bankStatementsApi.allocateSupplier(
-        selected.statementId, activeTx.transactionId,
+      const res = await bankTransactionsApi.allocateSupplier(
+        activeTx.transactionId,
         { supplierId: pickedSupplier.supplierId, notes: supplierNotes.trim() || undefined }
       );
-      setSelected(res.statement);
       setWarning(res.warning ?? null);
       resetRightPanel();
-      await loadStatements();
+      await loadTransactions();
     } catch (e: any) { setAllocError(e?.message ?? "Failed to allocate."); }
     finally { setAllocBusy(null); }
   }
 
   async function allocateNonClient() {
-    if (!selected || !activeTx || !ncDescription.trim()) return;
+    if (!activeTx || !ncDescription.trim()) return;
     const parsedAmt = ncAmount ? parseFloat(ncAmount) : 0;
     setAllocBusy("nonclient"); setAllocError("");
     try {
-      const res = await bankStatementsApi.allocateNonClient(
-        selected.statementId, activeTx.transactionId,
+      const res = await bankTransactionsApi.allocateNonClient(
+        activeTx.transactionId,
         { description: ncDescription.trim(), amount: parsedAmt }
       );
-      setSelected(res.statement);
       setWarning(res.warning ?? null);
       if (!res.warning) resetRightPanel();
       else setActiveTx(null);
-      await loadStatements();
+      await loadTransactions();
     } catch (e: any) { setAllocError(e?.message ?? "Failed to allocate."); }
     finally { setAllocBusy(null); }
   }
 
   async function allocatePettyCash() {
-    if (!selected || !activeTx) return;
+    if (!activeTx) return;
     setAllocBusy("pettycash"); setAllocError("");
     try {
-      const res = await bankStatementsApi.allocatePettyCash(selected.statementId, activeTx.transactionId);
-      setSelected(res.statement);
+      const res = await bankTransactionsApi.allocatePettyCash(activeTx.transactionId);
       setWarning(res.warning ?? null);
       if (!res.warning) resetRightPanel();
       else setActiveTx(null);
-      await loadStatements();
+      await loadTransactions();
     } catch (e: any) { setAllocError(e?.message ?? "Failed to allocate."); }
     finally { setAllocBusy(null); }
   }
 
   async function deallocate(tx: BankTransactionResponse) {
-    if (!selected) return;
     if (!window.confirm(`Remove allocation from this transaction?`)) return;
     try {
-      const updated = await bankStatementsApi.deallocate(selected.statementId, tx.transactionId);
-      setSelected(updated); setWarning(null);
+      await bankTransactionsApi.deallocate(tx.transactionId);
+      setWarning(null);
       if (activeTx?.transactionId === tx.transactionId) resetRightPanel();
-      await loadStatements();
+      await loadTransactions();
     } catch (e: any) { setError(e?.message ?? "Failed to deallocate."); }
-  }
-
-  async function skipTx(tx: BankTransactionResponse) {
-    if (!selected) return;
-    try {
-      const updated = await bankStatementsApi.skip(selected.statementId, tx.transactionId);
-      setSelected(updated);
-      await loadStatements();
-    } catch (e: any) { setError(e?.message ?? "Failed to skip transaction."); }
-  }
-
-  async function skipAllDups() {
-    if (!selected) return;
-    try {
-      const updated = await bankStatementsApi.skipAllDuplicates(selected.statementId);
-      setSelected(updated);
-      await loadStatements();
-    } catch (e: any) { setError(e?.message ?? "Failed to skip duplicates."); }
   }
 
   // ── Filtered transactions ─────────────────────────────────────────────────
@@ -523,9 +488,13 @@ function BankStatementsTab() {
     );
   }
 
-  const visibleTx = (selected?.transactions ?? []).filter(tx => {
+  const visibleTx = (transactions?.pending ?? []).filter(tx => {
     if (txTypeFilter !== "all" && tx.type !== txTypeFilter) return false;
-    if (tx.isAllocated) return false;   // allocated transactions always hidden from main list
+    return txMatchesSearch(tx, txSearch);
+  });
+
+  const visibleReconned = (transactions?.reconned ?? []).filter(tx => {
+    if (txTypeFilter !== "all" && tx.type !== txTypeFilter) return false;
     return txMatchesSearch(tx, txSearch);
   });
 
@@ -542,26 +511,23 @@ function BankStatementsTab() {
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 
-  const totalUnalloc  = statements.reduce((sum, s) => sum + s.unallocatedCount, 0);
-  const totalUnallocAmt = statements.reduce((sum, s) => sum + s.unallocatedAmount, 0);
-
   // ── Debit report inline allocation ───────────────────────────────────────
 
-  async function doDebitAlloc(item: { statementId: string; transactionId: string }) {
+  async function doDebitAlloc(transactionId: string) {
     setDebitAllocBusy(true); setDebitAllocError("");
     try {
       if (debitAllocMode === "supplier") {
         if (!debitAllocSupplierId) { setDebitAllocError("Pick a supplier."); setDebitAllocBusy(false); return; }
-        await bankStatementsApi.allocateSupplier(item.statementId, item.transactionId, {
+        await bankTransactionsApi.allocateSupplier(transactionId, {
           supplierId: debitAllocSupplierId,
           notes: debitAllocSupplierNotes.trim() || undefined,
         });
       } else if (debitAllocMode === "expense") {
         if (!debitAllocExpCat) { setDebitAllocError("Pick a category."); setDebitAllocBusy(false); return; }
-        await bankStatementsApi.allocateExpense(item.statementId, item.transactionId, { category: debitAllocExpCat });
+        await bankTransactionsApi.allocateExpense(transactionId, { category: debitAllocExpCat });
       } else {
         if (!debitAllocNcDesc.trim()) { setDebitAllocError("Enter a description."); setDebitAllocBusy(false); return; }
-        await bankStatementsApi.allocateNonClient(item.statementId, item.transactionId, {
+        await bankTransactionsApi.allocateNonClient(transactionId, {
           description: debitAllocNcDesc.trim(), amount: 0,
         });
       }
@@ -579,7 +545,7 @@ function BankStatementsTab() {
     setDebitAllocNcDesc(""); setDebitAllocError("");
     ensureSuppliers();
     if (!expenseCatsLoaded) {
-      bankStatementsApi.getExpenseCategories().then(c => { setExpenseCategories(c); setExpenseCatsLoaded(true); });
+      bankTransactionsApi.getExpenseCategories().then(c => { setExpenseCategories(c); setExpenseCatsLoaded(true); });
     }
   }
 
@@ -604,7 +570,6 @@ function BankStatementsTab() {
       }
       return true;
     });
-    // Specific category labels for the filter (e.g. "Fuel", "Bank Charges", not just "Expense")
     const categoryLabels = Array.from(new Set(
       (debitReport?.items ?? [])
         .filter(i => i.isAllocated && i.allocatedTo)
@@ -683,7 +648,6 @@ function BankStatementsTab() {
                         setDebitAllocFilter("unallocated");
                         setDebitCatFilter("");
                       } else {
-                        // label is like "Expense: Fuel" — extract the specific category
                         const colonIdx = cat.label.indexOf(": ");
                         const specificCat = colonIdx >= 0 ? cat.label.slice(colonIdx + 2) : cat.label;
                         setDebitCatFilter(prev => prev === specificCat ? "" : specificCat);
@@ -808,7 +772,7 @@ function BankStatementsTab() {
                                     setEditingPcEntry(item.transactionId);
                                     setEditingPcCategory(item.allocatedTo || "Other");
                                     if (!expenseCatsLoaded) {
-                                      bankStatementsApi.getExpenseCategories().then(setExpenseCategories).catch(() => {}).then(() => setExpenseCatsLoaded(true));
+                                      bankTransactionsApi.getExpenseCategories().then(setExpenseCategories).catch(() => {}).then(() => setExpenseCatsLoaded(true));
                                     }
                                   }}
                                 >✎</button>
@@ -832,7 +796,7 @@ function BankStatementsTab() {
                           ? <span style={{...s.badge, background:"#fef3c7", color:"#92400e", fontSize:11}}>Petty Cash</span>
                           : <span style={{...s.badge, background:"#eff6ff", color:"#1d4ed8", fontSize:11}}>Bank</span>}
                       </td>
-                      <td style={{...s.td, fontSize:12, color:"#9ca3af", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis"}}>{item.source === "PettyCash" ? "—" : item.fileName}</td>
+                      <td style={{...s.td, fontSize:12, color:"#9ca3af", maxWidth:160, overflow:"hidden", textOverflow:"ellipsis"}}>{item.source === "PettyCash" ? "—" : (item.fileName || "—")}</td>
                     </tr>
                     {isAllocRowOpen && (
                       <tr style={{ background:"#eff6ff" }}>
@@ -912,7 +876,7 @@ function BankStatementsTab() {
                               <button
                                 style={{ fontSize:12, background:"#166534", color:"#fff", border:"none", borderRadius:5, padding:"5px 14px", cursor:"pointer", fontWeight:600, opacity: debitAllocBusy ? 0.6 : 1 }}
                                 disabled={debitAllocBusy}
-                                onClick={() => doDebitAlloc(item)}
+                                onClick={() => doDebitAlloc(item.transactionId)}
                               >{debitAllocBusy ? "Saving…" : "Save"}</button>
                               <button
                                 style={{ fontSize:12, background:"#fff", color:"#6b7280", border:"1px solid #d1d5db", borderRadius:5, padding:"5px 14px", cursor:"pointer" }}
@@ -963,7 +927,7 @@ function BankStatementsTab() {
               {report.map(r => (
                 <tr key={r.transactionId} style={s.rowPending}>
                   <td style={s.td}>{fmtDate(r.date)}</td>
-                  <td style={{...s.td,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis"}}>{r.fileName}</td>
+                  <td style={{...s.td,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis"}}>{r.fileName || "—"}</td>
                   <td style={{...s.td,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis"}}>{r.description}</td>
                   <td style={{...s.td,...s.mono,fontSize:12}}>{r.reference||"—"}</td>
                   <td style={{...s.td,textAlign:"right",fontWeight:600}}>{fmt(r.amount)}</td>
@@ -999,83 +963,112 @@ function BankStatementsTab() {
     );
   }
 
-  // ── Statement detail (split panel) ────────────────────────────────────────
+  // ── Main: flat transaction list ───────────────────────────────────────────
 
-  if (selected) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {error && <div style={s.errorBanner}>{error}</div>}
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {error && <div style={s.errorBanner}>{error}</div>}
 
-        {/* Warning banner (amount mismatch) */}
-        {warning && (
-          <div style={{ ...sp.warningBanner, background: warning.code === "PARTIAL_PAYMENT" ? "#fffbeb" : "#fef3c7", borderColor: warning.code === "PARTIAL_PAYMENT" ? "#fcd34d" : "#fcd34d" }}>
-            <span style={{ fontWeight: 700 }}>
-              {warning.code === "PARTIAL_PAYMENT" ? "💛 Partial payment recorded — " : "⚠ Amount mismatch — "}
+      {/* Warning banner */}
+      {warning && (
+        <div style={{ ...sp.warningBanner, background: warning.code === "PARTIAL_PAYMENT" ? "#fffbeb" : "#fef3c7", borderColor: "#fcd34d" }}>
+          <span style={{ fontWeight: 700 }}>
+            {warning.code === "PARTIAL_PAYMENT" ? "💛 Partial payment recorded — " : "⚠ Amount mismatch — "}
+          </span>
+          {warning.message}
+          {warning.code !== "PARTIAL_PAYMENT" && (
+            <span style={{ marginLeft: 8 }}>
+              Bank: <b>{fmt(warning.bankAmount)}</b> · Allocated: <b>{fmt(warning.allocationAmount)}</b> · Diff: <b>{fmt(Math.abs(warning.difference))}</b>
             </span>
-            {warning.message}
-            {warning.code !== "PARTIAL_PAYMENT" && (
-              <span style={{ marginLeft: 8 }}>
-                Bank: <b>{fmt(warning.bankAmount)}</b> · Allocated: <b>{fmt(warning.allocationAmount)}</b> · Diff: <b>{fmt(Math.abs(warning.difference))}</b>
-              </span>
-            )}
-            <button style={sp.warnDismiss} onClick={() => setWarning(null)}>✕</button>
+          )}
+          <button style={sp.warnDismiss} onClick={() => setWarning(null)}>✕</button>
+        </div>
+      )}
+
+      {/* Stats bar */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <div style={{ ...s.kpiRow, marginBottom: 0 }}>
+          <div style={s.kpiCard}>
+            <div style={{ ...s.kpiValue, color: (transactions?.pendingCount ?? 0) > 0 ? "#ef4444" : "#111827" }}>
+              {transactions?.pendingCount ?? "—"}
+            </div>
+            <div style={s.kpiLabel}>Pending</div>
+          </div>
+          <div style={s.kpiCard}>
+            <div style={{ ...s.kpiValue, fontSize: 18, color: (transactions?.pendingAmount ?? 0) > 0 ? "#ef4444" : "#111827" }}>
+              {transactions ? fmt(transactions.pendingAmount) : "—"}
+            </div>
+            <div style={s.kpiLabel}>Pending Amount</div>
+          </div>
+          <div style={{ ...s.kpiCard, ...s.kpiGreen }}>
+            <div style={s.kpiValue}>{transactions?.reconnedCount ?? "—"}</div>
+            <div style={s.kpiLabel}>Reconciled</div>
+          </div>
+          {transactions?.lastImportedAt && (
+            <div style={s.kpiCard}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>{fmtDateTime(transactions.lastImportedAt)}</div>
+              <div style={s.kpiLabel}>Last Import · #{transactions.importCount}</div>
+            </div>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
+          <button style={s.applyBtn} onClick={() => setShowDebitReport(true)}>📉 Debit Report</button>
+          <button style={s.applyBtn} onClick={() => setShowReport(true)}>📊 Allocation Report</button>
+          <button
+            style={{ ...s.applyBtn, background: "#7c3aed", opacity: migrateLoading ? 0.6 : 1 }}
+            disabled={migrateLoading}
+            onClick={runMigration}
+            title="One-time: migrate old bank statement transactions into the flat table"
+          >{migrateLoading ? "Migrating…" : "⇄ Migrate Data"}</button>
+        </div>
+      </div>
+
+      {/* Upload */}
+      <div style={s.uploadArea}>
+        <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }}
+          onChange={e => { const f=e.target.files?.[0]; if(f) handleUpload(f); e.target.value=""; }} />
+        {uploading ? (
+          <div style={s.uploadBusy}><span>⏳</span><span>{uploadProgress||"Processing…"}</span></div>
+        ) : (
+          <div style={s.uploadIdle}>
+            <div style={s.uploadIcon}>📄</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Upload Bank Statement CSV</div>
+            <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 14 }}>Supports Nedbank, FNB, Standard Bank, ABSA</div>
+            <button style={s.uploadBtn} onClick={() => fileRef.current?.click()}>Choose CSV File</button>
           </div>
         )}
+      </div>
 
-        {/* Header */}
-        <div style={s.detailHeader}>
-          <button style={s.backBtn} onClick={() => { setSelected(null); resetRightPanel(); }}>← Back</button>
-          <div style={{ flex: 1 }}>
-            <span style={{ fontWeight: 700, fontSize: 15 }}>{selected.fileName}</span>
-            <span style={{ color: "#6b7280", fontSize: 13, marginLeft: 10 }}>
-              {selected.importCount ? `${selected.importCount} import${selected.importCount !== 1 ? "s" : ""} · Last: ` : "Uploaded "}
-              {fmtDate(selected.lastImportedAt ?? selected.uploadedAt)}
-            </span>
-          </div>
-          <div style={s.detailKpis}>
-            <span style={s.kpiBadge}>{selected.transactionCount} transactions</span>
-            <span style={{ ...s.kpiBadge, background: "#eff6ff", color: "#2563eb" }}>
-              {selected.creditCount} credits · {fmt(selected.totalCredits)}
-            </span>
-            <span style={{ ...s.kpiBadge, background: "#f0fdf4", color: "#15803d" }}>
-              {selected.allocatedCount}/{selected.creditCount} allocated
-            </span>
-            {selected.unallocatedCount > 0 && (
-              <span style={{ ...s.kpiBadge, background: "#fef3c7", color: "#92400e" }}>
-                {selected.unallocatedCount} unallocated · {fmt(selected.unallocatedAmount)}
-              </span>
-            )}
-          </div>
+      {/* Filters */}
+      <div style={{ ...s.filterRow, marginBottom: 0 }}>
+        <div style={s.filterGroup}><label style={s.filterLabel}>Type</label>
+          <select style={s.select} value={txTypeFilter} onChange={e => setTxTypeFilter(e.target.value as any)}>
+            <option value="all">All</option><option value="Credit">Credits</option><option value="Debit">Debits</option>
+          </select>
         </div>
-
-        {/* Filters */}
-        <div style={{ ...s.filterRow, marginBottom: 0 }}>
-          <div style={s.filterGroup}><label style={s.filterLabel}>Type</label>
-            <select style={s.select} value={txTypeFilter} onChange={e=>setTxTypeFilter(e.target.value as any)}>
-              <option value="all">All</option><option value="Credit">Credits</option><option value="Debit">Debits</option>
-            </select>
-          </div>
-          <div style={s.filterGroup}><label style={s.filterLabel}>Search</label>
-            <input style={{ ...s.input, minWidth: 180 }} placeholder="Description or ref…" value={txSearch} onChange={e=>setTxSearch(e.target.value)} />
-          </div>
-          <div style={{ alignSelf: "flex-end", color: "#6b7280", fontSize: 13, paddingBottom: 8 }}>{visibleTx.length} rows</div>
+        <div style={s.filterGroup}><label style={s.filterLabel}>Search</label>
+          <input style={{ ...s.input, minWidth: 200 }} placeholder="Description or ref…" value={txSearch} onChange={e => setTxSearch(e.target.value)} />
         </div>
+        <div style={{ alignSelf: "flex-end", color: "#6b7280", fontSize: 13, paddingBottom: 8 }}>{visibleTx.length} pending</div>
+      </div>
 
-        {/* Split panel */}
+      {/* Split panel */}
+      {loading ? (
+        <div style={s.empty}>Loading…</div>
+      ) : (
         <div style={sp.splitWrap}>
 
           {/* ── LEFT: Transaction list ── */}
           <div style={sp.leftPanel}>
-            <div style={sp.panelTitle}>Bank Transactions</div>
+            <div style={sp.panelTitle}>Pending ({visibleTx.length})</div>
             <div style={sp.txList}>
               {visibleTx.length === 0 ? (
                 <div style={{ padding: "32px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>
-                  No transactions match the filters.
+                  {transactions?.pendingCount === 0 ? "All transactions are reconciled." : "No transactions match the filters."}
                 </div>
               ) : visibleTx.map(tx => {
-                const isActive    = activeTx?.transactionId === tx.transactionId;
-                const isAllocated = tx.isAllocated;
-                const allocLabel  = tx.allocationType === "Invoice"
+                const isActive = activeTx?.transactionId === tx.transactionId;
+                const allocLabel = tx.allocationType === "Invoice"
                   ? (tx.allocatedInvoiceNumber || tx.allocatedInvoiceId.slice(0,8))
                   : tx.allocationType === "Supplier"
                   ? (tx.allocatedSupplierName || tx.allocatedSupplierId)
@@ -1090,131 +1083,70 @@ function BankStatementsTab() {
                 return (
                   <div
                     key={tx.transactionId}
-                    style={{
-                      ...sp.txRow,
-                      ...(isActive    ? sp.txRowActive    : {}),
-                      ...(isAllocated ? sp.txRowAllocated : {}),
-                    }}
-                    onClick={() => !isAllocated && selectTx(tx)}
+                    style={{ ...sp.txRow, ...(isActive ? sp.txRowActive : {}) }}
+                    onClick={() => selectTx(tx)}
                   >
                     <div style={sp.txTop}>
                       <span style={sp.txDate}>{fmtDate(tx.date)}</span>
-                      <span style={{ ...sp.txAmount, color: isAllocated ? "#15803d" : "#111827" }}>
-                        {fmt(tx.amount)}
-                      </span>
+                      <span style={{ ...sp.txAmount, color: "#111827" }}>{fmt(tx.amount)}</span>
                     </div>
                     <div style={sp.txDesc}>{tx.description}</div>
                     {tx.reference && <div style={sp.txRef}>{tx.reference}</div>}
-                    {isAllocated ? (
-                      <div style={sp.txAllocBadge}>
-                        <span style={{
-                          ...s.badge,
-                          ...(tx.allocationType === "Invoice"            ? s.badgeEFT
-                            : tx.allocationType === "Supplier"            ? { background:"#fef3c7", color:"#92400e" }
-                            : tx.allocationType === "ClientCredit"        ? { background:"#dcfce7", color:"#166534" }
-                            : tx.allocationType === "SplitClientCredit"   ? { background:"#d1fae5", color:"#065f46" }
-                            : tx.allocationType === "Expense"             ? { background:"#fce7f3", color:"#9d174d" }
-                            : { background:"#f3e8ff", color:"#7c3aed" }),
-                          fontSize: 11
-                        }}>
-                          {tx.allocationType === "Invoice"              ? "Invoice"
-                            : tx.allocationType === "Supplier"            ? "Supplier"
-                            : tx.allocationType === "ClientCredit"        ? "Credit Payment"
-                            : tx.allocationType === "SplitClientCredit"   ? "Split Credit"
-                            : tx.allocationType === "Expense"             ? "Expense"
-                            : "Non-client"}
-                        </span>
-                        <span style={{ fontSize:12, color:"#374151" }}>{allocLabel}</span>
-                        <button style={sp.unlinkBtn} onClick={e=>{e.stopPropagation();deallocate(tx);}}>✕</button>
-                      </div>
-                    ) : (
-                      <div style={sp.txSelectHint}>{isActive ? "↗ Select an invoice or entry →" : "Click to allocate"}</div>
-                    )}
+                    <div style={sp.txSelectHint}>{isActive ? "↗ Select an invoice or entry →" : "Click to allocate"}</div>
                   </div>
                 );
               })}
             </div>
 
-            {/* Allocated + Possible duplicates section */}
-            {(() => {
-              const allocatedTx = (selected.transactions ?? []).filter(tx => {
-                if (!tx.isAllocated) return false;
-                if (txTypeFilter === "Debit"  && tx.type !== "Debit")  return false;
-                if (txTypeFilter === "Credit" && tx.type !== "Credit") return false;
-                return txMatchesSearch(tx, txSearch);
-              });
-              const visibleDups = (selected.possibleDuplicates ?? []).filter(tx => {
-                if (txTypeFilter === "Debit"  && tx.type !== "Debit")  return false;
-                if (txTypeFilter === "Credit" && tx.type !== "Credit") return false;
-                return txMatchesSearch(tx, txSearch);
-              });
-              const totalCount = allocatedTx.length + visibleDups.length;
-              const dupsSectionOpen = showDuplicates || (txSearch.length > 0 && totalCount > 0);
-              if (totalCount === 0) return null;
-              return (
+            {/* Reconned section */}
+            {visibleReconned.length > 0 && (
               <div style={sp.dupSection}>
-                <div style={sp.dupHeader} onClick={() => setShowDuplicates(v => !v)}>
-                  <span>⚠ Allocated / Duplicates ({totalCount})</span>
-                  <span>{dupsSectionOpen ? "▲" : "▼"}</span>
+                <div style={sp.dupHeader} onClick={() => setShowReconned(v => !v)}>
+                  <span>✓ Reconciled ({visibleReconned.length})</span>
+                  <span>{showReconned ? "▲" : "▼"}</span>
                 </div>
-                {dupsSectionOpen && (
+                {showReconned && (
                   <div style={sp.dupList}>
-                    {allocatedTx.map(tx => {
-                      const isActive = activeTx?.transactionId === tx.transactionId;
+                    {visibleReconned.map(tx => {
+                      const allocLabel = tx.allocationType === "Invoice"
+                        ? (tx.allocatedInvoiceNumber || tx.allocatedInvoiceId.slice(0,8))
+                        : tx.allocationType === "Supplier"
+                        ? (tx.allocatedSupplierName || tx.allocatedSupplierId)
+                        : tx.allocationType === "ClientCredit"
+                        ? (tx.allocatedClientName || tx.allocatedClientId)
+                        : tx.allocationType === "SplitClientCredit"
+                        ? (tx.splitLines?.map(l => l.clientName).join(", ") || tx.allocatedClientName)
+                        : tx.allocationType === "Expense"
+                        ? tx.expenseCategory
+                        : tx.nonClientDescription || "Non-client";
                       return (
-                        <div key={tx.transactionId} style={{ ...sp.txRow, ...sp.dupRow, ...(isActive ? sp.txRowActive : {}), cursor: "default" }}>
+                        <div key={tx.transactionId} style={{ ...sp.txRow, ...sp.dupRow, cursor: "default" }}>
                           <div style={sp.txTop}>
                             <span style={sp.txDate}>{fmtDate(tx.date)}</span>
                             <span style={{ ...sp.txAmount, color: "#15803d" }}>{fmt(tx.amount)}</span>
                           </div>
                           <div style={sp.txDesc}>{tx.description}</div>
                           {tx.reference && <div style={sp.txRef}>{tx.reference}</div>}
-                          <div style={{ marginTop: 4, fontSize: 11, color: "#15803d", fontWeight: 600 }}>
-                            ✓ Allocated — {tx.allocationType}{tx.allocatedInvoiceNumber ? ` · ${tx.allocatedInvoiceNumber}` : ""}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {visibleDups.length > 0 && (
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, flexWrap: "wrap" as const }}>
-                      <div style={sp.dupNote}>
-                        These {txTypeFilter === "Debit" ? "debits" : "credits"} match the date + amount of a transaction already reconciled under a different statement upload —
-                        likely from overlapping date ranges between exports. Verify before allocating.
-                      </div>
-                      <button
-                        style={{ flexShrink: 0, padding: "4px 10px", fontSize: 12, fontWeight: 600, background: "#fef3c7", color: "#92400e", border: "1px solid #fcd34d", borderRadius: 6, cursor: "pointer" }}
-                        onClick={e => { e.stopPropagation(); skipAllDups(); }}
-                      >
-                        Skip All Duplicates
-                      </button>
-                    </div>
-                    )}
-                    {visibleDups.map(tx => {
-                      const isActive = activeTx?.transactionId === tx.transactionId;
-                      return (
-                        <div
-                          key={tx.transactionId}
-                          style={{ ...sp.txRow, ...sp.dupRow, ...(isActive ? sp.txRowActive : {}) }}
-                          onClick={() => selectTx(tx)}
-                        >
-                          <div style={sp.txTop}>
-                            <span style={sp.txDate}>{fmtDate(tx.date)}</span>
-                            <span style={{ ...sp.txAmount, color: "#92400e" }}>{fmt(tx.amount)}</span>
-                          </div>
-                          <div style={sp.txDesc}>{tx.description}</div>
-                          {tx.reference && <div style={sp.txRef}>{tx.reference}</div>}
-                          <div style={sp.dupWarning}>
-                            ⚠ Already reconciled in <strong>{tx.duplicateOfStatementFileName}</strong> as {tx.duplicateOfAllocationSummary || "an allocation"}
-                            {tx.duplicateOfAllocatedAt && <> on {fmtDate(tx.duplicateOfAllocatedAt)}</>}
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-                            <div style={sp.txSelectHint}>{isActive ? "↗ Select an invoice or entry →" : "Click to allocate anyway"}</div>
-                            <button
-                              style={{ padding: "2px 8px", fontSize: 11, fontWeight: 600, background: "#f3f4f6", color: "#374151", border: "1px solid #d1d5db", borderRadius: 4, cursor: "pointer" }}
-                              onClick={e => { e.stopPropagation(); skipTx(tx); }}
-                            >
-                              Skip
-                            </button>
+                          <div style={sp.txAllocBadge}>
+                            <span style={{
+                              ...s.badge,
+                              ...(tx.allocationType === "Invoice"            ? s.badgeEFT
+                                : tx.allocationType === "Supplier"           ? { background:"#fef3c7", color:"#92400e" }
+                                : tx.allocationType === "ClientCredit"       ? { background:"#dcfce7", color:"#166534" }
+                                : tx.allocationType === "SplitClientCredit"  ? { background:"#d1fae5", color:"#065f46" }
+                                : tx.allocationType === "Expense"            ? { background:"#fce7f3", color:"#9d174d" }
+                                : { background:"#f3e8ff", color:"#7c3aed" }),
+                              fontSize: 11
+                            }}>
+                              {tx.allocationType === "Invoice"             ? "Invoice"
+                                : tx.allocationType === "Supplier"           ? "Supplier"
+                                : tx.allocationType === "ClientCredit"       ? "Credit Payment"
+                                : tx.allocationType === "SplitClientCredit"  ? "Split Credit"
+                                : tx.allocationType === "Expense"            ? "Expense"
+                                : "Non-client"}
+                            </span>
+                            <span style={{ fontSize:12, color:"#374151" }}>{allocLabel}</span>
+                            <button style={sp.unlinkBtn} onClick={e => { e.stopPropagation(); deallocate(tx); }}>✕</button>
                           </div>
                         </div>
                       );
@@ -1222,9 +1154,7 @@ function BankStatementsTab() {
                   </div>
                 )}
               </div>
-              );
-            })()}
-
+            )}
           </div>
 
           {/* ── RIGHT: Allocation panel ── */}
@@ -1234,7 +1164,7 @@ function BankStatementsTab() {
                 <div style={{ fontSize: 32, marginBottom: 12 }}>←</div>
                 <div style={{ fontSize: 15, fontWeight: 600, color: "#374151" }}>Select a bank transaction</div>
                 <div style={{ fontSize: 13, color: "#9ca3af", marginTop: 4 }}>
-                  Click an unallocated credit on the left to find a matching invoice
+                  Click an unallocated transaction on the left to find a matching invoice
                 </div>
               </div>
             ) : (
@@ -1261,14 +1191,14 @@ function BankStatementsTab() {
 
                 {/* Mode tabs */}
                 <div style={sp.modeTabs}>
-                  <button style={rightMode==="matches"     ? sp.modeTabActive : sp.modeTab} onClick={()=>setRightMode("matches")}>Smart Matches</button>
+                  <button style={rightMode==="matches"     ? sp.modeTabActive : sp.modeTab} onClick={() => setRightMode("matches")}>Smart Matches</button>
                   <button style={rightMode==="browse"      ? sp.modeTabActive : sp.modeTab} onClick={switchToBrowse}>Browse Clients</button>
                   <button style={rightMode==="clientcredit"? sp.modeTabActive : sp.modeTab} onClick={switchToClientCredit}>Client Credit</button>
-                  <button style={rightMode==="splitcredit" ? sp.modeTabActive : sp.modeTab} onClick={()=>{ setRightMode("splitcredit"); ensureClients(); }}>Split Credit</button>
+                  <button style={rightMode==="splitcredit" ? sp.modeTabActive : sp.modeTab} onClick={() => { setRightMode("splitcredit"); ensureClients(); }}>Split Credit</button>
                   <button style={rightMode==="suppliers"   ? sp.modeTabActive : sp.modeTab} onClick={switchToSuppliers}>Browse Suppliers</button>
-                  <button style={rightMode==="nonclient"   ? sp.modeTabActive : sp.modeTab} onClick={()=>setRightMode("nonclient")}>Non-Client</button>
+                  <button style={rightMode==="nonclient"   ? sp.modeTabActive : sp.modeTab} onClick={() => setRightMode("nonclient")}>Non-Client</button>
                   <button style={rightMode==="expense"     ? sp.modeTabActive : sp.modeTab} onClick={switchToExpense}>Expense</button>
-                  <button style={rightMode==="pettycash"   ? sp.modeTabActive : sp.modeTab} onClick={()=>setRightMode("pettycash")}>Petty Cash</button>
+                  <button style={rightMode==="pettycash"   ? sp.modeTabActive : sp.modeTab} onClick={() => setRightMode("pettycash")}>Petty Cash</button>
                 </div>
 
                 {/* ─ Smart Matches ─ */}
@@ -1394,38 +1324,34 @@ function BankStatementsTab() {
                                   <div key={inv.invoiceId} style={{ ...sp.invoiceRow, ...(isReconced ? sp.invoiceRowReconced : {}), ...(isCancelled ? { opacity: 0.55 } : {}) }}>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                       <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" as const }}>
-                                        <span style={{ ...s.mono, ...(isCancelled ? { textDecoration: "line-through" } : {}) }}>{inv.invoiceNumber}</span>
+                                        <span style={s.mono}>{inv.invoiceNumber}</span>
+                                        {isReconced && <span style={{ ...s.badge, background: "#dcfce7", color: "#166534", fontSize: 10 }}>reconciled</span>}
                                         {isCancelled && <span style={{ ...s.badge, background: "#fee2e2", color: "#991b1b", fontSize: 10 }}>cancelled</span>}
-                                        {!isCancelled && isPartial && <span style={{ ...s.badge, background: "#fef3c7", color: "#92400e", fontSize: 10 }}>partial</span>}
-                                        {!isCancelled && txMatch && !isReconced && <span style={{ fontSize: 11, color: "#15803d", fontWeight: 700 }}>✓ exact match</span>}
-                                        {!isCancelled && txPartial && !isReconced && <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700 }}>⚠ partial payment</span>}
+                                        {isPartial   && <span style={{ ...s.badge, background: "#fef3c7", color: "#92400e", fontSize: 10 }}>partial</span>}
+                                        {txMatch && !isReconced && <span style={{ ...s.badge, background: "#dcfce7", color: "#166534", fontSize: 10 }}>✓ match</span>}
                                       </div>
-                                      <div style={{ display: "flex", gap: 10, marginTop: 2 }}>
+                                      <div style={{ display: "flex", gap: 8, marginTop: 2, flexWrap: "wrap" as const }}>
                                         <span style={{ fontSize: 12, color: "#9ca3af" }}>{fmtDate(inv.createdAt)}</span>
-                                        {!isCancelled && isPartial && <span style={{ fontSize: 12, color: "#92400e" }}>Paid {fmt(inv.amountPaid)} · Due {fmt(outstanding)}</span>}
-                                        {isCancelled && inv.cancelledReason && <span style={{ fontSize: 12, color: "#991b1b" }}>{inv.cancelledReason}</span>}
+                                        <span style={{ fontSize: 12, color: "#374151", fontWeight: 600 }}>{fmt(inv.grandTotal)}</span>
+                                        {isPartial && <span style={{ fontSize: 12, color: "#dc2626" }}>Due {fmt(outstanding)}</span>}
+                                        {txPartial && !isReconced && <span style={{ fontSize: 11, color: "#f59e0b", fontWeight: 700 }}>⚠ partial</span>}
                                       </div>
                                     </div>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                      <div style={{ textAlign: "right" as const }}>
-                                        <div style={{ fontWeight: 700, fontSize: 14 }}>{fmt(inv.grandTotal)}</div>
-                                        {!isCancelled && isPartial && !isReconced && <div style={{ fontSize: 11, color: "#dc2626", fontWeight: 600 }}>Due: {fmt(outstanding)}</div>}
-                                      </div>
-                                      <span style={{ ...s.badge, ...(inv.paymentType==="EFT"?s.badgeEFT:s.badgeCash), fontSize: 11 }}>{inv.paymentType}</span>
-                                      {isCancelled ? null : isReconced
-                                        ? <span style={{ ...s.pillGreen, fontSize: 11 }}>Reconciled</span>
-                                        : <button style={{ ...sp.allocBtn, opacity: busy ? 0.6 : 1 }} disabled={!!allocBusy} onClick={() => allocateToInvoice(inv.invoiceId)}>
-                                            {busy ? "…" : "Allocate"}
-                                          </button>}
-                                      {!isCancelled && !isReconced && (
+                                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                                      <span style={{ ...s.badge, ...(inv.paymentType==="EFT"?s.badgeEFT:s.badgeCash), fontSize:11 }}>{inv.paymentType}</span>
+                                      {!isReconced && !isCancelled && (
                                         <button
-                                          style={{ background: "none", border: "1px solid #fca5a5", color: "#dc2626", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", opacity: cancelling ? 0.6 : 1 }}
-                                          disabled={cancelling}
+                                          style={{ ...sp.allocBtn, opacity: busy ? 0.6 : 1, fontSize: 11 }}
+                                          disabled={!!allocBusy}
+                                          onClick={() => allocateToInvoice(inv.invoiceId)}
+                                        >{busy ? "…" : "Allocate"}</button>
+                                      )}
+                                      {!isCancelled && (
+                                        <button
+                                          style={{ background: "none", border: "none", color: "#ef4444", fontSize: 11, cursor: "pointer", padding: 0, opacity: cancelling ? 0.5 : 1 }}
+                                          disabled={!!cancelBusy}
                                           onClick={() => cancelInvoice(inv)}
-                                          title="Cancel this invoice (duplicate or mistaken)"
-                                        >
-                                          {cancelling ? "…" : "Cancel"}
-                                        </button>
+                                        >{cancelling ? "…" : "Cancel"}</button>
                                       )}
                                     </div>
                                   </div>
@@ -1440,9 +1366,6 @@ function BankStatementsTab() {
                 {/* ─ Client Credit ─ */}
                 {rightMode === "clientcredit" && (
                   <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden", gap: 6 }}>
-                    <div style={{ fontSize: 13, color: "#6b7280", padding: "2px 0 4px" }}>
-                      Allocate this payment to a client's credit account. The amount will be recorded as an EFT deposit against their credit balance.
-                    </div>
                     {!pickedCreditClient ? (
                       <>
                         <input
@@ -1465,52 +1388,35 @@ function BankStatementsTab() {
                       </>
                     ) : (
                       <>
-                        <div style={{ ...sp.selectedClientBar, flexDirection: "column", alignItems: "flex-start", gap: 6 }}>
-                          <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                            <div>
-                              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#6b7280" }}>Client</div>
-                              <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{pickedCreditClient.clientName}</div>
-                            </div>
-                            <button style={sp.changeClientBtn} onClick={() => { setPickedCreditClient(null); setCreditBalance(null); }}>Change</button>
-                          </div>
-                          <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 4, borderTop: "1px solid #e5e7eb" }}>
-                            <span style={{ fontSize: 13, color: "#374151" }}>Current credit balance</span>
+                        <div style={sp.selectedClientBar}>
+                          <div>
+                            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: "#6b7280" }}>Client</div>
+                            <div style={{ fontWeight: 700, fontSize: 15, color: "#111827" }}>{pickedCreditClient.clientName}</div>
                             {creditBalanceLoading
-                              ? <span style={{ fontSize: 13, color: "#9ca3af" }}>Loading…</span>
-                              : creditBalance === null
-                              ? <span style={{ fontSize: 13, color: "#9ca3af" }}>—</span>
-                              : <span style={{ fontWeight: 700, fontSize: 15, color: creditBalance >= 0 ? "#15803d" : "#dc2626" }}>
-                                  {fmt(creditBalance)}
-                                </span>}
+                              ? <div style={{ fontSize: 12, color: "#6b7280" }}>Loading balance…</div>
+                              : creditBalance !== null
+                              ? <div style={{ fontSize: 12, color: creditBalance > 0 ? "#15803d" : "#6b7280" }}>
+                                  Current credit: {fmt(creditBalance)}
+                                </div>
+                              : null}
                           </div>
-                          <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span style={{ fontSize: 13, color: "#374151" }}>Payment to allocate</span>
-                            <span style={{ fontWeight: 700, fontSize: 15, color: "#2563eb" }}>{activeTx ? fmt(activeTx.amount) : "—"}</span>
-                          </div>
-                          {creditBalance !== null && activeTx && (
-                            <div style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <span style={{ fontSize: 13, color: "#374151" }}>Balance after allocation</span>
-                              <span style={{ fontWeight: 700, fontSize: 15, color: "#166534" }}>{fmt(creditBalance + activeTx.amount)}</span>
-                            </div>
-                          )}
+                          <button style={sp.changeClientBtn} onClick={() => setPickedCreditClient(null)}>Change</button>
                         </div>
                         <div style={s.fieldGroup}>
                           <label style={s.label}>Notes (optional)</label>
                           <input
                             style={s.input}
-                            placeholder="e.g. EFT ref, invoice period…"
+                            placeholder="e.g. Payment reference…"
                             value={creditNotes}
                             onChange={e => setCreditNotes(e.target.value)}
                           />
                         </div>
                         <button
-                          style={{ ...sp.allocBtn, padding: "10px 20px", fontSize: 14, background: "#16a34a", opacity: (allocBusy === pickedCreditClient.clientId) ? 0.6 : 1 }}
+                          style={{ ...sp.allocBtn, padding: "10px 20px", fontSize: 14, background: "#16a34a", opacity: allocBusy === pickedCreditClient.clientId ? 0.6 : 1 }}
                           disabled={!!allocBusy}
                           onClick={allocateClientCredit}
                         >
-                          {allocBusy === pickedCreditClient.clientId
-                            ? "Allocating…"
-                            : `✔ Record ${activeTx ? fmt(activeTx.amount) : ""} Credit Payment`}
+                          {allocBusy === pickedCreditClient.clientId ? "Allocating…" : `✔ Record Credit Payment for ${pickedCreditClient.clientName}`}
                         </button>
                       </>
                     )}
@@ -1519,80 +1425,70 @@ function BankStatementsTab() {
 
                 {/* ─ Split Credit ─ */}
                 {rightMode === "splitcredit" && (
-                  <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "auto", gap: 10 }}>
-                    <div style={{ fontSize: 13, color: "#6b7280", padding: "2px 0 4px" }}>
-                      Split one bank transaction across multiple clients. Amounts must add up to <strong>{activeTx ? fmt(activeTx.amount) : "—"}</strong>.
-                    </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1, overflowY: "auto" as const }}>
                     {splitLines.map((line, idx) => {
-                      const search = splitClientSearch[idx] ?? "";
-                      const picked = clients.find(c => c.clientId === line.clientId);
-                      const visibleForLine = clients.filter(c =>
-                        !search || c.clientName.toLowerCase().includes(search.toLowerCase())
-                      ).slice(0, 8);
+                      const lineClients = clients.filter(c =>
+                        !splitClientSearch[idx] || c.clientName.toLowerCase().includes(splitClientSearch[idx].toLowerCase())
+                      );
+                      const pickedLineClient = line.clientId ? clients.find(c => c.clientId === line.clientId) : null;
                       return (
-                        <div key={idx} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, background: "#f9fafb" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                            <span style={{ fontWeight: 700, fontSize: 13, color: "#374151" }}>Client {idx + 1}</span>
+                        <div key={idx} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 12px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>Line {idx + 1}</span>
                             {splitLines.length > 2 && (
                               <button
-                                style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 12 }}
-                                onClick={() => {
-                                  setSplitLines(splitLines.filter((_, i) => i !== idx));
-                                  setSplitClientSearch(splitClientSearch.filter((_, i) => i !== idx));
-                                }}
+                                style={{ background: "none", border: "none", color: "#ef4444", fontSize: 12, cursor: "pointer" }}
+                                onClick={() => { const u=[...splitLines]; u.splice(idx,1); setSplitLines(u); const sc=[...splitClientSearch]; sc.splice(idx,1); setSplitClientSearch(sc); }}
                               >Remove</button>
                             )}
                           </div>
-                          {picked ? (
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                              <span style={{ fontWeight: 600, fontSize: 14 }}>{picked.clientName}</span>
-                              <button style={{ background: "none", border: "1px solid #d1d5db", borderRadius: 5, padding: "2px 8px", fontSize: 11, cursor: "pointer" }}
-                                onClick={() => {
-                                  const updated = [...splitLines]; updated[idx] = { ...updated[idx], clientId: "" };
-                                  setSplitLines(updated);
-                                  const s2 = [...splitClientSearch]; s2[idx] = ""; setSplitClientSearch(s2);
-                                }}>Change</button>
-                            </div>
-                          ) : (
-                            <div style={{ marginBottom: 8 }}>
-                              <input
-                                style={{ ...s.input, width: "100%", boxSizing: "border-box", marginBottom: 4 }}
-                                placeholder="Search client…"
-                                value={search}
-                                onChange={e => { const s2 = [...splitClientSearch]; s2[idx] = e.target.value; setSplitClientSearch(s2); }}
-                              />
-                              <div style={{ maxHeight: 100, overflowY: "auto", border: "1px solid #e5e7eb", borderRadius: 6 }}>
-                                {visibleForLine.map(c => (
-                                  <div key={c.clientId}
-                                    style={{ padding: "6px 10px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #f3f4f6" }}
-                                    onClick={() => {
-                                      const updated = [...splitLines]; updated[idx] = { ...updated[idx], clientId: c.clientId };
-                                      setSplitLines(updated);
-                                      const s2 = [...splitClientSearch]; s2[idx] = c.clientName; setSplitClientSearch(s2);
-                                    }}
-                                  >{c.clientName}</div>
-                                ))}
+                          <div style={s.fieldGroup}>
+                            <label style={s.label}>Client *</label>
+                            {!pickedLineClient ? (
+                              <>
+                                <input
+                                  style={s.input}
+                                  placeholder="Search client…"
+                                  value={splitClientSearch[idx]}
+                                  onChange={e => { const sc=[...splitClientSearch]; sc[idx]=e.target.value; setSplitClientSearch(sc); }}
+                                />
+                                {splitClientSearch[idx] && lineClients.length > 0 && (
+                                  <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, maxHeight: 140, overflowY: "auto" as const }}>
+                                    {lineClients.slice(0,8).map(c => (
+                                      <div key={c.clientId} style={{ padding: "7px 10px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #f1f5f9" }}
+                                        onClick={() => { const u=[...splitLines]; u[idx]={...u[idx],clientId:c.clientId}; setSplitLines(u); const sc=[...splitClientSearch]; sc[idx]=c.clientName; setSplitClientSearch(sc); }}
+                                      >{c.clientName}</div>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "6px 10px" }}>
+                                <span style={{ fontWeight: 600, fontSize: 13 }}>{pickedLineClient.clientName}</span>
+                                <button style={{ background: "none", border: "none", color: "#6b7280", fontSize: 12, cursor: "pointer" }}
+                                  onClick={() => { const u=[...splitLines]; u[idx]={...u[idx],clientId:""}; setSplitLines(u); const sc=[...splitClientSearch]; sc[idx]=""; setSplitClientSearch(sc); }}
+                                >Change</button>
                               </div>
-                            </div>
-                          )}
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <div style={{ flex: 1 }}>
-                              <label style={s.label}>Amount (R)</label>
-                              <input
-                                type="number" min="0" step="0.01"
-                                style={s.input}
-                                value={line.amount || ""}
-                                onChange={e => { const updated = [...splitLines]; updated[idx] = { ...updated[idx], amount: parseFloat(e.target.value) || 0 }; setSplitLines(updated); }}
-                              />
-                            </div>
-                            <div style={{ flex: 2 }}>
-                              <label style={s.label}>Notes (optional)</label>
-                              <input
-                                style={s.input}
-                                value={line.notes ?? ""}
-                                onChange={e => { const updated = [...splitLines]; updated[idx] = { ...updated[idx], notes: e.target.value }; setSplitLines(updated); }}
-                              />
-                            </div>
+                            )}
+                          </div>
+                          <div style={s.fieldGroup}>
+                            <label style={s.label}>Amount *</label>
+                            <NumericInput
+                              style={s.input}
+                              min="0"
+                              step="0.01"
+                              placeholder="0.00"
+                              value={line.amount || ""}
+                              onChange={e => { const updated = [...splitLines]; updated[idx] = { ...updated[idx], amount: parseFloat(e.target.value) || 0 }; setSplitLines(updated); }}
+                            />
+                          </div>
+                          <div style={s.fieldGroup}>
+                            <label style={s.label}>Notes (optional)</label>
+                            <input
+                              style={s.input}
+                              value={line.notes ?? ""}
+                              onChange={e => { const updated = [...splitLines]; updated[idx] = { ...updated[idx], notes: e.target.value }; setSplitLines(updated); }}
+                            />
                           </div>
                         </div>
                       );
@@ -1774,6 +1670,8 @@ function BankStatementsTab() {
                     </button>
                   </div>
                 )}
+
+                {/* ─ Petty Cash ─ */}
                 {rightMode === "pettycash" && (
                   <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                     <div style={{ fontSize:13, color:"#374151", lineHeight:1.6 }}>
@@ -1795,99 +1693,8 @@ function BankStatementsTab() {
             )}
           </div>
         </div>
-      </div>
-    );
-  }
-
-  // ── Statement list ─────────────────────────────────────────────────────────
-
-  return (
-    <>
-      {error && <div style={s.errorBanner}>{error}</div>}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <div style={s.kpiRow} >
-          <div style={s.kpiCard}><div style={s.kpiValue}>{statements.length}</div><div style={s.kpiLabel}>Statements</div></div>
-          <div style={s.kpiCard}><div style={s.kpiValue}>{fmt(statements.reduce((sum,s)=>sum+s.totalCredits,0))}</div><div style={s.kpiLabel}>Total Credits</div></div>
-          <div style={{...s.kpiCard,...s.kpiGreen}}><div style={s.kpiValue}>{statements.reduce((sum,s)=>sum+s.allocatedCount,0)}</div><div style={s.kpiLabel}>Allocated</div></div>
-          <div style={s.kpiCard}><div style={{...s.kpiValue,color:totalUnalloc>0?"#ef4444":"#111827"}}>{totalUnalloc}</div><div style={s.kpiLabel}>Unallocated</div></div>
-          <div style={s.kpiCard}><div style={{...s.kpiValue,color:totalUnallocAmt>0?"#ef4444":"#111827",fontSize:18}}>{fmt(totalUnallocAmt)}</div><div style={s.kpiLabel}>Unallocated Amount</div></div>
-        </div>
-        <div style={{ display:"flex", gap:8 }}>
-          <button style={s.applyBtn} onClick={()=>setShowDebitReport(true)}>📉 Debit Report</button>
-          <button style={s.applyBtn} onClick={()=>setShowReport(true)}>📊 Allocation Report</button>
-        </div>
-      </div>
-
-      {/* Upload */}
-      <div style={s.uploadArea}>
-        <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: "none" }}
-          onChange={e => { const f=e.target.files?.[0]; if(f) handleUpload(f); e.target.value=""; }} />
-        {uploading ? (
-          <div style={s.uploadBusy}><span>⏳</span><span>{uploadProgress||"Processing…"}</span></div>
-        ) : (
-          <div style={s.uploadIdle}>
-            <div style={s.uploadIcon}>📄</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Upload Bank Statement CSV</div>
-            <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 14 }}>Supports Nedbank, FNB, Standard Bank, ABSA</div>
-            <button style={s.uploadBtn} onClick={()=>fileRef.current?.click()}>Choose CSV File</button>
-          </div>
-        )}
-      </div>
-
-      {loading ? <div style={s.empty}>Loading…</div> :
-       statements.length === 0 ? <div style={s.empty}>No bank statements uploaded yet.</div> : (
-        <div style={s.tableWrap}><table style={s.table}>
-          <thead><tr>
-            <th style={s.th}>Statement</th>
-            <th style={s.th}>Last Import</th>
-            <th style={{...s.th,textAlign:"right"}}>Transactions</th>
-            <th style={{...s.th,textAlign:"right"}}>Credits</th>
-            <th style={{...s.th,textAlign:"right"}}>Total Credits</th>
-            <th style={{...s.th,textAlign:"right"}}>Allocated</th>
-            <th style={{...s.th,textAlign:"right"}}>Unallocated Amt</th>
-            <th style={s.th}>Progress</th>
-            <th style={s.th}></th>
-          </tr></thead>
-          <tbody>
-            {statements.map(stmt => {
-              const pct = stmt.creditCount > 0 ? Math.round((stmt.allocatedCount/stmt.creditCount)*100) : 0;
-              return (
-                <tr key={stmt.statementId} style={s.rowPending}>
-                  <td style={s.td}>
-                    <div>{stmt.fileName}</div>
-                    {(stmt.importCount ?? 0) > 0 && <div style={{ fontSize: 11, color: "#6b7280" }}>{stmt.importCount} import{stmt.importCount !== 1 ? "s" : ""}</div>}
-                  </td>
-                  <td style={s.td}>{fmtDateTime(stmt.lastImportedAt ?? stmt.uploadedAt)}</td>
-                  <td style={{...s.td,textAlign:"right"}}>{stmt.transactionCount}</td>
-                  <td style={{...s.td,textAlign:"right"}}>{stmt.creditCount}</td>
-                  <td style={{...s.td,textAlign:"right"}}>{fmt(stmt.totalCredits)}</td>
-                  <td style={{...s.td,textAlign:"right"}}>{stmt.allocatedCount}/{stmt.creditCount}</td>
-                  <td style={{...s.td,textAlign:"right",color:stmt.unallocatedAmount>0?"#ef4444":"#15803d",fontWeight:600}}>
-                    {stmt.unallocatedCount > 0 ? fmt(stmt.unallocatedAmount) : "—"}
-                  </td>
-                  <td style={{...s.td,minWidth:110}}>
-                    <div style={s.progressBg}>
-                      <div style={{...s.progressBar,width:`${pct}%`,background:pct===100?"#22c55e":"#3b82f6"}} />
-                    </div>
-                    <span style={{fontSize:11,color:"#6b7280"}}>{pct}%</span>
-                  </td>
-                  <td style={s.td}>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button style={s.reconBtn} onClick={()=>openStatement(stmt.statementId)} disabled={detailLoading}>Open</button>
-                      <button
-                        style={{ background: "none", border: "1px solid #fca5a5", color: "#dc2626", borderRadius: 6, padding: "4px 8px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}
-                        onClick={() => deleteStatement(stmt.statementId, stmt.fileName)}
-                        title="Delete this statement"
-                      >🗑</button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table></div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -1903,7 +1710,7 @@ const sp: Record<string, React.CSSProperties> = {
   dupHeader: { padding:"10px 14px", fontSize:12, fontWeight:700, color:"#92400e", display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer" },
   dupList: { maxHeight:260, overflowY:"auto" as const, borderTop:"1px solid #fde68a" },
   dupNote: { padding:"8px 14px", fontSize:11, color:"#92400e", lineHeight:1.5, background:"#fef3c7" },
-  dupRow: { background:"#fffbeb" },
+  dupRow: { background:"#f0fdf4" },
   dupWarning: { marginTop:6, fontSize:11, color:"#b45309", fontWeight:600, lineHeight:1.4 },
   txRow: { padding:"12px 14px", borderBottom:"1px solid #f1f5f9", cursor:"pointer" },
   txRowActive: { background:"#eff6ff", borderLeft:"3px solid #3b82f6", paddingLeft:11 },
