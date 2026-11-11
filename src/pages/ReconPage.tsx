@@ -102,6 +102,8 @@ function BankStatementsTab() {
   // Left-panel filters
   const [txTypeFilter,  setTxTypeFilter]  = useState<"all"|"Credit"|"Debit">("Credit");
   const [txSearch,      setTxSearch]      = useState("");
+  const [txDateFrom,    setTxDateFrom]    = useState("");
+  const [txDateTo,      setTxDateTo]      = useState("");
 
   // Selected transaction
   const [activeTx, setActiveTx] = useState<BankTransactionResponse | null>(null);
@@ -488,13 +490,21 @@ function BankStatementsTab() {
     );
   }
 
+  function txMatchesDate(txDate: string) {
+    if (txDateFrom && txDate < txDateFrom) return false;
+    if (txDateTo   && txDate > txDateTo)   return false;
+    return true;
+  }
+
   const visibleTx = (transactions?.pending ?? []).filter(tx => {
     if (txTypeFilter !== "all" && tx.type !== txTypeFilter) return false;
+    if (!txMatchesDate(tx.date)) return false;
     return txMatchesSearch(tx, txSearch);
   });
 
   const visibleReconned = (transactions?.reconned ?? []).filter(tx => {
     if (txTypeFilter !== "all" && tx.type !== txTypeFilter) return false;
+    if (!txMatchesDate(tx.date)) return false;
     return txMatchesSearch(tx, txSearch);
   });
 
@@ -1046,6 +1056,17 @@ function BankStatementsTab() {
             <option value="all">All</option><option value="Credit">Credits</option><option value="Debit">Debits</option>
           </select>
         </div>
+        <div style={s.filterGroup}><label style={s.filterLabel}>From</label>
+          <input type="date" style={s.input} value={txDateFrom} onChange={e => setTxDateFrom(e.target.value)} />
+        </div>
+        <div style={s.filterGroup}><label style={s.filterLabel}>To</label>
+          <input type="date" style={s.input} value={txDateTo} onChange={e => setTxDateTo(e.target.value)} />
+        </div>
+        {(txDateFrom || txDateTo) && (
+          <button style={{ ...s.applyBtn, background: "#6b7280", alignSelf: "flex-end" }} onClick={() => { setTxDateFrom(""); setTxDateTo(""); }}>
+            Clear dates
+          </button>
+        )}
         <div style={s.filterGroup}><label style={s.filterLabel}>Search</label>
           <input style={{ ...s.input, minWidth: 200 }} placeholder="Description or ref…" value={txSearch} onChange={e => setTxSearch(e.target.value)} />
         </div>
