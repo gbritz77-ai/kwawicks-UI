@@ -1068,17 +1068,6 @@ function BankStatementsTab() {
                 </div>
               ) : visibleTx.map(tx => {
                 const isActive = activeTx?.transactionId === tx.transactionId;
-                const allocLabel = tx.allocationType === "Invoice"
-                  ? (tx.allocatedInvoiceNumber || tx.allocatedInvoiceId.slice(0,8))
-                  : tx.allocationType === "Supplier"
-                  ? (tx.allocatedSupplierName || tx.allocatedSupplierId)
-                  : tx.allocationType === "ClientCredit"
-                  ? (tx.allocatedClientName || tx.allocatedClientId)
-                  : tx.allocationType === "SplitClientCredit"
-                  ? (tx.splitLines?.map(l => l.clientName).join(", ") || tx.allocatedClientName)
-                  : tx.allocationType === "Expense"
-                  ? tx.expenseCategory
-                  : tx.nonClientDescription || "Non-client";
 
                 return (
                   <div
