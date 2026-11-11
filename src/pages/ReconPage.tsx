@@ -1063,12 +1063,6 @@ function BankStatementsTab() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
           <button style={s.applyBtn} onClick={() => setShowDebitReport(true)}>📉 Debit Report</button>
           <button style={s.applyBtn} onClick={() => setShowReport(true)}>📊 Allocation Report</button>
-          <button
-            style={{ ...s.applyBtn, background: "#7c3aed", opacity: migrateLoading ? 0.6 : 1 }}
-            disabled={migrateLoading}
-            onClick={runMigration}
-            title="One-time: migrate old bank statement transactions into the flat table"
-          >{migrateLoading ? "Migrating…" : "⇄ Migrate Data"}</button>
         </div>
       </div>
 
@@ -1252,6 +1246,20 @@ function BankStatementsTab() {
                                 : "Non-client"}
                             </span>
                             <span style={{ fontSize:12, color:"#374151" }}>{allocLabel}</span>
+                            <button
+                              title="Edit allocation"
+                              style={{ background:"none", border:"none", color:"#2563eb", fontSize:11, fontWeight:600, cursor:"pointer", padding:"0 4px" }}
+                              onClick={async e => {
+                                e.stopPropagation();
+                                try {
+                                  await bankTransactionsApi.deallocate(tx.transactionId);
+                                  await loadTransactions();
+                                  // tx is now pending — select it for re-allocation
+                                  const fresh = { ...tx, isAllocated: false, allocationType: "", reconStatus: "Pending" };
+                                  selectTx(fresh as BankTransactionResponse);
+                                } catch (err: any) { setError(err?.message ?? "Failed."); }
+                              }}
+                            >✎ Edit</button>
                             <button style={sp.unlinkBtn} onClick={e => { e.stopPropagation(); deallocate(tx); }}>✕</button>
                           </div>
                         </div>
