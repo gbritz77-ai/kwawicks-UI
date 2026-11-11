@@ -105,6 +105,12 @@ function BankStatementsTab() {
   const [txDateFrom,    setTxDateFrom]    = useState("");
   const [txDateTo,      setTxDateTo]      = useState("");
 
+  // Multi-select bulk allocation
+  const [selectedTxIds,     setSelectedTxIds]     = useState<Set<string>>(new Set());
+  const [bulkExpenseCat,    setBulkExpenseCat]    = useState("");
+  const [bulkAllocBusy,     setBulkAllocBusy]     = useState(false);
+  const [bulkAllocError,    setBulkAllocError]    = useState("");
+
   // Selected transaction
   const [activeTx, setActiveTx] = useState<BankTransactionResponse | null>(null);
 
@@ -475,6 +481,39 @@ function BankStatementsTab() {
       if (activeTx?.transactionId === tx.transactionId) resetRightPanel();
       await loadTransactions();
     } catch (e: any) { setError(e?.message ?? "Failed to deallocate."); }
+  }
+
+  async function bulkAllocateExpense() {
+    if (!bulkExpenseCat || selectedTxIds.size === 0) return;
+    setBulkAllocBusy(true); setBulkAllocError("");
+    try {
+      await Promise.all(
+        Array.from(selectedTxIds).map(txId =>
+          bankTransactionsApi.allocateExpense(txId, { category: bulkExpenseCat })
+        )
+      );
+      setSelectedTxIds(new Set());
+      setBulkExpenseCat("");
+      await loadTransactions();
+    } catch (e: any) { setBulkAllocError(e?.message ?? "Bulk allocation failed."); }
+    finally { setBulkAllocBusy(false); }
+  }
+
+  function toggleSelect(txId: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setSelectedTxIds(prev => {
+      const next = new Set(prev);
+      next.has(txId) ? next.delete(txId) : next.add(txId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedTxIds.size === visibleTx.length) {
+      setSelectedTxIds(new Set());
+    } else {
+      setSelectedTxIds(new Set(visibleTx.map(tx => tx.transactionId)));
+    }
   }
 
   // ── Filtered transactions ─────────────────────────────────────────────────
@@ -1052,7 +1091,7 @@ function BankStatementsTab() {
       {/* Filters */}
       <div style={{ ...s.filterRow, marginBottom: 0 }}>
         <div style={s.filterGroup}><label style={s.filterLabel}>Type</label>
-          <select style={s.select} value={txTypeFilter} onChange={e => setTxTypeFilter(e.target.value as any)}>
+          <select style={s.select} value={txTypeFilter} onChange={e => { setTxTypeFilter(e.target.value as any); setSelectedTxIds(new Set()); setBulkAllocError(""); }}>
             <option value="all">All</option><option value="Credit">Credits</option><option value="Debit">Debits</option>
           </select>
         </div>
@@ -1081,7 +1120,24 @@ function BankStatementsTab() {
 
           {/* ── LEFT: Transaction list ── */}
           <div style={sp.leftPanel}>
-            <div style={sp.panelTitle}>Pending ({visibleTx.length})</div>
+            <div style={{ ...sp.panelTitle, display: "flex", alignItems: "center", gap: 8 }}>
+              {txTypeFilter === "Debit" && visibleTx.length > 0 && (
+                <input
+                  type="checkbox"
+                  title="Select all"
+                  checked={selectedTxIds.size > 0 && selectedTxIds.size === visibleTx.length}
+                  ref={el => { if (el) el.indeterminate = selectedTxIds.size > 0 && selectedTxIds.size < visibleTx.length; }}
+                  onChange={toggleSelectAll}
+                  style={{ cursor: "pointer", marginRight: 2 }}
+                />
+              )}
+              <span>Pending ({visibleTx.length})</span>
+              {selectedTxIds.size > 0 && (
+                <span style={{ marginLeft: "auto", fontSize: 11, color: "#2563eb", fontWeight: 700 }}>
+                  {selectedTxIds.size} selected
+                </span>
+              )}
+            </div>
             <div style={sp.txList}>
               {visibleTx.length === 0 ? (
                 <div style={{ padding: "32px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>
@@ -1089,24 +1145,64 @@ function BankStatementsTab() {
                 </div>
               ) : visibleTx.map(tx => {
                 const isActive = activeTx?.transactionId === tx.transactionId;
+                const isSelected = selectedTxIds.has(tx.transactionId);
 
                 return (
                   <div
                     key={tx.transactionId}
-                    style={{ ...sp.txRow, ...(isActive ? sp.txRowActive : {}) }}
-                    onClick={() => selectTx(tx)}
+                    style={{ ...sp.txRow, ...(isActive ? sp.txRowActive : {}), ...(isSelected ? { background: "#eff6ff", borderLeft: "3px solid #93c5fd", paddingLeft: 11 } : {}) }}
+                    onClick={() => { if (txTypeFilter === "Debit" && selectedTxIds.size > 0) return; selectTx(tx); }}
                   >
                     <div style={sp.txTop}>
+                      {txTypeFilter === "Debit" && (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onClick={e => toggleSelect(tx.transactionId, e)}
+                          onChange={() => {}}
+                          style={{ cursor: "pointer", marginRight: 6, flexShrink: 0 }}
+                        />
+                      )}
                       <span style={sp.txDate}>{fmtDate(tx.date)}</span>
                       <span style={{ ...sp.txAmount, color: "#111827" }}>{fmt(tx.amount)}</span>
                     </div>
                     <div style={sp.txDesc}>{tx.description}</div>
                     {tx.reference && <div style={sp.txRef}>{tx.reference}</div>}
-                    <div style={sp.txSelectHint}>{isActive ? "↗ Select an invoice or entry →" : "Click to allocate"}</div>
+                    {!isSelected && <div style={sp.txSelectHint}>{isActive ? "↗ Select an invoice or entry →" : txTypeFilter === "Debit" ? "Click to allocate or ☑ select for bulk" : "Click to allocate"}</div>}
                   </div>
                 );
               })}
             </div>
+
+            {/* Bulk allocate bar */}
+            {selectedTxIds.size > 0 && (
+              <div style={{ borderTop: "2px solid #3b82f6", background: "#eff6ff", padding: "10px 12px", display: "flex", flexDirection: "column" as const, gap: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#1d4ed8" }}>{selectedTxIds.size} debit{selectedTxIds.size !== 1 ? "s" : ""} selected — bulk allocate to expense</div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" as const }}>
+                  <select
+                    style={{ ...s.select, flex: 1, minWidth: 140, fontSize: 13 }}
+                    value={bulkExpenseCat}
+                    onChange={e => { setBulkExpenseCat(e.target.value); setBulkAllocError(""); }}
+                    onClick={() => { if (!expenseCatsLoaded) { bankTransactionsApi.getExpenseCategories().then(c => { setExpenseCategories(c); setExpenseCatsLoaded(true); }); } }}
+                  >
+                    <option value="">Select category…</option>
+                    {[...new Set([...expenseCategories])].sort().map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <button
+                    style={{ background: "#1d4ed8", color: "#fff", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: (!bulkExpenseCat || bulkAllocBusy) ? 0.5 : 1, whiteSpace: "nowrap" as const }}
+                    disabled={!bulkExpenseCat || bulkAllocBusy}
+                    onClick={bulkAllocateExpense}
+                  >{bulkAllocBusy ? "Allocating…" : "Allocate All"}</button>
+                  <button
+                    style={{ background: "#fff", color: "#6b7280", border: "1px solid #d1d5db", borderRadius: 7, padding: "7px 10px", fontSize: 13, cursor: "pointer" }}
+                    disabled={bulkAllocBusy}
+                    onClick={() => { setSelectedTxIds(new Set()); setBulkAllocError(""); }}
+                  >✕</button>
+                </div>
+                {bulkAllocError && <div style={{ fontSize: 12, color: "#dc2626" }}>{bulkAllocError}</div>}
+              </div>
+            )}
+
 
             {/* Reconned section */}
             {visibleReconned.length > 0 && (
