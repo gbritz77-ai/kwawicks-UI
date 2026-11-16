@@ -486,15 +486,35 @@ function BankStatementsTab() {
   async function bulkAllocateExpense() {
     if (!bulkExpenseCat || selectedTxIds.size === 0) return;
     setBulkAllocBusy(true); setBulkAllocError("");
+    const allocatedIds = new Set(selectedTxIds);
+    const cat = bulkExpenseCat;
     try {
       await Promise.all(
-        Array.from(selectedTxIds).map(txId =>
-          bankTransactionsApi.allocateExpense(txId, { category: bulkExpenseCat })
+        Array.from(allocatedIds).map(txId =>
+          bankTransactionsApi.allocateExpense(txId, { category: cat })
         )
       );
+      // Optimistically move allocated rows to reconned so the list updates instantly
+      setTransactions(prev => {
+        if (!prev) return prev;
+        const nowReconned = prev.pending
+          .filter(tx => allocatedIds.has(tx.transactionId))
+          .map(tx => ({ ...tx, isAllocated: true, allocationType: "Expense", expenseCategory: cat }));
+        const stillPending = prev.pending.filter(tx => !allocatedIds.has(tx.transactionId));
+        const pendingAmt = stillPending.reduce((s, tx) => s + (tx.type === "Credit" ? tx.amount : 0), 0);
+        return {
+          ...prev,
+          pending: stillPending,
+          reconned: [...nowReconned, ...prev.reconned],
+          pendingCount: stillPending.length,
+          reconnedCount: prev.reconnedCount + nowReconned.length,
+          pendingAmount: pendingAmt,
+        };
+      });
       setSelectedTxIds(new Set());
       setBulkExpenseCat("");
-      await loadTransactions();
+      // Background reload to sync real state
+      loadTransactions();
     } catch (e: any) { setBulkAllocError(e?.message ?? "Bulk allocation failed."); }
     finally { setBulkAllocBusy(false); }
   }
