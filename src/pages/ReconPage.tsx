@@ -108,6 +108,9 @@ function BankStatementsTab() {
   // Multi-select bulk allocation
   const [selectedTxIds,     setSelectedTxIds]     = useState<Set<string>>(new Set());
   const [bulkExpenseCat,    setBulkExpenseCat]    = useState("");
+  const [bulkCreditMode,    setBulkCreditMode]    = useState<"client"|"nonclient">("client");
+  const [bulkClientId,      setBulkClientId]      = useState("");
+  const [bulkNcDesc,        setBulkNcDesc]        = useState("");
   const [bulkAllocBusy,     setBulkAllocBusy]     = useState(false);
   const [bulkAllocError,    setBulkAllocError]    = useState("");
 
@@ -164,8 +167,6 @@ function BankStatementsTab() {
   const [newExpenseCategory,     setNewExpenseCategory]     = useState("");
   const [addingCategory,         setAddingCategory]         = useState(false);
 
-  // Migrate
-  const [migrateLoading, setMigrateLoading] = useState(false);
 
   // ── Loaders ──────────────────────────────────────────────────────────────
 
@@ -229,19 +230,6 @@ function BankStatementsTab() {
       }
     } catch (e: any) { setError(e?.message ?? "Upload failed."); }
     finally { setUploading(false); setUploadProgress(""); }
-  }
-
-  // ── Migrate historical data ───────────────────────────────────────────────
-
-  async function runMigration() {
-    if (!window.confirm("Migrate all historical bank statement transactions into the flat transaction table? Duplicates will be skipped.")) return;
-    setMigrateLoading(true); setError("");
-    try {
-      const result = await bankTransactionsApi.migrate();
-      await loadTransactions();
-      alert(`Migration complete: ${result.migrated} migrated, ${result.skipped} skipped.`);
-    } catch (e: any) { setError(e?.message ?? "Migration failed."); }
-    finally { setMigrateLoading(false); }
   }
 
   // ── Select transaction + fetch smart matches ───────────────────────────
@@ -483,23 +471,33 @@ function BankStatementsTab() {
     } catch (e: any) { setError(e?.message ?? "Failed to deallocate."); }
   }
 
-  async function bulkAllocateExpense() {
-    if (!bulkExpenseCat || selectedTxIds.size === 0) return;
+  const bulkIsCredit = txTypeFilter === "Credit";
+  const bulkReady = bulkIsCredit
+    ? (bulkCreditMode === "client" ? !!bulkClientId : !!bulkNcDesc.trim())
+    : !!bulkExpenseCat;
+
+  async function bulkAllocate() {
+    if (!bulkReady || selectedTxIds.size === 0) return;
     setBulkAllocBusy(true); setBulkAllocError("");
     const allocatedIds = new Set(selectedTxIds);
     const cat = bulkExpenseCat;
+    const txById = new Map((transactions?.pending ?? []).map(tx => [tx.transactionId, tx]));
+    const allocationType = !bulkIsCredit ? "Expense" : bulkCreditMode === "client" ? "ClientCredit" : "NonClient";
     try {
       await Promise.all(
-        Array.from(allocatedIds).map(txId =>
-          bankTransactionsApi.allocateExpense(txId, { category: cat })
-        )
+        Array.from(allocatedIds).map(txId => {
+          if (!bulkIsCredit) return bankTransactionsApi.allocateExpense(txId, { category: cat });
+          if (bulkCreditMode === "client")
+            return bankTransactionsApi.allocateClientCredit(txId, { clientId: bulkClientId, statementDate: txById.get(txId)?.date });
+          return bankTransactionsApi.allocateNonClient(txId, { description: bulkNcDesc.trim(), amount: 0 });
+        })
       );
       // Optimistically move allocated rows to reconned so the list updates instantly
       setTransactions(prev => {
         if (!prev) return prev;
         const nowReconned = prev.pending
           .filter(tx => allocatedIds.has(tx.transactionId))
-          .map(tx => ({ ...tx, isAllocated: true, allocationType: "Expense", expenseCategory: cat }));
+          .map(tx => ({ ...tx, isAllocated: true, allocationType, ...(bulkIsCredit ? {} : { expenseCategory: cat }) }));
         const stillPending = prev.pending.filter(tx => !allocatedIds.has(tx.transactionId));
         const pendingAmt = stillPending.reduce((s, tx) => s + (tx.type === "Credit" ? tx.amount : 0), 0);
         return {
@@ -513,6 +511,8 @@ function BankStatementsTab() {
       });
       setSelectedTxIds(new Set());
       setBulkExpenseCat("");
+      setBulkClientId("");
+      setBulkNcDesc("");
       // Background reload to sync real state
       loadTransactions();
     } catch (e: any) { setBulkAllocError(e?.message ?? "Bulk allocation failed."); }
@@ -1135,7 +1135,7 @@ function BankStatementsTab() {
           {/* ── LEFT: Transaction list ── */}
           <div style={sp.leftPanel}>
             <div style={{ ...sp.panelTitle, display: "flex", alignItems: "center", gap: 8 }}>
-              {txTypeFilter === "Debit" && visibleTx.length > 0 && (
+              {txTypeFilter !== "all" && visibleTx.length > 0 && (
                 <input
                   type="checkbox"
                   title="Select all"
@@ -1165,10 +1165,10 @@ function BankStatementsTab() {
                   <div
                     key={tx.transactionId}
                     style={{ ...sp.txRow, ...(isActive ? sp.txRowActive : {}), ...(isSelected ? { background: "#eff6ff", borderLeft: "3px solid #93c5fd", paddingLeft: 11 } : {}) }}
-                    onClick={() => { if (txTypeFilter === "Debit" && selectedTxIds.size > 0) return; selectTx(tx); }}
+                    onClick={() => { if (selectedTxIds.size > 0) return; selectTx(tx); }}
                   >
                     <div style={sp.txTop}>
-                      {txTypeFilter === "Debit" && (
+                      {txTypeFilter !== "all" && (
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -1182,7 +1182,7 @@ function BankStatementsTab() {
                     </div>
                     <div style={sp.txDesc}>{tx.description}</div>
                     {tx.reference && <div style={sp.txRef}>{tx.reference}</div>}
-                    {!isSelected && <div style={sp.txSelectHint}>{isActive ? "↗ Select an invoice or entry →" : txTypeFilter === "Debit" ? "Click to allocate or ☑ select for bulk" : "Click to allocate"}</div>}
+                    {!isSelected && <div style={sp.txSelectHint}>{isActive ? "↗ Select an invoice or entry →" : txTypeFilter !== "all" ? "Click to allocate or ☑ select for bulk" : "Click to allocate"}</div>}
                   </div>
                 );
               })}
@@ -1191,8 +1191,42 @@ function BankStatementsTab() {
             {/* Bulk allocate bar */}
             {selectedTxIds.size > 0 && (
               <div style={{ borderTop: "2px solid #3b82f6", background: "#eff6ff", padding: "10px 12px", display: "flex", flexDirection: "column" as const, gap: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#1d4ed8" }}>{selectedTxIds.size} debit{selectedTxIds.size !== 1 ? "s" : ""} selected — bulk allocate to expense</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#1d4ed8" }}>
+                  {selectedTxIds.size} {bulkIsCredit ? "credit" : "debit"}{selectedTxIds.size !== 1 ? "s" : ""} selected ({fmt((transactions?.pending ?? []).filter(tx => selectedTxIds.has(tx.transactionId)).reduce((s, tx) => s + tx.amount, 0))}) — bulk allocate {bulkIsCredit ? "" : "to expense"}
+                </div>
+                {bulkIsCredit && (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {(["client", "nonclient"] as const).map(m => (
+                      <button
+                        key={m}
+                        onClick={() => { setBulkCreditMode(m); setBulkAllocError(""); }}
+                        style={{ flex: 1, padding: "5px 8px", fontSize: 12, fontWeight: 600, borderRadius: 6, cursor: "pointer",
+                          border: bulkCreditMode === m ? "1px solid #1d4ed8" : "1px solid #d1d5db",
+                          background: bulkCreditMode === m ? "#1d4ed8" : "#fff",
+                          color: bulkCreditMode === m ? "#fff" : "#374151" }}
+                      >{m === "client" ? "Client credit" : "Non-client"}</button>
+                    ))}
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" as const }}>
+                  {bulkIsCredit ? (bulkCreditMode === "client" ? (
+                    <select
+                      style={{ ...s.select, flex: 1, minWidth: 140, fontSize: 13 }}
+                      value={bulkClientId}
+                      onFocus={ensureClients}
+                      onChange={e => { setBulkClientId(e.target.value); setBulkAllocError(""); }}
+                    >
+                      <option value="">Select client…</option>
+                      {[...clients].sort((a, b) => a.clientName.localeCompare(b.clientName)).map(c => <option key={c.clientId} value={c.clientId}>{c.clientName}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      style={{ ...s.select, flex: 1, minWidth: 140, fontSize: 13 }}
+                      placeholder="Description (e.g. Interest received)"
+                      value={bulkNcDesc}
+                      onChange={e => { setBulkNcDesc(e.target.value); setBulkAllocError(""); }}
+                    />
+                  )) : (
                   <select
                     style={{ ...s.select, flex: 1, minWidth: 140, fontSize: 13 }}
                     value={bulkExpenseCat}
@@ -1202,10 +1236,11 @@ function BankStatementsTab() {
                     <option value="">Select category…</option>
                     {[...new Set([...expenseCategories])].sort().map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
+                  )}
                   <button
-                    style={{ background: "#1d4ed8", color: "#fff", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: (!bulkExpenseCat || bulkAllocBusy) ? 0.5 : 1, whiteSpace: "nowrap" as const }}
-                    disabled={!bulkExpenseCat || bulkAllocBusy}
-                    onClick={bulkAllocateExpense}
+                    style={{ background: "#1d4ed8", color: "#fff", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: (!bulkReady || bulkAllocBusy) ? 0.5 : 1, whiteSpace: "nowrap" as const }}
+                    disabled={!bulkReady || bulkAllocBusy}
+                    onClick={bulkAllocate}
                   >{bulkAllocBusy ? "Allocating…" : "Allocate All"}</button>
                   <button
                     style={{ background: "#fff", color: "#6b7280", border: "1px solid #d1d5db", borderRadius: 7, padding: "7px 10px", fontSize: 13, cursor: "pointer" }}
