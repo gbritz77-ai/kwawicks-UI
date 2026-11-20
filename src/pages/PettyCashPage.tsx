@@ -10,8 +10,9 @@ import type {
   CreateCashupRequest,
 } from "../api/pettyCashApi";
 import { NumericInput } from "../components/NumericInput";
+import ClientDepositsReport from "../components/ClientDepositsReport";
 
-type Tab = "cashbook" | "cashup" | "history";
+type Tab = "cashbook" | "cashup" | "history" | "deposits";
 
 const fmt = (n: number) =>
   "R " + n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -366,7 +367,7 @@ export default function PettyCashPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["cashbook", "cashup", "history"] as Tab[]).map(t => (
+        {(["cashbook", "cashup", "history", "deposits"] as Tab[]).map(t => (
           <button
             key={t}
             style={tab === t ? { ...s.tab, ...s.tabActive } : s.tab}
@@ -375,10 +376,12 @@ export default function PettyCashPage() {
               setCashupDone(null);
             }}
           >
-            {t === "cashbook" ? "Cash Book" : t === "cashup" ? "Do Cashup" : "Cashup History"}
+            {t === "cashbook" ? "Cash Book" : t === "cashup" ? "Do Cashup" : t === "history" ? "Cashup History" : "Client Deposits"}
           </button>
         ))}
       </div>
+
+      {tab === "deposits" && <ClientDepositsReport />}
 
       {/* ── CASH BOOK ── */}
       {tab === "cashbook" && (
