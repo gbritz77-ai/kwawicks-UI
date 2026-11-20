@@ -62,6 +62,32 @@ export default function PettyCashPage() {
   const [cbFrom, setCbFrom] = useState("");
   const [cbTo, setCbTo] = useState("");
   const [cbType, setCbType] = useState<"All" | "In" | "Out">("All");
+  const [cbShowDeposits, setCbShowDeposits] = useState(false);
+  const [cbDeposits, setCbDeposits] = useState<CashDepositDetailDto[] | null>(null);
+
+  useEffect(() => {
+    if (cbShowDeposits && cbDeposits === null)
+      pettyCashApi.getDepositDetails().then(setCbDeposits).catch(() => setCbDeposits([]));
+  }, [cbShowDeposits, cbDeposits]);
+
+  const depositsSince = summary?.depositsSinceUtc ? new Date(summary.depositsSinceUtc) : null;
+  const depositEntries: PettyCashEntryDto[] = cbShowDeposits
+    ? (cbDeposits ?? []).map(d => ({
+        entryId: `deposit-${d.entryId}`,
+        type: "In",
+        amount: d.amount,
+        description: [d.clientName, d.reference, d.notes].filter(Boolean).join(" — "),
+        category: "Client Deposit",
+        recipientName: d.clientName,
+        recordedBy: "",
+        entryDate: d.date.slice(0, 10),
+        cashupId: depositsSince && new Date(d.date) < depositsSince ? "cashed-up" : "",
+        assignedDriverId: "",
+        slipS3Key: "",
+        createdAtUtc: d.date,
+      }))
+    : [];
+  const byDateDesc = (a: PettyCashEntryDto, b: PettyCashEntryDto) => b.entryDate.localeCompare(a.entryDate);
 
   // Deposit details modal
   const [depositDetails, setDepositDetails] = useState<CashDepositDetailDto[] | null>(null);
@@ -412,6 +438,10 @@ export default function PettyCashPage() {
               <option value="In">In</option>
               <option value="Out">Out</option>
             </select>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#94a3b8", cursor: "pointer" }}>
+              <input type="checkbox" checked={cbShowDeposits} onChange={e => setCbShowDeposits(e.target.checked)} />
+              Show client deposits{cbShowDeposits && cbDeposits === null ? " (loading…)" : ""}
+            </label>
             {(cbFrom || cbTo || cbType !== "All") && (
               <button
                 style={{ ...s.btnSecondary, padding: "6px 12px", fontSize: 12 }}
@@ -513,13 +543,14 @@ export default function PettyCashPage() {
 
           {/* Open entries list */}
           {(() => {
-            const visibleOpen = (summary?.openEntries ?? []).filter(e => {
+            const openDeposits = depositEntries.filter(e => !e.cashupId);
+            const visibleOpen = [...(summary?.openEntries ?? []), ...openDeposits].sort(byDateDesc).filter(e => {
               if (cbFrom && e.entryDate < cbFrom) return false;
               if (cbTo && e.entryDate > cbTo) return false;
               if (cbType !== "All" && e.type !== cbType) return false;
               return true;
             });
-            if (!summary || summary.openEntries.length === 0) return <p style={{ color: "#94a3b8", marginTop: 16 }}>No open entries — all caught up.</p>;
+            if (!summary || summary.openEntries.length + openDeposits.length === 0) return <p style={{ color: "#94a3b8", marginTop: 16 }}>No open entries — all caught up.</p>;
             if (visibleOpen.length === 0) return <p style={{ color: "#94a3b8", marginTop: 16 }}>No open entries match the selected filters.</p>;
             return (
             <div style={s.tableWrap}>
@@ -565,13 +596,14 @@ export default function PettyCashPage() {
           <div style={{ marginTop: 32 }}>
             <h2 style={s.subHeading}>All Entries</h2>
             {(() => {
-              const filtered = entries.filter(e => {
+              const allRows = cbShowDeposits ? [...entries, ...depositEntries].sort(byDateDesc) : entries;
+              const filtered = allRows.filter(e => {
                 if (cbFrom && e.entryDate < cbFrom) return false;
                 if (cbTo && e.entryDate > cbTo) return false;
                 if (cbType !== "All" && e.type !== cbType) return false;
                 return true;
               });
-              if (entries.length === 0) return <p style={{ color: "#94a3b8" }}>No entries yet.</p>;
+              if (allRows.length === 0) return <p style={{ color: "#94a3b8" }}>No entries yet.</p>;
               if (filtered.length === 0) return <p style={{ color: "#94a3b8" }}>No entries match the selected filters.</p>;
               return (
                 <div style={s.tableWrap}>
