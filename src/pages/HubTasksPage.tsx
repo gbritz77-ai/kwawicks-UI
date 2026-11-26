@@ -70,8 +70,8 @@ type SortDir = "asc" | "desc";
 
 export default function HubTasksPage() {
   const navigate = useNavigate();
-  const canManageSpecies  = hasAnyRole("Owner", "Admin");
-  const canManageClients  = hasAnyRole("Owner", "Finance", "Admin", "Procurement");
+  const canManageSpecies  = hasAnyRole("Owner", "Admin", "BranchUser");
+  const canManageClients  = hasAnyRole("Owner", "Finance", "Admin", "Procurement", "BranchUser");
 
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>((searchParams.get("tab") as Tab) ?? "species");
