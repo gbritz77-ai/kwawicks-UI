@@ -835,7 +835,7 @@ if (tab === "client-orders") {
         for (const rec of filteredCostRecs) {
           if (!costBySpecies[rec.speciesId]) costBySpecies[rec.speciesId] = { totalQty: 0, weightedCost: 0 };
           costBySpecies[rec.speciesId].totalQty     += rec.totalQty;
-          costBySpecies[rec.speciesId].weightedCost += rec.totalQty * rec.avgCostExVat;
+          costBySpecies[rec.speciesId].weightedCost += rec.totalQty * rec.avgCostIncVat;
         }
 
         // Build avg sell price per species from sales in the date range
@@ -3116,11 +3116,11 @@ function SalesTab({
   loading: boolean; onApply: () => void;
   fmt: (n: number) => string;
 }) {
-  // Build cost lookup: speciesId → month → avgCostExVat (ex-VAT, matches unitPrice storage)
+  // Incl. VAT, matching the sales rows' unitPrice and lineTotal
   const costMap: Record<string, Record<string, number>> = {};
   for (const r of costRecords) {
     if (!costMap[r.speciesId]) costMap[r.speciesId] = {};
-    costMap[r.speciesId][r.month] = r.avgCostExVat;
+    costMap[r.speciesId][r.month] = r.avgCostIncVat;
   }
   function unitCost(speciesId: string, dateIso: string): number | null {
     const month = dateIso.slice(0, 7);
@@ -3339,8 +3339,8 @@ function SalesTab({
                 <th style={s.th}>Product</th>
                 <th style={{ ...s.th, textAlign: "right" }}>Qty</th>
                 <th style={s.th}>Payment</th>
-                <th style={{ ...s.th, textAlign: "right" }}>Unit Sale (ex VAT)</th>
-                <th style={{ ...s.th, textAlign: "right" }}>Unit Cost (ex VAT)</th>
+                <th style={{ ...s.th, textAlign: "right" }}>Unit Sale (incl. VAT)</th>
+                <th style={{ ...s.th, textAlign: "right" }}>Unit Cost (incl. VAT)</th>
                 <th style={{ ...s.th, textAlign: "right" }}>Total</th>
               </tr>
             </thead>
