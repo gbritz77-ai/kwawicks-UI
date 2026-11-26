@@ -24,7 +24,6 @@ import type { DeliveryOrderResponse } from "../api/deliveryOrdersApi";
 import type {
   RevenueSummaryResponse,
   OutstandingPaymentsResponse,
-  DriverPerformanceResponse,
   ReturnsSummaryResponse,
   DeliveryStatusSummaryResponse,
   InvoiceItem,
@@ -142,7 +141,6 @@ export default function AdminReportsPage() {
 
   const [revenue, setRevenue] = useState<RevenueSummaryResponse | null>(null);
   const [outstanding, setOutstanding] = useState<OutstandingPaymentsResponse | null>(null);
-  const [drivers, setDrivers] = useState<DriverPerformanceResponse | null>(null);
   const [returns, setReturns] = useState<ReturnsSummaryResponse | null>(null);
   const [deliveries, setDeliveries] = useState<DeliveryStatusSummaryResponse | null>(null);
   const [statusFilter, setStatusFilter] = useState<"All" | "Open" | "OutForDelivery" | "Delivered">("All");
@@ -200,7 +198,7 @@ export default function AdminReportsPage() {
     try {
       if (tab === "revenue") setRevenue(await reportsApi.getRevenue(from || undefined, to || undefined));
       if (tab === "outstanding") setOutstanding(await reportsApi.getOutstandingPayments());
-      if (tab === "drivers") setDrivers(await reportsApi.getDriverPerformance(from || undefined, to || undefined));
+      if (tab === "drivers") setCrData(await collectionRequestsApi.list());
       if (tab === "returns") {
         const [ret, spc] = await Promise.all([
           reportsApi.getReturns(from || undefined, to || undefined),
@@ -343,7 +341,7 @@ if (tab === "client-orders") {
         const hasData =
           (tab === "revenue" && revenue) ||
           (tab === "outstanding" && outstanding) ||
-          (tab === "drivers" && drivers) ||
+          (tab === "drivers" && crData) ||
           (tab === "returns" && returns) ||
           (tab === "deliveries" && deliveries) ||
           (tab === "invoices" && invoices) ||
@@ -413,17 +411,28 @@ if (tab === "client-orders") {
       )}
 
       {/* Driver Performance */}
-      {tab === "drivers" && drivers && !loading && (() => {
+      {tab === "drivers" && crData && !loading && (() => {
         const pct = (n: number, of: number) => of > 0 ? `${((n / of) * 100).toFixed(2)}%` : "—";
-        const tot = drivers.drivers.reduce((t, d) => ({
-          deliveries: t.deliveries + d.deliveriesCompleted,
-          value: t.value + d.totalValue,
-          loaded: t.loaded + (d.totalLoadedQty ?? 0),
-          dead: t.dead + d.totalDeadReturns,
-          mutilated: t.mutilated + d.totalMutilatedReturns,
-          short: t.short + d.totalShortQty,
-          over: t.over + d.totalOverQty,
-        }), { deliveries: 0, value: 0, loaded: 0, dead: 0, mutilated: 0, short: 0, over: 0 });
+        type Row = { name: string; collections: number; loaded: number; dead: number; short: number; over: number };
+        const byDriver = new Map<string, Row>();
+        for (const cr of crData) {
+          if (cr.status !== "HubConfirmed" && cr.status !== "FinanceAcknowledged") continue;
+          const day = cr.updatedAt.slice(0, 10);
+          if (from && day < from) continue;
+          if (to && day > to) continue;
+          const key = cr.assignedDriverId || cr.assignedDriverName || "Unknown";
+          const r = byDriver.get(key) ?? { name: cr.assignedDriverName || cr.assignedDriverId || "Unknown", collections: 0, loaded: 0, dead: 0, short: 0, over: 0 };
+          r.collections++;
+          for (const l of cr.lines) {
+            r.loaded += l.loadedQty; r.dead += l.deadQty; r.short += l.shortQty; r.over += l.overQty;
+          }
+          byDriver.set(key, r);
+        }
+        const rows = [...byDriver.values()].sort((a, b) => b.loaded - a.loaded);
+        const tot = rows.reduce((t, r) => ({
+          collections: t.collections + r.collections, loaded: t.loaded + r.loaded,
+          dead: t.dead + r.dead, short: t.short + r.short, over: t.over + r.over,
+        }), { collections: 0, loaded: 0, dead: 0, short: 0, over: 0 });
         const cell = (n: number, of: number, color: string) => (
           <>
             <span style={{ color: n > 0 ? color : undefined, fontWeight: 600 }}>{n.toLocaleString()}</span>
@@ -434,47 +443,40 @@ if (tab === "client-orders") {
         <div>
           <div style={s.kpiRow}>
             <KpiCard label="Birds Loaded" value={tot.loaded.toLocaleString()} highlight />
-            <KpiCard label="Dead" value={`${tot.dead.toLocaleString()} · ${pct(tot.dead, tot.loaded)}`} color="#dc2626" />
+            <KpiCard label="Dead" value={`${tot.dead.toLocaleString()} · ${pct(tot.dead, tot.loaded)}`} color="#c2410c" />
             <KpiCard label="Short" value={`${tot.short.toLocaleString()} · ${pct(tot.short, tot.loaded)}`} color="#dc2626" />
-            <KpiCard label="Over" value={`${tot.over.toLocaleString()} · ${pct(tot.over, tot.loaded)}`} color="#2563eb" />
+            <KpiCard label="Over" value={`${tot.over.toLocaleString()} · ${pct(tot.over, tot.loaded)}`} color="#16a34a" />
           </div>
           <p style={{ fontSize: 12, color: "#94a3b8", marginBottom: 12 }}>
-            Delivered orders in the date range. Percentages are of birds loaded. Short = loaded − delivered − returned; Over = delivered + returned − loaded (per delivery line).
+            Supplier collections confirmed at the hub in the date range (same data as the Driver Discrepancy report). Loaded = birds the driver loaded at the supplier; dead, short and over as recorded on hub confirmation. Percentages are of birds loaded.
           </p>
           <ScrollTable>
             <thead>
               <tr>
-                <Th>Driver</Th><Th>Deliveries</Th><Th>Total Value</Th><Th>Loaded</Th><Th>Dead</Th><Th>Mutilated</Th><Th>Short</Th><Th>Over</Th>
+                <Th>Driver</Th><Th>Collections</Th><Th>Loaded</Th><Th>Dead</Th><Th>Short</Th><Th>Over</Th>
               </tr>
             </thead>
             <tbody>
-              {drivers.drivers.map((d) => {
-                const loaded = d.totalLoadedQty ?? 0;
-                return (
-                <tr key={d.driverId}>
-                  <Td><strong>{d.driverName}</strong></Td>
-                  <Td>{d.deliveriesCompleted}</Td>
-                  <Td>{fmt(d.totalValue)}</Td>
-                  <Td style={{ fontWeight: 600 }}>{loaded.toLocaleString()}</Td>
-                  <Td>{cell(d.totalDeadReturns, loaded, "#dc2626")}</Td>
-                  <Td>{cell(d.totalMutilatedReturns, loaded, "#d97706")}</Td>
-                  <Td>{cell(d.totalShortQty, loaded, "#dc2626")}</Td>
-                  <Td>{cell(d.totalOverQty, loaded, "#2563eb")}</Td>
+              {rows.map((r) => (
+                <tr key={r.name}>
+                  <Td><strong>{r.name}</strong></Td>
+                  <Td>{r.collections}</Td>
+                  <Td style={{ fontWeight: 600 }}>{r.loaded.toLocaleString()}</Td>
+                  <Td>{cell(r.dead, r.loaded, "#c2410c")}</Td>
+                  <Td>{cell(r.short, r.loaded, "#dc2626")}</Td>
+                  <Td>{cell(r.over, r.loaded, "#16a34a")}</Td>
                 </tr>
-                );
-              })}
-              {drivers.drivers.length === 0 ? (
-                <tr><td colSpan={8} style={s.emptyCell}>No data for selected period</td></tr>
+              ))}
+              {rows.length === 0 ? (
+                <tr><td colSpan={6} style={s.emptyCell}>No confirmed collections for selected period</td></tr>
               ) : (
                 <tr style={{ background: "#f1f5f9" }}>
                   <Td><strong>Total</strong></Td>
-                  <Td><strong>{tot.deliveries}</strong></Td>
-                  <Td><strong>{fmt(tot.value)}</strong></Td>
+                  <Td><strong>{tot.collections}</strong></Td>
                   <Td><strong>{tot.loaded.toLocaleString()}</strong></Td>
-                  <Td>{cell(tot.dead, tot.loaded, "#dc2626")}</Td>
-                  <Td>{cell(tot.mutilated, tot.loaded, "#d97706")}</Td>
+                  <Td>{cell(tot.dead, tot.loaded, "#c2410c")}</Td>
                   <Td>{cell(tot.short, tot.loaded, "#dc2626")}</Td>
-                  <Td>{cell(tot.over, tot.loaded, "#2563eb")}</Td>
+                  <Td>{cell(tot.over, tot.loaded, "#16a34a")}</Td>
                 </tr>
               )}
             </tbody>
