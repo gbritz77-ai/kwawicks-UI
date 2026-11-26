@@ -36,6 +36,7 @@ import { costAveragesApi } from "../api/costAveragesApi";
 import type { CostAverageRecordDto } from "../api/costAveragesApi";
 import type { ClientDto } from "../api/clientsApi";
 import { NumericInput } from "../components/NumericInput";
+import CustomerRatingTab from "../components/CustomerRatingTab";
 
 // ── Searchable select ──────────────────────────────────────────────────────
 
@@ -124,7 +125,7 @@ function SearchableSelect({
   );
 }
 
-type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability" | "collection-returns" | "client-orders" | "sales" | "staff-deductions" | "client-balances" | "species-audit";
+type Tab = "revenue" | "outstanding" | "drivers" | "returns" | "deliveries" | "invoices" | "statement" | "species" | "supplier-spend" | "margin" | "load-discrepancy" | "transit-discrepancy" | "supplier-reliability" | "collection-returns" | "client-orders" | "sales" | "staff-deductions" | "client-balances" | "species-audit" | "customer-rating";
 
 export default function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -198,7 +199,7 @@ export default function AdminReportsPage() {
     try {
       if (tab === "revenue") setRevenue(await reportsApi.getRevenue(from || undefined, to || undefined));
       if (tab === "outstanding") setOutstanding(await reportsApi.getOutstandingPayments());
-      if (tab === "drivers") setCrData(await collectionRequestsApi.list());
+      if (tab === "drivers" || tab === "customer-rating") setCrData(await collectionRequestsApi.list());
       if (tab === "returns") {
         const [ret, spc] = await Promise.all([
           reportsApi.getReturns(from || undefined, to || undefined),
@@ -294,7 +295,7 @@ if (tab === "client-orders") {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(["revenue", "outstanding", "invoices", "sales", "client-balances", "staff-deductions", "client-orders", "drivers", "returns", "deliveries", "species", "species-audit", "statement", "supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability", "collection-returns"] as Tab[])
+        {(["revenue", "outstanding", "invoices", "sales", "client-balances", "staff-deductions", "client-orders", "customer-rating", "drivers", "returns", "deliveries", "species", "species-audit", "statement", "supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability", "collection-returns"] as Tab[])
           .filter(t => {
             const financialTabs: Tab[] = ["revenue", "outstanding", "invoices", "species", "species-audit", "statement", "sales", "staff-deductions", "client-balances"];
             const procurementTabs: Tab[] = ["supplier-spend", "margin", "load-discrepancy", "transit-discrepancy", "supplier-reliability", "collection-returns"];
@@ -310,6 +311,7 @@ if (tab === "client-orders") {
             {t === "staff-deductions"      && "👤 Staff Stock Deductions"}
             {t === "client-balances"       && "💳 Client Balances"}
             {t === "drivers"               && "🚚 Driver Performance"}
+            {t === "customer-rating"       && "⭐ Customer Rating"}
             {t === "returns"               && "↩️ Returns"}
             {t === "deliveries"            && "📬 Deliveries"}
             {t === "species"               && "🐔 Species Revenue"}
@@ -341,7 +343,7 @@ if (tab === "client-orders") {
         const hasData =
           (tab === "revenue" && revenue) ||
           (tab === "outstanding" && outstanding) ||
-          (tab === "drivers" && crData) ||
+          ((tab === "drivers" || tab === "customer-rating") && crData) ||
           (tab === "returns" && returns) ||
           (tab === "deliveries" && deliveries) ||
           (tab === "invoices" && invoices) ||
@@ -484,6 +486,10 @@ if (tab === "client-orders") {
         </div>
         );
       })()}
+
+      {tab === "customer-rating" && crData && !loading && (
+        <CustomerRatingTab collections={crData} from={from} to={to} />
+      )}
 
       {/* Deliveries */}
       {tab === "deliveries" && deliveries && !loading && (() => {
