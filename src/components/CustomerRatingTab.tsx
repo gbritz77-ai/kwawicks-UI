@@ -19,6 +19,7 @@ function rating(rate: number): { stars: number; label: string; color: string; bg
 export default function CustomerRatingTab({ collections, from, to }: { collections: CollectionRequestDto[]; from: string; to: string }) {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [starFilter, setStarFilter] = useState<number | null>(null);
 
   const rows = useMemo(() => {
     const map = new Map<string, CustomerRow>();
@@ -48,11 +49,12 @@ export default function CustomerRatingTab({ collections, from, to }: { collectio
   }, [collections, from, to]);
 
   const q = search.trim().toLowerCase();
-  const visible = q ? rows.filter(r => r.name.toLowerCase().includes(q)) : rows;
+  const searched = q ? rows.filter(r => r.name.toLowerCase().includes(q)) : rows;
+  const counts = [5, 4, 3, 2, 1].map(st => searched.filter(r => rating(pctOf(r.taken, r.ordered)).stars === st).length);
+  const visible = starFilter === null ? searched : searched.filter(r => rating(pctOf(r.taken, r.ordered)).stars === starFilter);
 
   const tot = visible.reduce((t, r) => ({ ordered: t.ordered + r.ordered, taken: t.taken + r.taken, orders: t.orders + r.orders }), { ordered: 0, taken: 0, orders: 0 });
   const totRate = pctOf(tot.taken, tot.ordered);
-  const counts = [5, 4, 3, 2, 1].map(st => visible.filter(r => rating(pctOf(r.taken, r.ordered)).stars === st).length);
 
   function exportXlsx() {
     const data = visible.map(r => {
@@ -84,12 +86,25 @@ export default function CustomerRatingTab({ collections, from, to }: { collectio
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
         {[5, 4, 3, 2, 1].map((st, i) => {
           const r = rating(st === 5 ? 100 : st === 4 ? 96 : st === 3 ? 91 : st === 2 ? 85 : 0);
+          const active = starFilter === st;
           return (
-            <span key={st} style={{ ...s.badge, background: r.bg, color: r.color }}>
+            <button
+              key={st}
+              onClick={() => { setStarFilter(active ? null : st); setExpanded(null); }}
+              title={active ? "Show all ratings" : `Show only ${r.label}`}
+              style={{ ...s.badge, background: r.bg, color: r.color, cursor: "pointer",
+                border: active ? `2px solid ${r.color}` : "2px solid transparent",
+                opacity: starFilter !== null && !active ? 0.5 : 1 }}
+            >
               {"★".repeat(st)} {r.label}: {counts[i]}
-            </span>
+            </button>
           );
         })}
+        {starFilter !== null && (
+          <button style={{ ...s.badge, background: "#fff", color: "#475569", border: "1px solid #cbd5e1", cursor: "pointer" }} onClick={() => setStarFilter(null)}>
+            ✕ Show all
+          </button>
+        )}
         <input style={s.search} placeholder="Search customer…" value={search} onChange={e => setSearch(e.target.value)} />
         <button style={s.exportBtn} onClick={exportXlsx} disabled={visible.length === 0}>Export Excel</button>
       </div>
