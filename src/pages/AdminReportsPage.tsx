@@ -413,33 +413,75 @@ if (tab === "client-orders") {
       )}
 
       {/* Driver Performance */}
-      {tab === "drivers" && drivers && !loading && (
+      {tab === "drivers" && drivers && !loading && (() => {
+        const pct = (n: number, of: number) => of > 0 ? `${((n / of) * 100).toFixed(2)}%` : "—";
+        const tot = drivers.drivers.reduce((t, d) => ({
+          deliveries: t.deliveries + d.deliveriesCompleted,
+          value: t.value + d.totalValue,
+          loaded: t.loaded + (d.totalLoadedQty ?? 0),
+          dead: t.dead + d.totalDeadReturns,
+          mutilated: t.mutilated + d.totalMutilatedReturns,
+          short: t.short + d.totalShortQty,
+          over: t.over + d.totalOverQty,
+        }), { deliveries: 0, value: 0, loaded: 0, dead: 0, mutilated: 0, short: 0, over: 0 });
+        const cell = (n: number, of: number, color: string) => (
+          <>
+            <span style={{ color: n > 0 ? color : undefined, fontWeight: 600 }}>{n.toLocaleString()}</span>
+            <span style={{ color: "#94a3b8", fontSize: 12, marginLeft: 6 }}>{pct(n, of)}</span>
+          </>
+        );
+        return (
         <div>
+          <div style={s.kpiRow}>
+            <KpiCard label="Birds Loaded" value={tot.loaded.toLocaleString()} highlight />
+            <KpiCard label="Dead" value={`${tot.dead.toLocaleString()} · ${pct(tot.dead, tot.loaded)}`} color="#dc2626" />
+            <KpiCard label="Short" value={`${tot.short.toLocaleString()} · ${pct(tot.short, tot.loaded)}`} color="#dc2626" />
+            <KpiCard label="Over" value={`${tot.over.toLocaleString()} · ${pct(tot.over, tot.loaded)}`} color="#2563eb" />
+          </div>
+          <p style={{ fontSize: 12, color: "#94a3b8", marginBottom: 12 }}>
+            Delivered orders in the date range. Percentages are of birds loaded. Short = loaded − delivered − returned; Over = delivered + returned − loaded (per delivery line).
+          </p>
           <ScrollTable>
             <thead>
               <tr>
-                <Th>Driver</Th><Th>Deliveries</Th><Th>Total Value</Th><Th>Dead (inspected)</Th><Th>Mutilated (inspected)</Th><Th>Short</Th><Th>Over</Th>
+                <Th>Driver</Th><Th>Deliveries</Th><Th>Total Value</Th><Th>Loaded</Th><Th>Dead</Th><Th>Mutilated</Th><Th>Short</Th><Th>Over</Th>
               </tr>
             </thead>
             <tbody>
-              {drivers.drivers.map((d) => (
+              {drivers.drivers.map((d) => {
+                const loaded = d.totalLoadedQty ?? 0;
+                return (
                 <tr key={d.driverId}>
                   <Td><strong>{d.driverName}</strong></Td>
                   <Td>{d.deliveriesCompleted}</Td>
                   <Td>{fmt(d.totalValue)}</Td>
-                  <Td style={{ color: d.totalDeadReturns > 0 ? "#dc2626" : undefined }}>{d.totalDeadReturns}</Td>
-                  <Td style={{ color: d.totalMutilatedReturns > 0 ? "#d97706" : undefined }}>{d.totalMutilatedReturns}</Td>
-                  <Td style={{ color: d.totalShortQty > 0 ? "#dc2626" : undefined }}>{d.totalShortQty}</Td>
-                  <Td style={{ color: d.totalOverQty > 0 ? "#2563eb" : undefined }}>{d.totalOverQty}</Td>
+                  <Td style={{ fontWeight: 600 }}>{loaded.toLocaleString()}</Td>
+                  <Td>{cell(d.totalDeadReturns, loaded, "#dc2626")}</Td>
+                  <Td>{cell(d.totalMutilatedReturns, loaded, "#d97706")}</Td>
+                  <Td>{cell(d.totalShortQty, loaded, "#dc2626")}</Td>
+                  <Td>{cell(d.totalOverQty, loaded, "#2563eb")}</Td>
                 </tr>
-              ))}
-              {drivers.drivers.length === 0 && (
-                <tr><td colSpan={6} style={s.emptyCell}>No data for selected period</td></tr>
+                );
+              })}
+              {drivers.drivers.length === 0 ? (
+                <tr><td colSpan={8} style={s.emptyCell}>No data for selected period</td></tr>
+              ) : (
+                <tr style={{ background: "#f1f5f9" }}>
+                  <Td><strong>Total</strong></Td>
+                  <Td><strong>{tot.deliveries}</strong></Td>
+                  <Td><strong>{fmt(tot.value)}</strong></Td>
+                  <Td><strong>{tot.loaded.toLocaleString()}</strong></Td>
+                  <Td>{cell(tot.dead, tot.loaded, "#dc2626")}</Td>
+                  <Td>{cell(tot.mutilated, tot.loaded, "#d97706")}</Td>
+                  <Td>{cell(tot.short, tot.loaded, "#dc2626")}</Td>
+                  <Td>{cell(tot.over, tot.loaded, "#2563eb")}</Td>
+                </tr>
               )}
             </tbody>
           </ScrollTable>
         </div>
-      )}
+        );
+      })()}
 
       {/* Deliveries */}
       {tab === "deliveries" && deliveries && !loading && (() => {

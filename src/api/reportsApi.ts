@@ -40,6 +40,7 @@ export type DriverPerformanceItem = {
   driverName: string;
   deliveriesCompleted: number;
   totalValue: number;
+  totalLoadedQty?: number;
   totalDeadReturns: number;
   totalMutilatedReturns: number;
   totalShortQty: number;
