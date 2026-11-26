@@ -464,7 +464,7 @@ if (tab === "client-orders") {
                 onClick={() => setStatusFilter("All")}
               />
               <KpiCard
-                label="Open"
+                label="Shed Sales"
                 value={String(deliveries.openCount)}
                 active={statusFilter === "Open"}
                 color="#92400e"
@@ -491,7 +491,7 @@ if (tab === "client-orders") {
 
             <p style={{ fontSize: 13, color: "#64748b", marginBottom: 12 }}>
               Showing {visible.length} order{visible.length !== 1 ? "s" : ""}
-              {statusFilter !== "All" ? ` · ${statusFilter === "OutForDelivery" ? "In Transit" : statusFilter}` : ""}
+              {statusFilter !== "All" ? ` · ${statusFilter === "OutForDelivery" ? "In Transit" : statusFilter === "Open" ? "Shed Sales" : statusFilter}` : ""}
             </p>
 
             <ScrollTable>
@@ -503,7 +503,7 @@ if (tab === "client-orders") {
               <tbody>
                 {visible.map((o) => {
                   const { color, bg } = statusStyle(o.status);
-                  const label = o.status === "OutForDelivery" ? "In Transit" : o.status;
+                  const label = o.status === "OutForDelivery" ? "In Transit" : o.status === "Open" ? "Shed Sales" : o.status;
                   const payColor = o.paymentStatus === "Paid" ? "#166534" : o.paymentStatus === "Pending" ? "#854d0e" : undefined;
                   const payBg   = o.paymentStatus === "Paid" ? "#dcfce7" : o.paymentStatus === "Pending" ? "#fef9c3" : undefined;
                   return (
